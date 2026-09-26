@@ -9,470 +9,549 @@
   @font-face { font-family: Inter; font-weight: 600; src: url(fonts/inter-latin-600-normal.woff2) format('woff2'); }
   @font-face { font-family: Inter; font-weight: 700; src: url(fonts/inter-latin-700-normal.woff2) format('woff2'); }
   @font-face { font-family: Inter; font-weight: 800; src: url(fonts/inter-latin-800-normal.woff2) format('woff2'); }
-  @font-face { font-family: Mono; font-weight: 500; src: url(fonts/jetbrains-mono-latin-500-normal.woff2) format('woff2'); }
 
   :root {
-    --bg: #0b0c0e;
-    --panel: #141619;
-    --panel-2: #1b1e22;
-    --line: #2a2e34;
-    --text: #f2f4f5;
-    --muted: #9aa1a9;
-    --dim: #6b727b;
-    --accent: #33c482;
-    --accent-soft: rgba(51, 196, 130, 0.14);
-    --blue: #4c8dff;
-    --violet: #9b7bff;
-    --amber: #f5b547;
-    --pink: #ff6fa8;
-    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --dark: #0c0d10;
+    --light: #f3f4f6;
+    --green: #33c482;
+    --blue: #0a84ff;
+    --ink: #111317;
+    --muted: #7c828c;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
-  body { font-family: Inter, sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--dark); }
+  body { font-family: Inter, sans-serif; -webkit-font-smoothing: antialiased; }
 
-  .stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
-  .bg-grid {
-    position: absolute; inset: 0;
-    background-image:
-      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse at 50% 45%, #000 20%, transparent 75%);
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+  .scene { position: absolute; inset: 0; display: none; }
+  .scene.dark { background: radial-gradient(ellipse 70% 60% at 50% 45%, #1a1c21 0%, var(--dark) 70%); color: #fff; }
+  .scene.light { background: radial-gradient(ellipse 70% 60% at 50% 45%, #ffffff 0%, var(--light) 75%); color: var(--ink); }
+
+  /* Every animated object is placed by JS: its centre goes to (x, y) via translate(-50%, -50%). */
+  .obj { position: absolute; left: 0; top: 0; will-change: transform; transform-style: preserve-3d; }
+
+  /* 3D app tiles */
+  .tile {
+    position: relative; width: 100%; height: 100%; border-radius: 26%;
+    background: linear-gradient(160deg, #ffffff 0%, #f1f2f5 55%, #dfe2e8 100%);
+    box-shadow:
+      inset 0 3px 1px rgba(255,255,255,1),
+      inset 0 -8px 16px rgba(20,30,50,0.10),
+      0 2px 3px rgba(0,0,0,0.10),
+      0 22px 40px -14px rgba(10,20,40,0.35),
+      0 50px 80px -30px rgba(10,20,40,0.30);
+    display: grid; place-items: center; overflow: hidden;
   }
-  .glow {
-    position: absolute; width: 1400px; height: 1400px; left: 260px; top: -520px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(51,196,130,0.16), transparent 62%);
-    animation: drift 50s linear 0s both;
+  .tile::after {
+    content: ''; position: absolute; left: 6%; right: 6%; top: 3%; height: 44%; border-radius: 40% 40% 50% 50% / 60% 60% 40% 40%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.75), rgba(255,255,255,0));
+    pointer-events: none;
   }
-  @keyframes drift { from { transform: translate(-120px, 0); } to { transform: translate(140px, 60px); } }
+  .tile img { width: 58%; height: 58%; object-fit: contain; filter: drop-shadow(0 6px 6px rgba(0,0,0,0.18)); position: relative; z-index: 1; }
+  .dark .tile { box-shadow:
+      inset 0 3px 1px rgba(255,255,255,1),
+      inset 0 -8px 16px rgba(20,30,50,0.12),
+      0 22px 40px -12px rgba(0,0,0,0.7),
+      0 0 0 1px rgba(255,255,255,0.06); }
 
-  .scene { position: absolute; inset: 0; opacity: 0; }
-
-  /* Entrance primitives: every animation uses `both` fill so the renderer can seek to any time. */
-  .fu  { animation: fadeUp 0.8s var(--ease) var(--d, 0s) both; }
-  .fi  { animation: fadeIn 0.6s ease var(--d, 0s) both; }
-  .pop { animation: pop 0.55s var(--ease) var(--d, 0s) both; }
-  .sl  { animation: slideL 0.7s var(--ease) var(--d, 0s) both; }
-  .sr  { animation: slideR 0.7s var(--ease) var(--d, 0s) both; }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes pop { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: none; } }
-  @keyframes slideL { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
-  @keyframes slideR { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
-
-  .type { display: inline-block; white-space: nowrap; animation: typing var(--dur, 1s) steps(var(--n, 30)) var(--d, 0s) both; }
-  @keyframes typing { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
-
-  .h1 { font-size: 88px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.04; }
-  .h2 { font-size: 64px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; }
-  .sub { font-size: 30px; color: var(--muted); font-weight: 500; letter-spacing: -0.01em; }
-  .accent { color: var(--accent); }
-  .center { position: absolute; left: 0; right: 0; text-align: center; }
-  .eyebrow { font-family: Mono; font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
-
-  /* Logo */
-  .logo { display: inline-flex; align-items: center; gap: 28px; }
-  .logo .mark { width: 132px; height: 132px; }
-  .logo .word { font-size: 124px; font-weight: 800; letter-spacing: -0.045em; }
-
-  /* Scene 2: message bubbles */
-  .msg {
-    position: absolute; width: 440px; padding: 20px 24px; border-radius: 22px;
-    background: var(--panel); border: 1px solid var(--line);
-    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  .labbai-tile {
+    position: relative; width: 100%; height: 100%; border-radius: 26%; overflow: hidden;
+    background: radial-gradient(120% 90% at 30% 12%, #86f5c2 0%, #35c985 42%, #178a55 100%);
+    box-shadow:
+      inset 0 4px 2px rgba(255,255,255,0.55),
+      inset 0 -14px 24px rgba(0,60,30,0.45),
+      0 40px 90px -20px rgba(51,196,130,0.55),
+      0 18px 30px -12px rgba(0,0,0,0.6);
   }
-  .msg .who { display: flex; align-items: center; gap: 10px; font-size: 18px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
-  .msg .dot { width: 12px; height: 12px; border-radius: 50%; }
-  .msg .who .time { margin-left: auto; font-weight: 500; color: var(--dim); font-family: Mono; font-size: 16px; }
-  .msg .body { font-size: 24px; line-height: 1.35; font-weight: 500; }
-  .tg { background: #2aa3e0; } .wa { background: #25d366; } .ig { background: linear-gradient(135deg, #f9a13a, #e1306c, #8a3ab9); }
-  .badge-unread {
-    display: inline-flex; align-items: center; gap: 14px; padding: 14px 28px; border-radius: 999px;
-    background: rgba(255, 90, 90, 0.12); border: 1px solid rgba(255, 90, 90, 0.4); color: #ff8b8b;
-    font-size: 28px; font-weight: 700;
+  .labbai-tile::after {
+    content: ''; position: absolute; left: 7%; right: 7%; top: 3%; height: 42%; border-radius: 40% 40% 50% 50% / 60% 60% 40% 40%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.45), rgba(255,255,255,0));
+  }
+  .labbai-tile svg { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 4px 4px rgba(0,50,25,0.35)); }
+
+  .word { font-weight: 800; letter-spacing: -0.045em; white-space: nowrap; }
+
+  /* Scene 2 badges */
+  .badge {
+    position: absolute; right: -22px; top: -22px; min-width: 84px; height: 84px; padding: 0 20px; border-radius: 42px;
+    background: linear-gradient(180deg, #ff5a52, #e5231b); color: #fff; font-weight: 800; font-size: 40px;
+    display: grid; place-items: center; z-index: 3;
+    box-shadow: inset 0 3px 1px rgba(255,255,255,0.45), 0 10px 20px -6px rgba(229,35,27,0.6);
   }
 
-  /* Scene 3: chat + canvas */
-  .chat-panel {
-    position: absolute; left: 80px; top: 230px; width: 520px; height: 720px; border-radius: 28px;
-    background: var(--panel); border: 1px solid var(--line); padding: 28px; overflow: hidden;
+  /* Scene 3 prompt pill */
+  .pill {
+    position: relative; width: 100%; height: 100%; border-radius: 999px;
+    background: linear-gradient(180deg, #2c2e34, #1d1e22);
+    box-shadow: inset 0 2px 1px rgba(255,255,255,0.14), inset 0 -3px 8px rgba(0,0,0,0.5), 0 30px 60px -20px rgba(0,0,0,0.8);
+    overflow: hidden;
   }
-  .chat-head { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-  .chat-head .live { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
-  .bubble-user {
-    margin-top: 24px; margin-left: 36px; padding: 18px 20px; border-radius: 18px 18px 6px 18px;
-    background: var(--accent-soft); border: 1px solid rgba(51,196,130,0.35); font-size: 21px; line-height: 1.45; font-weight: 500;
+  .pill .text { position: absolute; left: 52px; top: 50%; transform: translateY(-50%); font-size: 40px; font-weight: 500; color: #f4f5f7; white-space: nowrap; }
+  .pill .caret { display: inline-block; width: 3px; height: 44px; background: var(--blue); vertical-align: -8px; margin-left: 3px; }
+  .pill .placeholder { color: #7a7f88; }
+  .send {
+    position: absolute; right: 18px; top: 50%; width: 96px; height: 96px; margin-top: -48px; border-radius: 50%;
+    background: radial-gradient(100% 100% at 30% 20%, #4aa6ff, #0a6ee0);
+    box-shadow: inset 0 3px 1px rgba(255,255,255,0.4), 0 10px 24px -6px rgba(10,132,255,0.7);
+    display: grid; place-items: center;
   }
-  .bubble-ai { margin-top: 22px; font-size: 21px; line-height: 1.4; }
-  .bubble-ai .lead { display: flex; align-items: center; gap: 10px; font-weight: 700; margin-bottom: 14px; }
-  .step { display: flex; align-items: center; gap: 12px; font-size: 19px; color: var(--muted); padding: 7px 0; }
-  .check {
-    width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none;
-    background: var(--accent); color: #07140e; font-size: 15px; font-weight: 800;
-  }
-  .ready {
-    margin-top: 18px; display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px;
-    background: var(--accent); color: #06130c; font-weight: 700; font-size: 19px;
-  }
+  .send svg { position: absolute; }
 
-  .canvas {
-    position: absolute; left: 640px; top: 230px; width: 1200px; height: 720px; border-radius: 28px;
-    border: 1px solid var(--line); background-color: #0f1113;
-    background-image: radial-gradient(rgba(255,255,255,0.09) 1.2px, transparent 1.2px);
-    background-size: 26px 26px;
+  /* Scene 4 card */
+  .card {
+    position: relative; width: 100%; height: 100%; border-radius: 44px; background: #fff; overflow: hidden;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.06), 0 40px 80px -30px rgba(10,20,40,0.35), 0 0 0 1px rgba(10,20,40,0.05);
   }
-  .node {
-    position: absolute; width: 280px; height: 104px; border-radius: 18px; padding: 18px 20px;
-    background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 18px 40px rgba(0,0,0,0.45);
-    display: flex; align-items: center; gap: 16px;
+  .card-head {
+    height: 128px; padding: 0 44px; display: flex; flex-direction: column; justify-content: center;
+    background: linear-gradient(135deg, #3fd894, #22a868); color: #fff;
   }
-  .node .ic { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: #fff; flex: none; }
-  .node .t { font-size: 21px; font-weight: 700; }
-  .node .s { font-size: 16px; color: var(--muted); margin-top: 4px; font-family: Mono; }
-  .node.agent { border-color: rgba(51,196,130,0.6); box-shadow: 0 0 0 4px rgba(51,196,130,0.12), 0 18px 40px rgba(0,0,0,0.45); }
-  svg.edges { position: absolute; inset: 0; overflow: visible; }
-  .edge { fill: none; stroke: #4a525c; stroke-width: 3; stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 0.6s ease var(--d) both; }
-  .edge.tool { stroke: #5b4a8f; }
-  @keyframes draw { to { stroke-dashoffset: 0; } }
-  .pulse {
-    position: absolute; left: 0; top: 0; width: 14px; height: 14px; border-radius: 50%;
-    background: var(--accent); box-shadow: 0 0 16px 4px rgba(51,196,130,0.7);
-    offset-anchor: center; offset-rotate: 0deg;
-    animation: travel 1.1s linear var(--d) infinite both, fadeIn 0.2s ease var(--d) both;
-  }
-  .pulse.tool { background: var(--violet); box-shadow: 0 0 16px 4px rgba(155,123,255,0.7); }
-  @keyframes travel { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+  .card-head .t { font-size: 38px; font-weight: 800; letter-spacing: -0.02em; }
+  .card-head .s { font-size: 22px; font-weight: 600; opacity: 0.85; margin-top: 4px; }
+  .rows { padding: 22px 44px 0; }
+  .row { display: flex; align-items: center; gap: 22px; height: 86px; border-bottom: 1px solid #eef0f3; }
+  .check { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #cfd3da; position: relative; flex: none; }
+  .check .fill { position: absolute; inset: -3px; border-radius: 50%; background: var(--green); display: grid; place-items: center; }
+  .mini { width: 52px; height: 52px; flex: none; }
+  .mini .tile { border-radius: 30%; }
+  .mini .tile img { width: 64%; height: 64%; }
+  .label { position: relative; z-index: 0; font-size: 30px; font-weight: 600; color: #1d2026; }
+  .label .hl { position: absolute; left: -6px; top: 55%; height: 40%; border-radius: 6px; background: rgba(51,196,130,0.28); z-index: -1; }
+  .foot { position: absolute; left: 44px; right: 44px; bottom: 34px; height: 90px; display: flex; align-items: center; justify-content: space-between; }
+  .foot .gl { font-size: 32px; font-weight: 800; color: #1d2026; display: flex; align-items: center; gap: 14px; }
+  .foot .dot { width: 16px; height: 16px; border-radius: 50%; }
+  .toggle { width: 132px; height: 78px; border-radius: 39px; position: relative; box-shadow: inset 0 2px 4px rgba(0,0,0,0.12); }
+  .knob { position: absolute; top: 6px; left: 6px; width: 66px; height: 66px; border-radius: 50%; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.25); }
 
-  /* Scene 4: integration chips */
-  .chips { position: absolute; left: 150px; right: 150px; top: 360px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }
+  /* Scene 5 hub */
+  svg.links { position: absolute; inset: 0; }
+
+  /* Scene 6 chat */
+  .chat-head { height: 120px; padding: 0 34px; display: flex; align-items: center; gap: 20px; border-bottom: 1px solid #eef0f3; }
+  .chat-head .n { font-size: 30px; font-weight: 800; color: #1d2026; }
+  .chat-head .st { font-size: 21px; font-weight: 600; color: var(--green); margin-top: 2px; }
+  .msgs { position: absolute; left: 30px; right: 30px; top: 150px; }
+  .b { position: absolute; max-width: 470px; padding: 20px 26px; font-size: 28px; line-height: 1.35; font-weight: 500; border-radius: 30px; white-space: nowrap; }
+  .b.in { left: 0; background: #eef0f4; color: #1d2026; border-bottom-left-radius: 8px; transform-origin: 0% 100%; }
+  .b.out { right: 0; background: linear-gradient(180deg, #3fd894, #25ad6c); color: #fff; border-bottom-right-radius: 8px; transform-origin: 100% 100%; }
+  .typing { position: absolute; right: 0; display: flex; gap: 10px; padding: 28px 30px; background: #d9f3e6; border-radius: 30px; border-bottom-right-radius: 8px; transform-origin: 100% 100%; }
+  .typing i { width: 13px; height: 13px; border-radius: 50%; background: #25ad6c; }
   .chip {
-    display: flex; align-items: center; gap: 14px; height: 76px; padding: 0 22px; border-radius: 18px;
-    background: var(--panel); border: 1px solid var(--line); font-size: 23px; font-weight: 600; white-space: nowrap;
+    display: flex; align-items: center; gap: 20px; padding: 22px 30px 22px 22px; border-radius: 30px; background: #fff; white-space: nowrap;
+    box-shadow: inset 0 2px 1px #fff, 0 2px 3px rgba(0,0,0,0.06), 0 30px 60px -20px rgba(10,20,40,0.35);
   }
-  .chip .c { width: 14px; height: 14px; border-radius: 5px; flex: none; }
-  .chip.more { border-style: dashed; color: var(--accent); border-color: rgba(51,196,130,0.5); }
+  .chip .mini { width: 70px; height: 70px; }
+  .chip .k { font-size: 28px; font-weight: 800; color: #1d2026; }
+  .chip .v { font-size: 22px; font-weight: 600; color: var(--muted); margin-top: 2px; }
 
-  /* Scene 5: module cards */
-  .cards { position: absolute; left: 150px; right: 150px; top: 330px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
-  .card { height: 236px; border-radius: 26px; padding: 34px; background: var(--panel); border: 1px solid var(--line); }
-  .card .ico { width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; font-size: 28px; font-weight: 800; margin-bottom: 22px; }
-  .card .n { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
-  .card .d { font-size: 22px; color: var(--muted); margin-top: 10px; line-height: 1.4; }
-
-  /* Scene 6: live conversation */
-  .phone {
-    position: absolute; left: 190px; top: 190px; width: 620px; height: 800px; border-radius: 44px;
-    background: #111417; border: 1px solid var(--line); overflow: hidden; box-shadow: 0 40px 90px rgba(0,0,0,0.55);
-  }
-  .phone-head { display: flex; align-items: center; gap: 16px; padding: 28px 30px; background: #171b1f; border-bottom: 1px solid var(--line); }
-  .avatar { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #06130c; font-weight: 800; font-size: 24px; }
-  .phone-head .nm { font-size: 23px; font-weight: 700; }
-  .phone-head .st { font-size: 17px; color: var(--accent); margin-top: 2px; }
-  .thread { padding: 26px 26px; display: flex; flex-direction: column; gap: 16px; }
-  .b { max-width: 440px; padding: 16px 20px; font-size: 22px; line-height: 1.4; border-radius: 22px; font-weight: 500; }
-  .b.in { align-self: flex-start; background: #20252b; border-bottom-left-radius: 6px; }
-  .b.out { align-self: flex-end; background: #1f6f4c; border-bottom-right-radius: 6px; }
-  .b .meta { display: block; font-size: 14px; color: rgba(255,255,255,0.55); margin-top: 6px; text-align: right; font-family: Mono; }
-  .typing-dots { align-self: flex-end; display: flex; gap: 8px; padding: 18px 22px; background: #1f6f4c; border-radius: 22px; border-bottom-right-radius: 6px; }
-  .typing-dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.8); animation: blink 0.9s ease var(--d) infinite both; }
-  .typing-dots i:nth-child(2) { animation-delay: calc(var(--d) + 0.15s); }
-  .typing-dots i:nth-child(3) { animation-delay: calc(var(--d) + 0.3s); }
-  @keyframes blink { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } }
-  .typing-wrap { align-self: flex-end; height: 0; overflow: visible; }
-
-  .runlog {
-    position: absolute; left: 900px; top: 300px; width: 830px; border-radius: 28px; padding: 30px 34px;
-    background: var(--panel); border: 1px solid var(--line);
-  }
-  .runlog .hd { display: flex; align-items: center; justify-content: space-between; font-size: 20px; font-weight: 700; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
-  .runlog .hd span { font-family: Mono; font-size: 16px; color: var(--dim); font-weight: 500; }
-  .row { display: flex; align-items: center; gap: 16px; padding: 14px 0; font-size: 22px; border-bottom: 1px solid rgba(255,255,255,0.04); }
-  .row .sq { width: 16px; height: 16px; border-radius: 5px; flex: none; }
-  .row .k { font-weight: 700; width: 170px; }
-  .row .v { color: var(--muted); flex: 1; }
-  .row .ms { font-family: Mono; font-size: 18px; color: var(--dim); }
-  .row.done { border-bottom: 0; color: var(--accent); font-weight: 700; padding-top: 20px; }
+  #hand { width: 150px; height: 180px; z-index: 50; filter: drop-shadow(0 16px 14px rgba(0,0,0,0.3)); }
+  #fade { position: absolute; inset: 0; background: #000; pointer-events: none; opacity: 0; z-index: 60; }
 </style>
 </head>
 <body>
-<div class="stage" id="stage">
-  <div class="glow"></div>
-  <div class="bg-grid"></div>
+<div id="stage">
 
-  <!-- Scene 1: intro -->
-  <section class="scene" data-in="0" data-out="4.6">
-    <div class="center" style="top: 360px;">
-      <div class="logo pop" style="--d: 0.3s;">
-        <svg class="mark" viewBox="0 0 132 132" aria-hidden="true">
-          <rect width="132" height="132" rx="34" fill="#33c482" />
-          <path d="M42 32 V92 H92" stroke="#06130c" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-          <circle cx="92" cy="44" r="11" fill="#06130c" />
-        </svg>
-        <span class="word">Labbai</span>
+  <section class="scene dark" id="s1">
+    <div class="obj" id="s1-word"><span class="word" style="font-size: 170px; color: #fff;">Labbai</span></div>
+    <div class="obj" id="s1-icon"><div class="labbai-tile" id="s1-tile"></div></div>
+  </section>
+
+  <section class="scene light" id="s2">
+    <div class="obj" id="s2-a"><div class="tile"><img src="icons/telegram.svg" /></div><div class="badge" id="s2-ba">1</div></div>
+    <div class="obj" id="s2-b"><div class="tile"><img src="icons/whats-app.svg" /></div><div class="badge" id="s2-bb">1</div></div>
+    <div class="obj" id="s2-c"><div class="tile"><img src="icons/instagram.svg" /></div><div class="badge" id="s2-bc">1</div></div>
+  </section>
+
+  <section class="scene dark" id="s3">
+    <div class="obj" id="s3-pill">
+      <div class="pill">
+        <div class="text" id="s3-text"></div>
+        <div class="send" id="s3-send">
+          <svg id="s3-arrow" width="44" height="44" viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none" /></svg>
+          <svg id="s3-spin" width="50" height="50" viewBox="0 0 50 50"><circle cx="25" cy="25" r="19" stroke="rgba(255,255,255,0.3)" stroke-width="5" fill="none" /><path d="M25 6 A19 19 0 0 1 44 25" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none" /></svg>
+        </div>
       </div>
     </div>
-    <div class="center sub fu" style="top: 560px; --d: 1.1s; font-size: 38px;">The AI workspace where your business builds <span class="accent">AI agents</span></div>
   </section>
 
-  <!-- Scene 2: the problem -->
-  <section class="scene" data-in="4.6" data-out="10.6">
-    <div class="center fu" style="top: 110px; --d: 4.8s;"><div class="h2">Your customers write <span class="accent">everywhere.</span></div></div>
-
-    <div class="msg pop" style="left: 150px; top: 290px; --d: 5.3s;"><div class="who"><span class="dot tg"></span>Telegram · Aziza<span class="time">09:12</span></div><div class="body">Do you have a slot tomorrow morning?</div></div>
-    <div class="msg pop" style="left: 740px; top: 250px; --d: 5.6s;"><div class="who"><span class="dot wa"></span>WhatsApp · Jasur<span class="time">09:14</span></div><div class="body">How much is delivery to Samarkand?</div></div>
-    <div class="msg pop" style="left: 1330px; top: 300px; --d: 5.9s;"><div class="who"><span class="dot ig"></span>Instagram · @malika.shop<span class="time">09:15</span></div><div class="body">Is this still in stock? 😍</div></div>
-    <div class="msg pop" style="left: 300px; top: 520px; --d: 6.2s;"><div class="who"><span class="dot wa"></span>WhatsApp · Timur<span class="time">09:21</span></div><div class="body">Can I change my order?</div></div>
-    <div class="msg pop" style="left: 890px; top: 490px; --d: 6.5s;"><div class="who"><span class="dot tg"></span>Telegram · Dilnoza<span class="time">09:26</span></div><div class="body">Hello? Anyone there?</div></div>
-    <div class="msg pop" style="left: 1400px; top: 560px; --d: 6.8s;"><div class="who"><span class="dot ig"></span>Instagram · @bek_92<span class="time">09:31</span></div><div class="body">What are your prices?</div></div>
-
-    <div class="center fu" style="top: 800px; --d: 7.6s;"><span class="badge-unread">● 47 unread messages</span></div>
-    <div class="center sub fu" style="top: 900px; --d: 8.2s; font-size: 34px;">Replies are slow. Leads go cold.</div>
-  </section>
-
-  <!-- Scene 3: describe it, Labbai builds it -->
-  <section class="scene" data-in="10.6" data-out="21">
-    <div class="fu" style="position: absolute; left: 80px; top: 88px; --d: 10.8s;">
-      <div class="eyebrow">Build with Labbai AI</div>
-      <div class="h2" style="margin-top: 14px; font-size: 58px;">Describe your agent. <span class="accent">Labbai builds it.</span></div>
-    </div>
-
-    <div class="chat-panel sl" style="--d: 11.0s;">
-      <div class="chat-head"><span class="live"></span>Labbai AI</div>
-      <div class="bubble-user pop" style="--d: 11.3s;">
-        <span class="type" style="--d: 11.5s; --dur: 0.9s; --n: 26;">Build a Telegram agent that</span><br />
-        <span class="type" style="--d: 12.4s; --dur: 0.9s; --n: 28;">answers price questions and</span><br />
-        <span class="type" style="--d: 13.3s; --dur: 0.8s; --n: 24;">books visits in Cal.com.</span>
-      </div>
-      <div class="bubble-ai">
-        <div class="lead fi" style="--d: 14.2s;"><span class="live" style="width: 10px; height: 10px; border-radius: 50%; background: var(--accent);"></span>Building your agent…</div>
-        <div class="step sl" style="--d: 14.5s;"><span class="check">✓</span>Telegram trigger added</div>
-        <div class="step sl" style="--d: 15.2s;"><span class="check">✓</span>Agent · gpt-5-mini configured</div>
-        <div class="step sl" style="--d: 15.9s;"><span class="check">✓</span>Price list linked from Knowledge</div>
-        <div class="step sl" style="--d: 16.6s;"><span class="check">✓</span>Cal.com booking tool connected</div>
-        <div class="step sl" style="--d: 17.3s;"><span class="check">✓</span>Reply step wired back to Telegram</div>
-        <div class="ready pop" style="--d: 18.2s;">● Agent deployed</div>
+  <section class="scene light" id="s4">
+    <div class="obj" id="s4-card">
+      <div class="card">
+        <div id="s4-content">
+          <div class="card-head"><div class="t">Barbershop agent</div><div class="s">Built by Labbai AI · just now</div></div>
+          <div class="rows" id="s4-rows"></div>
+          <div class="foot">
+            <div class="gl"><span class="dot" id="s4-dot"></span><span id="s4-status">Go live</span></div>
+            <div class="toggle" id="s4-toggle"><div class="knob" id="s4-knob"></div></div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <div class="canvas fi" style="--d: 11.0s;">
-      <svg class="edges" width="1200" height="720" viewBox="0 0 1200 720">
-        <path class="edge" pathLength="1" d="M330 360 L450 360" style="--d: 15.4s;" />
-        <path class="edge tool" pathLength="1" d="M590 184 L590 308" style="--d: 16.1s;" />
-        <path class="edge tool" pathLength="1" d="M590 536 L590 412" style="--d: 16.8s;" />
-        <path class="edge" pathLength="1" d="M730 360 L850 360" style="--d: 17.5s;" />
-      </svg>
-      <div class="node pop" style="left: 50px; top: 308px; --d: 14.5s;"><div class="ic" style="background: #2aa3e0;">T</div><div><div class="t">Telegram</div><div class="s">message received</div></div></div>
-      <div class="node agent pop" style="left: 450px; top: 308px; --d: 15.2s;"><div class="ic" style="background: var(--accent); color: #06130c;">A</div><div><div class="t">Agent</div><div class="s">gpt-5-mini</div></div></div>
-      <div class="node pop" style="left: 450px; top: 80px; --d: 15.9s;"><div class="ic" style="background: var(--violet);">K</div><div><div class="t">Knowledge</div><div class="s">price-list.pdf</div></div></div>
-      <div class="node pop" style="left: 450px; top: 536px; --d: 16.6s;"><div class="ic" style="background: #111; border: 1px solid #444;">C</div><div><div class="t">Cal.com</div><div class="s">create booking</div></div></div>
-      <div class="node pop" style="left: 850px; top: 308px; --d: 17.3s;"><div class="ic" style="background: #2aa3e0;">T</div><div><div class="t">Telegram</div><div class="s">send reply</div></div></div>
-
-      <div class="pulse" style="offset-path: path('M330 360 L450 360'); --d: 18.4s;"></div>
-      <div class="pulse tool" style="offset-path: path('M590 308 L590 184'); --d: 18.8s;"></div>
-      <div class="pulse tool" style="offset-path: path('M590 412 L590 536'); --d: 19.2s;"></div>
-      <div class="pulse" style="offset-path: path('M730 360 L850 360'); --d: 19.6s;"></div>
-    </div>
   </section>
 
-  <!-- Scene 4: integrations -->
-  <section class="scene" data-in="21" data-out="28">
-    <div class="center fu" style="top: 120px; --d: 21.2s;">
-      <div class="eyebrow">Integrations</div>
-      <div class="h2" style="margin-top: 16px;">Works with the tools <span class="accent">you already use.</span></div>
-    </div>
-    <div class="chips" id="chips"></div>
+  <section class="scene dark" id="s5">
+    <svg class="links" id="s5-links" width="1920" height="1080"></svg>
+    <div id="s5-tiles"></div>
+    <div class="obj" id="s5-hub"><div class="labbai-tile" id="s5-hubtile"></div></div>
   </section>
 
-  <!-- Scene 5: modules -->
-  <section class="scene" data-in="28" data-out="35">
-    <div class="center fu" style="top: 120px; --d: 28.2s;">
-      <div class="eyebrow">One workspace</div>
-      <div class="h2" style="margin-top: 16px;">Everything your agents need, <span class="accent">in one place.</span></div>
+  <section class="scene light" id="s6">
+    <div class="obj" id="s6-left">
+      <div class="chip"><div class="mini"><div class="tile" style="font-size: 38px;">⚡</div></div><div><div class="k">Replied in 2s</div><div class="v">24/7, no waiting</div></div></div>
     </div>
-    <div class="cards" id="cards"></div>
-    <div class="center sub fu" style="top: 900px; --d: 31.6s; font-size: 26px;">Roles, audit logs, secrets and API keys built in.</div>
-  </section>
-
-  <!-- Scene 6: live -->
-  <section class="scene" data-in="35" data-out="44.2">
-    <div class="fu" style="position: absolute; left: 900px; top: 130px; --d: 35.2s;">
-      <div class="eyebrow">Live in minutes</div>
-      <div class="h2" style="margin-top: 14px; font-size: 56px;">Answers in seconds, <span class="accent">24/7.</span></div>
+    <div class="obj" id="s6-right">
+      <div class="chip"><div class="mini"><div class="tile"><img src="icons/cal-com-mark.svg" /></div></div><div><div class="k">Booking created</div><div class="v">Today · 16:00</div></div></div>
     </div>
-
-    <div class="phone sl" style="--d: 35.3s;">
-      <div class="phone-head"><div class="avatar">L</div><div><div class="nm">Barber Studio</div><div class="st">AI agent · online</div></div></div>
-      <div class="thread">
-        <div class="b in pop" style="--d: 36.0s;">Hi! How much is a haircut and beard trim?<span class="meta">18:02</span></div>
-        <div class="typing-wrap"><div class="typing-dots" id="dots1"><i style="--d: 36.7s;"></i><i style="--d: 36.7s;"></i><i style="--d: 36.7s;"></i></div></div>
-        <div class="b out pop" style="--d: 37.8s;">Haircut + beard trim is 150,000 UZS. Want me to book you? I have Tue 15:00 or Wed 11:00.<span class="meta">18:02</span></div>
-        <div class="b in pop" style="--d: 39.3s;">Tue 15:00 please 🙏<span class="meta">18:03</span></div>
-        <div class="b out pop" style="--d: 40.6s;">Done ✅ You're booked for Tuesday at 15:00. See you!<span class="meta">18:03</span></div>
+    <div class="obj" id="s6-card">
+      <div class="card">
+        <div id="s6-content">
+          <div class="chat-head">
+            <div class="mini" style="width: 72px; height: 72px;"><div class="tile"><img src="icons/telegram.svg" /></div></div>
+            <div><div class="n">Barber Studio</div><div class="st">AI agent · online</div></div>
+          </div>
+          <div class="msgs">
+            <div class="b in" id="m1" style="top: 0;">Haircut and beard trim today?</div>
+            <div class="typing" id="m2" style="top: 120px;"><i></i><i></i><i></i></div>
+            <div class="b out" id="m3" style="top: 120px;">Sure! 16:00 or 18:30?</div>
+            <div class="b in" id="m4" style="top: 240px;">16:00 please 👍</div>
+            <div class="b out" id="m5" style="top: 360px;">Booked ✅ See you at 16:00!</div>
+          </div>
+        </div>
       </div>
     </div>
-
-    <div class="runlog sr" style="--d: 35.6s;">
-      <div class="hd">Run log<span>run_8f2c · Telegram</span></div>
-      <div class="row fi" style="--d: 36.2s;"><span class="sq" style="background: #2aa3e0;"></span><span class="k">Telegram</span><span class="v">message received</span><span class="ms">0.0s</span></div>
-      <div class="row fi" style="--d: 36.8s;"><span class="sq" style="background: var(--violet);"></span><span class="k">Knowledge</span><span class="v">3 matches · price-list.pdf</span><span class="ms">0.4s</span></div>
-      <div class="row fi" style="--d: 37.4s;"><span class="sq" style="background: var(--accent);"></span><span class="k">Agent</span><span class="v">gpt-5-mini · reply drafted</span><span class="ms">1.2s</span></div>
-      <div class="row fi" style="--d: 39.9s;"><span class="sq" style="background: #888;"></span><span class="k">Cal.com</span><span class="v">booking created · Tue 15:00</span><span class="ms">0.6s</span></div>
-      <div class="row fi" style="--d: 40.5s;"><span class="sq" style="background: #2aa3e0;"></span><span class="k">Telegram</span><span class="v">reply sent</span><span class="ms">0.1s</span></div>
-      <div class="row done fi" style="--d: 41.2s;">✓ Run completed · every step traced in Logs</div>
-    </div>
   </section>
 
-  <!-- Scene 7: outro -->
-  <section class="scene" data-in="44.2" data-out="50.5">
-    <div class="center" style="top: 300px;">
-      <div class="logo pop" style="--d: 44.5s;">
-        <svg class="mark" viewBox="0 0 132 132" aria-hidden="true">
-          <rect width="132" height="132" rx="34" fill="#33c482" />
-          <path d="M42 32 V92 H92" stroke="#06130c" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-          <circle cx="92" cy="44" r="11" fill="#06130c" />
-        </svg>
-        <span class="word">Labbai</span>
-      </div>
-    </div>
-    <div class="center h2 fu" style="top: 520px; --d: 45.3s; font-size: 60px;">Build AI agents that <span class="accent">automate real work.</span></div>
-    <div class="center sub fu" style="top: 640px; --d: 46.0s; font-size: 32px;">Visually, conversationally, or with code.</div>
+  <section class="scene dark" id="s7">
+    <div class="obj" id="s7-icon"><div class="labbai-tile" id="s7-tile"></div></div>
+    <div class="obj" id="s7-word"><span class="word" style="font-size: 150px; color: #fff;">Labbai</span></div>
+    <div class="obj" id="s7-tag"><span style="font-size: 50px; font-weight: 600; color: #a3a9b2; letter-spacing: -0.02em; white-space: nowrap;">AI agents that automate <span style="color: var(--green);">real work.</span></span></div>
   </section>
+
+  <div id="hand-layer" style="position: absolute; inset: 0; pointer-events: none; z-index: 50;">
+  <div class="obj" id="hand">
+    <svg viewBox="0 0 100 120" width="150" height="180" aria-hidden="true">
+      <g fill="#111" stroke="#111" stroke-width="7" stroke-linejoin="round">
+        <rect x="28" y="3" width="20" height="62" rx="10" />
+        <rect x="45" y="38" width="19" height="32" rx="9.5" />
+        <rect x="61" y="44" width="18" height="30" rx="9" />
+        <rect x="76" y="52" width="16" height="26" rx="8" />
+        <rect x="22" y="56" width="70" height="46" rx="20" />
+        <ellipse cx="20" cy="74" rx="11" ry="19" transform="rotate(-32 20 74)" />
+        <rect x="32" y="96" width="52" height="20" rx="6" />
+      </g>
+      <g fill="#fff">
+        <rect x="28" y="3" width="20" height="62" rx="10" />
+        <rect x="45" y="38" width="19" height="32" rx="9.5" />
+        <rect x="61" y="44" width="18" height="30" rx="9" />
+        <rect x="76" y="52" width="16" height="26" rx="8" />
+        <rect x="22" y="56" width="70" height="46" rx="20" />
+        <ellipse cx="20" cy="74" rx="11" ry="19" transform="rotate(-32 20 74)" />
+        <rect x="32" y="96" width="52" height="20" rx="6" />
+      </g>
+      <g stroke="#111" stroke-width="3.2" stroke-linecap="round" fill="none">
+        <path d="M47 44 V60" /><path d="M63 50 V64" /><path d="M78 57 V68" />
+        <path d="M34 98 H82" />
+      </g>
+    </svg>
+  </div>
+  </div>
+  <div id="fade"></div>
 </div>
 
 <script>
-  /** Length of the authored timeline: every `--d` delay and `data-in/out` window is in these seconds. */
-  const DURATION = 50
-  /** Length of the rendered video. */
-  const VIDEO_DURATION = 44
+  /** Total video length in seconds. */
+  const DURATION = 27
 
-  /**
-   * Scene boundaries as [authored time, video time]. Seeking maps video time onto the
-   * authored timeline piecewise-linearly, so each scene plays at the pace the narration needs.
-   */
-  const PACE = [
-    [0, 0], [4.6, 5.0], [10.6, 11.4], [21, 19.6], [28, 24.8], [35, 30.8], [44.2, 38.0], [50, 44],
+  /** Scene windows in seconds; a hard cut happens at each boundary. */
+  const SCENES = [
+    ['s1', 0, 2.6], ['s2', 2.6, 6.9], ['s3', 6.9, 10.2], ['s4', 10.2, 14.6],
+    ['s5', 14.6, 18.2], ['s6', 18.2, 22.6], ['s7', 22.6, 27.01],
   ]
 
-  function toStoryTime(t) {
-    for (let i = 1; i < PACE.length; i++) {
-      const [s0, v0] = PACE[i - 1]
-      const [s1, v1] = PACE[i]
-      if (t <= v1 || i === PACE.length - 1) return s0 + ((t - v0) * (s1 - s0)) / (v1 - v0)
+  const LABBAI_GLYPH =
+    '<svg viewBox="0 0 132 132"><path d="M44 32 V90 H90" stroke="#fff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="90" cy="44" r="11.5" fill="#fff"/></svg>'
+
+  const HUB_ICONS = [
+    'telegram', 'whats-app', 'instagram', 'gmail', 'google-sheets', 'google-calendar', 'google-drive', 'hubspot',
+    'notion', 'shopify', 'zoom', 'postgres', 'cal-com-mark', 'airtable', 'trello', 'supabase',
+  ]
+
+  const ROWS = [
+    ['telegram', 'Replies on Telegram'],
+    ['google-sheets', 'Knows your price list'],
+    ['cal-com-mark', 'Books visits in Cal.com'],
+    ['open-ai', 'Answers with gpt-5-mini'],
+  ]
+
+  const PROMPT = 'Build a Telegram agent for my barbershop'
+
+  const $ = (id) => document.getElementById(id)
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x))
+  const lerp = (a, b, p) => a + (b - a) * p
+  const prog = (t, start, dur) => clamp((t - start) / dur)
+  const easeOut = (p) => 1 - Math.pow(1 - p, 3)
+  const easeIn = (p) => p * p * p
+  const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
+  /** Damped spring from 0 to 1 starting at `start`; overshoots like an After Effects bounce. */
+  const spring = (t, start, freq = 1.6, damp = 0.5) => {
+    const x = t - start
+    if (x <= 0) return 0
+    const w = 2 * Math.PI * freq
+    return 1 - Math.exp(-damp * w * x) * Math.cos(w * Math.sqrt(1 - damp * damp) * x)
+  }
+  /** 0 → 1 → 0 bump used for button presses. */
+  const press = (t, start, dur) => Math.sin(Math.PI * prog(t, start, dur))
+
+  function place(el, { x = 960, y = 540, s = 1, r = 0, rx = 0, ry = 0, o = 1, w, h }) {
+    if (w !== undefined) el.style.width = `${w}px`
+    if (h !== undefined) el.style.height = `${h}px`
+    el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) perspective(1600px) rotateX(${rx}deg) rotateY(${ry}deg) rotate(${r}deg) scale(${s})`
+    el.style.opacity = o
+  }
+
+  /** Places the hand so its fingertip (38%, 3% of the 150×180 box) lands on (x, y). */
+  function hand(x, y, s = 1, o = 1) {
+    const el = $('hand')
+    el.style.transformOrigin = '38% 3%'
+    el.style.transform = `translate(${x - 57}px, ${y - 5}px) scale(${s})`
+    el.style.opacity = o
+  }
+
+  function tileHtml(name) {
+    return `<div class="tile"><img src="icons/${name}.svg" /></div>`
+  }
+
+  function build() {
+    for (const id of ['s1-tile', 's5-hubtile', 's7-tile']) $(id).innerHTML = LABBAI_GLYPH
+    $('s4-rows').innerHTML = ROWS.map(
+      ([icon, text], i) =>
+        `<div class="row" id="r${i}"><div class="check"><div class="fill" id="c${i}"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div></div><div class="mini">${tileHtml(icon)}</div><div class="label"><span class="hl" id="h${i}"></span>${text}</div></div>`
+    ).join('')
+    $('s5-tiles').innerHTML = HUB_ICONS.map((n, i) => `<div class="obj" id="t${i}" style="width:128px;height:128px">${tileHtml(n)}</div>`).join('')
+    $('s5-links').innerHTML = HUB_ICONS.map(
+      (_, i) => `<line id="l${i}" stroke="rgba(51,196,130,0.35)" stroke-width="3" stroke-linecap="round"/><circle id="p${i}" r="6" fill="#5df0ad"/>`
+    ).join('')
+  }
+
+  function scene1(t) {
+    const grow = spring(t, 0.12, 1.7, 0.42)
+    const size = lerp(40, 300, grow)
+    const slide = easeInOut(prog(t, 1.0, 0.55))
+    const exit = easeIn(prog(t, 2.25, 0.35))
+    const tile = $('s1-tile')
+    const glyph = tile.querySelector('svg')
+    tile.style.borderRadius = `${lerp(50, 26, clamp(grow))}%`
+    glyph.style.opacity = prog(t, 0.4, 0.2)
+    glyph.style.transform = `scale(${spring(t, 0.4, 2, 0.45)})`
+    place($('s1-icon'), {
+      x: 960 - 270 * slide, y: 540 - 900 * exit, w: size, h: size,
+      s: clamp(spring(t, 0, 2.4, 0.7), 0, 1.3), r: lerp(-60, 0, grow), ry: lerp(40, 0, clamp(grow)),
+    })
+    const reveal = easeOut(prog(t, 1.15, 0.6))
+    const word = $('s1-word')
+    word.style.clipPath = `inset(-20% ${100 - 100 * reveal}% -20% 0)`
+    place(word, { x: 1150 + lerp(-120, 0, reveal), y: 540 - 900 * exit })
+  }
+
+  function scene2(t) {
+    const ids = ['s2-a', 's2-b', 's2-c']
+    const badges = ['s2-ba', 's2-bb', 's2-bc']
+    const targets = [12, 27, 47]
+    const exit = easeIn(prog(t, 6.5, 0.4))
+    ids.forEach((id, i) => {
+      const drop = spring(t, 2.62 + 0.11 * i, 1.8, 0.42)
+      const badgeAt = 3.45 + 0.18 * i
+      const x0 = 960 + (i - 1) * 380
+      const since = t - badgeAt
+      const wobble = since > 0 ? 7 * Math.sin(since * 28) * Math.exp(-since * 5) : 0
+      const idle = Math.sin((t - 3) * 2.2 + i * 1.7) * 7
+      place($(id), {
+        w: 250, h: 250,
+        x: lerp(x0, 960, exit), y: lerp(-300, 540, drop) + idle * clamp(t - 3.5),
+        rx: (1 - clamp(drop)) * 55, r: wobble + (i - 1) * 4 * (1 - clamp(drop)),
+        s: 1 - 0.8 * exit,
+      })
+      const b = $(badges[i])
+      b.style.transform = `scale(${spring(t, badgeAt, 2.2, 0.4)})`
+      b.textContent = String(Math.max(1, Math.round(targets[i] * easeOut(prog(t, badgeAt, 2.2)))))
+    })
+  }
+
+  function scene3(t) {
+    const grow = spring(t, 6.9, 1.9, 0.5)
+    const w = lerp(90, 1060, grow)
+    const h = lerp(90, 132, clamp(grow))
+    place($('s3-pill'), { w, h })
+    const typed = Math.floor(PROMPT.length * prog(t, 7.3, 1.35))
+    const caretOn = t < 9.1 && Math.floor(t * 3) % 2 === 0
+    const text = $('s3-text')
+    text.style.opacity = prog(t, 7.1, 0.2)
+    text.innerHTML = typed === 0
+      ? '<span class="placeholder">Ask Labbai AI…</span>'
+      : `${PROMPT.slice(0, typed)}${caretOn ? '<span class="caret"></span>' : ''}`
+
+    const bx = 960 + w / 2 - 18 - 48
+    const tap = press(t, 9.2, 0.18)
+    const send = $('s3-send')
+    send.style.opacity = prog(t, 7.1, 0.2)
+    send.style.transform = `scale(${(1 - 0.14 * tap) * (1 + 0.12 * press(t, 9.38, 0.3))})`
+    $('s3-arrow').style.opacity = t < 9.35 ? 1 : 0
+    $('s3-spin').style.opacity = t < 9.35 ? 0 : 1
+    $('s3-spin').style.transform = `rotate(${(t - 9.35) * 600}deg)`
+
+    const inP = easeInOut(prog(t, 8.55, 0.6))
+    const outP = easeIn(prog(t, 9.55, 0.5))
+    hand(lerp(1650, bx, inP) + outP * 500, lerp(1150, 540, inP) + outP * 500, 1 - 0.12 * tap, t > 8.5 ? 1 : 0)
+  }
+
+  function scene4(t) {
+    const g = spring(t, 10.2, 1.7, 0.5)
+    const exit = easeIn(prog(t, 14.2, 0.4))
+    const cardW = lerp(1060, 700, g)
+    place($('s4-card'), { w: cardW, h: lerp(132, 640, g), r: -55 * exit, s: 1 - 0.8 * exit, ry: 25 * exit })
+    $('s4-content').style.opacity = prog(t, 10.4, 0.25)
+    ROWS.forEach((_, i) => {
+      const row = $(`r${i}`)
+      const appear = spring(t, 10.45 + 0.09 * i, 1.8, 0.6)
+      row.style.transform = `translateY(${(1 - appear) * 40}px)`
+      row.style.opacity = clamp(appear)
+      const at = 10.95 + 0.42 * i
+      $(`c${i}`).style.transform = `scale(${spring(t, at, 2.3, 0.4)})`
+      $(`h${i}`).style.width = `calc(${100 * easeOut(prog(t, at + 0.05, 0.3))}% + 12px)`
+      $(`h${i}`).style.opacity = t > at ? 1 : 0
+    })
+    const on = t > 13.25
+    const squash = press(t, 13.1, 0.3)
+    $('s4-knob').style.transform = `translateX(${54 * spring(t, 13.25, 2, 0.55)}px) scale(${1 + 0.15 * squash}, ${1 - 0.1 * squash})`
+    $('s4-toggle').style.background = on ? '#33c482' : '#d7dbe1'
+    $('s4-status').textContent = on ? 'Live' : 'Go live'
+    $('s4-status').style.color = on ? '#1c9a5f' : '#1d2026'
+    const ring = on ? ((t - 13.25) % 0.9) / 0.9 : 0
+    $('s4-dot').style.background = on ? '#33c482' : '#c4c9d1'
+    $('s4-dot').style.boxShadow = on ? `0 0 0 ${ring * 16}px rgba(51,196,130,${0.5 * (1 - ring)})` : 'none'
+
+    const tx = 960 + cardW / 2 - 44 - 66 + 27
+    const ty = 540 + 320 - 34 - 45
+    const inP = easeInOut(prog(t, 12.45, 0.6))
+    const outP = easeIn(prog(t, 13.5, 0.55))
+    const tap = press(t, 13.1, 0.2)
+    hand(lerp(1700, tx, inP) + outP * 450, lerp(1200, ty, inP) + outP * 400, 1 - 0.12 * tap, t > 12.4 && t < 14.1 ? 1 : 0)
+  }
+
+  function scene5(t) {
+    const exit = easeIn(prog(t, 17.85, 0.35))
+    const hub = spring(t, 14.6, 1.9, 0.45)
+    place($('s5-hub'), { w: 240, h: 240, s: lerp(0.2, 1, hub) * (1 - 0.6 * exit), r: (1 - clamp(hub)) * -40 })
+    const orbit = (t - 14.6) * 0.22
+    HUB_ICONS.forEach((_, i) => {
+      const pop = spring(t, 14.75 + 0.04 * i, 1.8, 0.45) * (1 - exit)
+      const a = (i / HUB_ICONS.length) * Math.PI * 2 + orbit - Math.PI / 2
+      const x = 960 + Math.cos(a) * 600 * pop
+      const y = 540 + Math.sin(a) * 360 * pop
+      place($(`t${i}`), { x, y, s: clamp(pop, 0, 1.3), rx: Math.sin(a) * 18, ry: -Math.cos(a) * 18 })
+      const line = $(`l${i}`)
+      line.setAttribute('x1', 960)
+      line.setAttribute('y1', 540)
+      line.setAttribute('x2', x)
+      line.setAttribute('y2', y)
+      line.style.opacity = clamp(pop) * 0.9
+      const d = (t * 0.8 + i * 0.37) % 1
+      const dot = $(`p${i}`)
+      dot.setAttribute('cx', lerp(960, x, d))
+      dot.setAttribute('cy', lerp(540, y, d))
+      dot.style.opacity = clamp(pop) * Math.sin(Math.PI * d) * (t > 15.3 ? 1 : 0)
+    })
+  }
+
+  function scene6(t) {
+    const g = spring(t, 18.2, 1.8, 0.5)
+    const exit = easeIn(prog(t, 22.25, 0.35))
+    place($('s6-card'), { w: 680, h: 720, s: lerp(0.15, 1, g) * (1 - 0.85 * exit), r: (1 - clamp(g)) * 20 })
+    $('s6-content').style.opacity = prog(t, 18.35, 0.2)
+    for (const [id, at] of [['m1', 18.55], ['m3', 19.75], ['m4', 20.45], ['m5', 21.15]]) {
+      $(id).style.transform = `scale(${spring(t, at, 2, 0.5)})`
     }
-    return t
-  }
-
-  const INTEGRATIONS = [
-    ['Telegram', '#2aa3e0'], ['WhatsApp', '#25d366'], ['Instagram', '#e1306c'], ['Twilio SMS', '#f22f46'], ['Gmail', '#ea4335'], ['SMTP', '#9aa1a9'],
-    ['Google Sheets', '#34a853'], ['Google Drive', '#fbbc04'], ['Google Docs', '#4285f4'], ['Google Calendar', '#4285f4'], ['Google Forms', '#7248b9'], ['Google Maps', '#34a853'],
-    ['HubSpot', '#ff7a59'], ['Pipedrive', '#7a7f86'], ['Notion', '#e6e6e6'], ['Airtable', '#fcb400'], ['Trello', '#0079bf'], ['Cal.com', '#e6e6e6'],
-    ['Calendly', '#006bff'], ['Zoom', '#2d8cff'], ['PostgreSQL', '#336791'], ['MySQL', '#00758f'], ['Supabase', '#3ecf8e'], ['Shopify', '#95bf47'],
-    ['WordPress', '#21759b'], ['Firecrawl', '#ff6a00'], ['Exa', '#4c8dff'], ['Serper', '#9b7bff'], ['ElevenLabs', '#e6e6e6'], ['+ MCP & more', null],
-  ]
-
-  const MODULES = [
-    ['Chat', 'Talk to Labbai AI. Build and change agents in plain language.', 'var(--accent)', '#06130c', '✦'],
-    ['Workflows', 'The visual builder. Connect blocks, models and integrations.', 'var(--blue)', '#fff', '⇄'],
-    ['Knowledge', 'Upload docs and price lists your agents answer from.', 'var(--violet)', '#fff', 'K'],
-    ['Tables', 'A built-in database for leads, orders and bookings.', 'var(--amber)', '#241a02', '▦'],
-    ['Logs', 'Full visibility. Trace every run block by block.', 'var(--pink)', '#2a0716', '≡'],
-    ['Schedules', 'Run agents on a timer: reports, reminders, follow-ups.', '#2aa3e0', '#fff', '◷'],
-  ]
-
-  function buildChips() {
-    const root = document.getElementById('chips')
-    INTEGRATIONS.forEach(([name, color], i) => {
-      const el = document.createElement('div')
-      el.className = color ? 'chip pop' : 'chip more pop'
-      el.style.setProperty('--d', `${(21.8 + i * 0.07).toFixed(2)}s`)
-      el.innerHTML = color ? `<span class="c" style="background:${color}"></span>${name}` : name
-      root.appendChild(el)
+    const typing = $('m2')
+    typing.style.transform = `scale(${t < 19.7 ? spring(t, 19.05, 2, 0.5) : 0})`
+    typing.querySelectorAll('i').forEach((dot, k) => {
+      dot.style.transform = `translateY(${-6 * Math.max(0, Math.sin(t * 9 - k * 0.8))}px)`
     })
+    const left = spring(t, 19.9, 1.4, 0.5)
+    place($('s6-left'), { x: 960 - 640 - (1 - left) * 300, y: 380, ry: (1 - clamp(left)) * 60, o: clamp(left) * (1 - exit), s: 1 - 0.5 * exit })
+    const right = spring(t, 21.35, 1.4, 0.5)
+    place($('s6-right'), { x: 960 + 660 + (1 - right) * 300, y: 700, ry: (1 - clamp(right)) * -60, o: clamp(right) * (1 - exit), s: 1 - 0.5 * exit })
   }
 
-  function buildCards() {
-    const root = document.getElementById('cards')
-    MODULES.forEach(([name, desc, bg, fg, glyph], i) => {
-      const el = document.createElement('div')
-      el.className = 'card fu'
-      el.style.setProperty('--d', `${(28.7 + i * 0.28).toFixed(2)}s`)
-      el.innerHTML = `<div class="ico" style="background:${bg};color:${fg}">${glyph}</div><div class="n">${name}</div><div class="d">${desc}</div>`
-      root.appendChild(el)
-    })
+  function scene7(t) {
+    const g = spring(t, 22.6, 1.5, 0.45)
+    const spin = easeOut(prog(t, 22.6, 1.0))
+    const up = easeInOut(prog(t, 23.35, 0.6))
+    place($('s7-icon'), { w: 300, h: 300, y: lerp(540, 400, up), s: clamp(g, 0, 1.4), ry: lerp(-220, 0, spin), r: lerp(-30, 0, spin) })
+    const word = spring(t, 23.55, 1.4, 0.6)
+    place($('s7-word'), { y: 640 + (1 - word) * 60, o: clamp(word) })
+    const tag = spring(t, 24.0, 1.4, 0.6)
+    place($('s7-tag'), { y: 760 + (1 - tag) * 40, o: clamp(tag) })
+    $('fade').style.opacity = easeIn(prog(t, 26.3, 0.7))
   }
+
+  const RENDER = { s1: scene1, s2: scene2, s3: scene3, s4: scene4, s5: scene5, s6: scene6, s7: scene7 }
+
+  /** Moments something lands or gets tapped: [time, strength]. Each one kicks the camera. */
+  const IMPACTS = [
+    [0.3, 1], [2.85, 0.8], [2.97, 0.8], [3.08, 0.8], [3.5, 0.4], [3.68, 0.4], [3.86, 0.4],
+    [7.05, 0.7], [9.22, 0.9], [10.3, 0.8], [11.0, 0.25], [11.42, 0.25], [11.84, 0.25], [12.26, 0.25],
+    [13.15, 1], [14.72, 0.9], [18.32, 0.8], [19.8, 0.3], [21.2, 0.3], [21.4, 0.5], [22.75, 1.1], [23.6, 0.5],
+  ]
 
   /**
-   * Gives each scene one opacity animation spanning the whole video so that
-   * seeking to any time shows exactly the scenes whose window contains it.
+   * Camera move for the active scene: a zoom punch-in on every cut, an accelerating
+   * push-out before the next one, and a decaying shake on each impact.
    */
-  function buildSceneWindows() {
-    const total = DURATION * 1000
-    const fade = 0.45
-    document.querySelectorAll('.scene').forEach((el) => {
-      const tin = Number(el.dataset.in)
-      const tout = Number(el.dataset.out)
-      const frames = []
-      const at = (t) => Math.min(1, Math.max(0, t / DURATION))
-      if (tin <= 0) {
-        frames.push({ offset: 0, opacity: 1, transform: 'none' })
-      } else {
-        frames.push({ offset: 0, opacity: 0, transform: 'scale(1.015)' })
-        frames.push({ offset: at(tin), opacity: 0, transform: 'scale(1.015)' })
-        frames.push({ offset: at(tin + fade), opacity: 1, transform: 'none' })
-      }
-      if (tout < DURATION) {
-        frames.push({ offset: at(tout - fade), opacity: 1, transform: 'none' })
-        frames.push({ offset: at(tout), opacity: 0, transform: 'scale(0.985)' })
-        frames.push({ offset: 1, opacity: 0, transform: 'scale(0.985)' })
-      } else {
-        frames.push({ offset: 1, opacity: 1, transform: 'none' })
-      }
-      el.animate(frames, { duration: total, fill: 'both', easing: 'linear' })
-    })
+  function camera(t, start, end) {
+    let scale = 1 + 0.14 * (1 - easeOut(prog(t, start, 0.4))) + 0.18 * easeIn(prog(t, end - 0.28, 0.28))
+    let x = 0
+    let y = 0
+    let rot = 0
+    for (const [at, k] of IMPACTS) {
+      const dt = t - at
+      if (dt < 0 || dt > 0.6) continue
+      const decay = Math.exp(-dt * 9) * k
+      scale += 0.035 * decay * Math.cos(dt * 30)
+      x += 14 * decay * Math.sin(dt * 47)
+      y += 10 * decay * Math.sin(dt * 39 + 1)
+      rot += 0.6 * decay * Math.sin(dt * 33 + 2)
+    }
+    return `translate(${x}px, ${y}px) rotate(${rot}deg) scale(${scale})`
   }
 
-  /** Typing dots are only visible while the agent is "typing". */
-  function buildTypingWindow() {
-    const el = document.getElementById('dots1')
-    const total = DURATION * 1000
-    const at = (t) => t / DURATION
-    el.animate(
-      [
-        { offset: 0, opacity: 0 },
-        { offset: at(36.6), opacity: 0 },
-        { offset: at(36.8), opacity: 1 },
-        { offset: at(37.6), opacity: 1 },
-        { offset: at(37.75), opacity: 0 },
-        { offset: 1, opacity: 0 },
-      ],
-      { duration: total, fill: 'both' }
-    )
-  }
-
-  buildChips()
-  buildCards()
-  buildSceneWindows()
-  buildTypingWindow()
-
-  let animations = null
-
-  /** Pauses every animation and moves it to `t` seconds of the rendered video. */
+  /** Draws the frame at `t` seconds. */
   window.seek = (t) => {
-    animations ??= document.getAnimations()
-    const story = toStoryTime(t) * 1000
-    for (const a of animations) {
-      a.pause()
-      a.currentTime = story
+    let handUsed = false
+    for (const [id, start, end] of SCENES) {
+      const active = t >= start && t < end
+      const el = $(id)
+      el.style.display = active ? 'block' : 'none'
+      if (active) {
+        RENDER[id](t)
+        const cam = camera(t, start, id === 's7' ? DURATION + 1 : end)
+        el.style.transform = cam
+        $('hand-layer').style.transform = cam
+        handUsed = id === 's3' || id === 's4'
+      }
     }
+    if (!handUsed) $('hand').style.opacity = 0
+    if (t < 26) $('fade').style.opacity = 0
   }
-  window.DURATION = VIDEO_DURATION
+  window.DURATION = DURATION
 
+  build()
+  window.ready = Promise.all([
+    document.fonts.ready,
+    ...[...document.images].map((img) => img.decode().catch(() => undefined)),
+  ])
   const params = new URLSearchParams(location.search)
-  if (params.has('t')) {
-    document.fonts.ready.then(() => window.seek(Number(params.get('t'))))
-  }
+  if (params.has('t')) window.ready.then(() => window.seek(Number(params.get('t'))))
 </script>
 </body>
 </html>

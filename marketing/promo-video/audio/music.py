@@ -1,6 +1,6 @@
-"""Synthesizes the promo's background track and mixes it with the narration.
+"""Synthesizes the promo's background track and sound effects and mixes them with the narration.
 
-Usage: python3 music.py [--duration 44] [--scenes 5,11.4,19.6,24.8,30.8,38]
+Usage: python3 music.py [--duration 27] [--scenes ...] [--pops ...] [--taps ...] [--hits ...]
 Reads build/line-<n>.wav (from voice.py) and narration.json; writes build/music.wav
 and build/mix.wav (48 kHz stereo). Everything is generated here, so the track has no
 third-party licensing.
@@ -16,7 +16,7 @@ from scipy.signal import butter, lfilter, resample_poly, sosfilt
 
 HERE = Path(__file__).parent
 SR = 48000
-BPM = 118
+BPM = 128
 BEAT = 60 / BPM
 BAR = 4 * BEAT
 
@@ -145,10 +145,46 @@ def arp(total: int, bars: int, start_bar: int, end_bar: int) -> np.ndarray:
 def whoosh(total: int, at: float) -> np.ndarray:
     """Short filtered-noise swell that lands on a scene cut."""
     out = np.zeros(total)
-    n = int(0.55 * SR)
-    shape = np.sin(np.linspace(0, np.pi, n)) ** 2
-    noise = lowpass(highpass(np.random.randn(n), 900), 6000) * shape
-    add(out, at - 0.4, noise * 0.035)
+    n = int(0.45 * SR)
+    shape = np.linspace(0, 1, n) ** 3
+    shape[-int(0.04 * SR):] *= np.linspace(1, 0, int(0.04 * SR))
+    noise = highpass(np.random.randn(n), 600) * shape
+    sweep = lowpass(noise[: n // 2], 1500)
+    noise[: n // 2] = sweep
+    add(out, at - 0.43, lowpass(noise, 9000) * 0.11)
+    return out
+
+
+def pop(total: int, at: float, gain: float = 1.0) -> np.ndarray:
+    """Bubbly blip for things that spring onto the screen."""
+    out = np.zeros(total)
+    n = int(0.12 * SR)
+    t = np.arange(n) / SR
+    freq = 380 + 900 * np.exp(-t * 40)
+    add(out, at, np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 28) * 0.22 * gain)
+    return out
+
+
+def tap(total: int, at: float) -> np.ndarray:
+    """Finger tap: a short click over a soft low thump."""
+    out = np.zeros(total)
+    n = int(0.09 * SR)
+    t = np.arange(n) / SR
+    click = highpass(np.random.randn(n), 2500) * np.exp(-t * 180) * 0.35
+    thump = np.sin(2 * np.pi * 140 * t) * np.exp(-t * 35) * 0.3
+    add(out, at, click + thump)
+    return out
+
+
+def hit(total: int, at: float) -> np.ndarray:
+    """Sub-bass impact with a noise crack for the big logo moments."""
+    out = np.zeros(total)
+    n = int(0.9 * SR)
+    t = np.arange(n) / SR
+    freq = 38 + 90 * np.exp(-t * 14)
+    sub = np.sin(2 * np.pi * np.cumsum(freq) / SR) * np.exp(-t * 4.5) * 0.7
+    crack = lowpass(np.random.randn(n), 5000) * np.exp(-t * 25) * 0.18
+    add(out, at, sub + crack)
     return out
 
 
@@ -164,25 +200,36 @@ def load_voice(duration: float) -> np.ndarray:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--duration", type=float, default=44.0)
-    parser.add_argument("--scenes", default="5,11.4,19.6,24.8,30.8,38")
+    parser.add_argument("--duration", type=float, default=27.0)
+    parser.add_argument("--scenes", default="2.6,6.9,10.2,14.6,18.2,22.6")
+    parser.add_argument("--pops", default="0.3,2.85,2.97,3.08,3.5,3.68,3.86,7.05,10.3,11.0,11.42,11.84,12.26,14.72,15.0,15.3,15.6,18.32,18.6,19.8,20.5,21.2,21.4")
+    parser.add_argument("--taps", default="9.22,13.15")
+    parser.add_argument("--hits", default="0.25,22.7")
     args = parser.parse_args()
 
     np.random.seed(7)
     total = int(args.duration * SR)
     bars = int(np.ceil(args.duration / BAR)) + 1
-    last = int((args.duration - 5.0) // BAR)  # drums stop so the outro can breathe
+    last = int((args.duration - 4.4) // BAR)  # drums drop out for the logo hit
 
-    kick_track, duck = kick(total, bars, 2, last)
+    kick_track, duck = kick(total, bars, 1, last)
     music = (
         pad(total, bars) * duck
-        + bass(total, bars, 2) * np.minimum(1, duck + 0.25)
+        + bass(total, bars, 1) * np.minimum(1, duck + 0.25)
         + kick_track
-        + hats(total, bars, 4, last)
-        + arp(total, bars, 6, last + 1)
+        + hats(total, bars, 1, last)
+        + arp(total, bars, 2, last + 1)
     )
-    for cut in (float(x) for x in args.scenes.split(",")):
-        music += whoosh(total, cut)
+    times = lambda arg: [float(x) for x in arg.split(",") if x]
+    sfx = np.zeros(total)
+    for cut in times(args.scenes):
+        sfx += whoosh(total, cut)
+    for at in times(args.pops):
+        sfx += pop(total, at)
+    for at in times(args.taps):
+        sfx += tap(total, at)
+    for at in times(args.hits):
+        sfx += hit(total, at)
 
     fade_out = int(3.0 * SR)
     music[-fade_out:] *= np.linspace(1, 0, fade_out) ** 1.5
@@ -200,7 +247,7 @@ def main() -> None:
     speaking = lfilter([1 - 0.9997], [1, -0.9997], speaking)
     music_gain = 0.42 - 0.24 * np.clip(speaking * 1.4, 0, 1)
 
-    mix = voice * 0.9 + music * music_gain
+    mix = voice * 0.9 + music * music_gain + sfx * 0.9
     mix /= np.max(np.abs(mix)) + 1e-9
     mix *= 0.89
 

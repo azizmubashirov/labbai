@@ -1,7 +1,10 @@
 /**
  * Renders promo.html frame by frame and encodes it to MP4.
  *
- * Usage: node render.cjs [--fps 30] [--out labbai-promo.mp4] [--audio audio/build/mix.wav] [--stills 1,12,19]
+ * Usage: node render.cjs [--fps 30] [--blur 5] [--out labbai-promo.mp4] [--audio audio/build/mix.wav] [--stills 1,12,19]
+ *
+ * Motion blur: each output frame is the average of `--blur` sub-frames spread over half a
+ * frame interval (a 180° shutter), blended by ffmpeg's tmix.
  * Requires Playwright (Chromium) and an ffmpeg binary with libx264 (FFMPEG env or PATH).
  */
 const { spawn } = require('node:child_process')
@@ -17,13 +20,14 @@ const FPS = Number(arg('fps', '30'))
 const OUT = path.resolve(__dirname, arg('out', 'labbai-promo.mp4'))
 const STILLS = arg('stills', null)
 const AUDIO = arg('audio', null)
+const BLUR = Number(arg('blur', '5'))
 const FFMPEG = process.env.FFMPEG || 'ffmpeg'
 
 async function main() {
   const browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 })
   await page.goto(`file://${path.join(__dirname, 'promo.html')}`)
-  await page.evaluate(() => document.fonts.ready)
+  await page.evaluate(() => window.ready)
   const duration = await page.evaluate(() => window.DURATION)
 
   if (STILLS) {
@@ -41,7 +45,8 @@ async function main() {
     : []
   const ff = spawn(
     FFMPEG,
-    ['-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', ...audioArgs,
+    ['-y', '-f', 'image2pipe', '-framerate', String(FPS * BLUR), '-c:v', 'mjpeg', '-i', '-', ...audioArgs,
+      '-vf', `tmix=frames=${BLUR},select='eq(mod(n\\,${BLUR})\\,${BLUR - 1})',setpts=N/(${FPS}*TB)`, '-r', String(FPS),
       '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', OUT],
     { stdio: ['pipe', 'inherit', 'inherit'] }
   )
@@ -51,9 +56,11 @@ async function main() {
 
   const frames = Math.round(duration * FPS)
   for (let f = 0; f < frames; f++) {
-    await page.evaluate((s) => window.seek(s), f / FPS)
-    const buf = await page.screenshot({ type: 'jpeg', quality: 95 })
-    if (!ff.stdin.write(buf)) await new Promise((r) => ff.stdin.once('drain', r))
+    for (let k = 0; k < BLUR; k++) {
+      await page.evaluate((s) => window.seek(s), (f + (0.5 * k) / BLUR) / FPS)
+      const buf = await page.screenshot({ type: 'jpeg', quality: 95 })
+      if (!ff.stdin.write(buf)) await new Promise((r) => ff.stdin.once('drain', r))
+    }
     if (f % 150 === 0) process.stdout.write(`frame ${f}/${frames}\n`)
   }
   ff.stdin.end()
