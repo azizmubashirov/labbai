@@ -8,6 +8,7 @@ import { genericHandler } from '@/lib/webhooks/providers/generic'
 import { gmailHandler } from '@/lib/webhooks/providers/gmail'
 import { googleFormsHandler } from '@/lib/webhooks/providers/google-forms'
 import { imapHandler } from '@/lib/webhooks/providers/imap'
+import { instagramHandler } from '@/lib/webhooks/providers/instagram'
 import { notionHandler } from '@/lib/webhooks/providers/notion'
 import { rssHandler } from '@/lib/webhooks/providers/rss'
 import { tableProviderHandler } from '@/lib/webhooks/providers/table'
@@ -29,6 +30,7 @@ const PROVIDER_HANDLERS: Record<string, WebhookProviderHandler> = {
   gmail: gmailHandler,
   google_forms: googleFormsHandler,
   imap: imapHandler,
+  instagram: instagramHandler,
   notion: notionHandler,
   rss: rssHandler,
   table: tableProviderHandler,

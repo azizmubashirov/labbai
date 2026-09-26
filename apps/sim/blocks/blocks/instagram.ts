@@ -4,6 +4,7 @@ import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { AuthMode, IntegrationType } from '@/blocks/types'
 import { normalizeFileInput } from '@/blocks/utils'
 import type { InstagramResponse } from '@/tools/instagram/types'
+import { getTrigger } from '@/triggers'
 
 const IG_USER_ID_OPS = [
   'instagram_list_media',
@@ -186,6 +187,7 @@ export const InstagramBlock: BlockConfig<InstagramResponse> = {
       },
     },
   },
+  triggerAllowed: true,
   subBlocks: [
     {
       id: 'operation',
@@ -744,6 +746,7 @@ Return ONLY the timestamp or date - no explanations, no extra text.`,
       mode: 'advanced',
       condition: { field: 'operation', value: IG_USER_ID_OPS },
     },
+    ...getTrigger('instagram_webhook').subBlocks,
   ],
   tools: {
     access: [
@@ -1170,6 +1173,10 @@ Return ONLY the timestamp or date - no explanations, no extra text.`,
         ],
       },
     },
+  },
+  triggers: {
+    enabled: true,
+    available: ['instagram_webhook'],
   },
 }
 

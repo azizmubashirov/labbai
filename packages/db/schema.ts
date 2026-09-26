@@ -7882,3 +7882,91 @@ export const localCopilotUserMemory = pgTable(
     memoryTypeIdx: index('local_copilot_user_memory_type_idx').on(table.memoryType),
   })
 )
+
+/** Customer messaging channels that feed the Inbox. */
+export const inboxChannelEnum = pgEnum('inbox_channel', ['telegram', 'whatsapp', 'instagram'])
+
+/** Who wrote an Inbox message: the customer, the AI agent workflow, or a workspace operator. */
+export const inboxMessageAuthorEnum = pgEnum('inbox_message_author', [
+  'customer',
+  'agent',
+  'operator',
+])
+
+/** Delivery state of an outbound Inbox message; inbound messages are always `received`. */
+export const inboxMessageStatusEnum = pgEnum('inbox_message_status', ['received', 'sent', 'failed'])
+
+/**
+ * One customer thread on one channel account (a Telegram bot, a WhatsApp phone number, an
+ * Instagram professional account). Rows are created by inbound channel webhooks. `aiEnabled`
+ * off makes webhook delivery record the message without starting the agent workflow.
+ */
+export const inboxConversation = pgTable(
+  'inbox_conversation',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    channel: inboxChannelEnum('channel').notNull(),
+    /** Channel account id: Telegram bot id, WhatsApp phone number id, Instagram account id. */
+    accountId: text('account_id').notNull(),
+    /** Customer address on the channel: Telegram chat id, WhatsApp number, Instagram IGSID. */
+    externalChatId: text('external_chat_id').notNull(),
+    contactName: text('contact_name'),
+    contactHandle: text('contact_handle'),
+    /** Workflow whose trigger last received a message here; replies use its webhook config. */
+    workflowId: text('workflow_id').references(() => workflow.id, { onDelete: 'set null' }),
+    webhookId: text('webhook_id').references(() => webhook.id, { onDelete: 'set null' }),
+    aiEnabled: boolean('ai_enabled').notNull().default(true),
+    unreadCount: integer('unread_count').notNull().default(0),
+    lastMessagePreview: text('last_message_preview'),
+    lastMessageAt: timestamp('last_message_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    threadUnique: uniqueIndex('inbox_conversation_thread_unique').on(
+      table.workspaceId,
+      table.channel,
+      table.accountId,
+      table.externalChatId
+    ),
+    workspaceRecentIdx: index('inbox_conversation_workspace_recent_idx').on(
+      table.workspaceId,
+      table.lastMessageAt
+    ),
+  })
+)
+
+/** One message in an Inbox conversation, inbound or outbound. */
+export const inboxMessage = pgTable(
+  'inbox_message',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => inboxConversation.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    author: inboxMessageAuthorEnum('author').notNull(),
+    /** Operator who sent the message; null for customer and agent messages. */
+    operatorUserId: text('operator_user_id').references(() => user.id, { onDelete: 'set null' }),
+    text: text('text').notNull(),
+    /** Provider message id; makes webhook retries and repeated tool results idempotent. */
+    externalMessageId: text('external_message_id'),
+    status: inboxMessageStatusEnum('status').notNull(),
+    error: text('error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    conversationCreatedIdx: index('inbox_message_conversation_created_idx').on(
+      table.conversationId,
+      table.createdAt
+    ),
+    externalMessageUnique: uniqueIndex('inbox_message_external_unique')
+      .on(table.conversationId, table.author, table.externalMessageId)
+      .where(sql`${table.externalMessageId} IS NOT NULL`),
+  })
+)

@@ -25,6 +25,7 @@ import {
 } from '@/lib/core/utils/stream-limits'
 import { getEffectiveDecryptedEnv } from '@/lib/environment/utils'
 import { preprocessExecution } from '@/lib/execution/preprocessing'
+import { recordInboxWebhookDelivery } from '@/lib/inbox/webhook'
 import { WEBHOOK_MAX_BODY_BYTES } from '@/lib/webhooks/constants'
 import { deliverableWebhookPredicate } from '@/lib/webhooks/delivery-predicate'
 import { createWebhookExecutionPrincipal } from '@/lib/webhooks/execution-principal'
@@ -671,6 +672,7 @@ export interface WebhookDispatchResult {
     | 'preprocessing'
     | 'block-missing'
     | 'queue-failed'
+    | 'inbox-ai-off'
 }
 
 function parseProviderConfig(value: unknown): Record<string, unknown> {
@@ -906,6 +908,27 @@ export async function dispatchResolvedWebhookTarget(
           new NextResponse('Trigger block not found in deployment', { status: 404 }),
         reason: 'block-missing',
       }
+    }
+  }
+
+  /**
+   * Inbox channels record every customer message before anything can reject the run. When the
+   * operator has turned AI off for every conversation in the delivery, the agent must not answer,
+   * so the delivery is acknowledged without queueing an execution.
+   */
+  const inbox = await recordInboxWebhookDelivery({
+    webhook: webhookRecord,
+    workflow: foundWorkflow,
+    body,
+    requestId: options.requestId,
+  })
+  if (inbox?.allAiDisabled) {
+    return {
+      outcome: 'ignored',
+      response: NextResponse.json({
+        message: 'Recorded in Inbox; AI is off for this conversation',
+      }),
+      reason: 'inbox-ai-off',
     }
   }
 

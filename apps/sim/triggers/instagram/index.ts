@@ -1,0 +1,1 @@
+export { instagramWebhookTrigger } from './webhook'

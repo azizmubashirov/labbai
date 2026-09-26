@@ -25,6 +25,7 @@ import { googleSheetsPollingTrigger } from '@/triggers/google-sheets'
 import { googleFormsWebhookTrigger } from '@/triggers/googleforms'
 import { hubspotPollingTrigger } from '@/triggers/hubspot'
 import { imapPollingTrigger } from '@/triggers/imap'
+import { instagramWebhookTrigger } from '@/triggers/instagram'
 import {
   notionCommentCreatedTrigger,
   notionDatabaseCreatedTrigger,
@@ -87,6 +88,7 @@ export const TRIGGER_REGISTRY: TriggerRegistry = {
   table_new_row: tableNewRowTrigger,
   telegram_webhook: telegramWebhookTrigger,
   whatsapp_webhook: whatsappWebhookTrigger,
+  instagram_webhook: instagramWebhookTrigger,
   google_forms_webhook: googleFormsWebhookTrigger,
   hubspot_poller: hubspotPollingTrigger,
   imap_poller: imapPollingTrigger,

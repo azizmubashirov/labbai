@@ -1,12 +1,8 @@
-import { db, workflowDeploymentVersion } from '@sim/db'
-import { webhook } from '@sim/db/schema'
 import { createLogger } from '@sim/logger'
-import { safeCompare } from '@sim/security/compare'
 import { sha256Hex } from '@sim/security/hash'
-import { hmacSha256Hex } from '@sim/security/hmac'
 import { isRecordLike } from '@sim/utils/object'
-import { and, eq, isNull, or } from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
+import { handleMetaVerification, verifyMetaWebhookAuth } from '@/lib/webhooks/providers/meta'
 import type {
   FormatInputContext,
   FormatInputResult,
@@ -135,23 +131,6 @@ function normalizeWhatsAppStatus(
   }
 }
 
-function validateWhatsAppSignature(secret: string, signature: string, body: string): boolean {
-  try {
-    if (!signature.startsWith('sha256=')) {
-      logger.warn('WhatsApp signature has invalid format')
-      return false
-    }
-
-    const providedSignature = signature.substring(7)
-    const computedSignature = hmacSha256Hex(body, secret)
-
-    return safeCompare(computedSignature, providedSignature)
-  } catch (error) {
-    logger.error('Error validating WhatsApp signature:', error)
-    return false
-  }
-}
-
 function buildWhatsAppIdempotencyKey(keys: Set<string>): string | null {
   if (keys.size === 0) {
     return null
@@ -162,86 +141,6 @@ function buildWhatsAppIdempotencyKey(keys: Set<string>): string | null {
   return `whatsapp:${sortedKeys.length}:${digest}`
 }
 
-/**
- * Handle WhatsApp verification requests
- */
-async function handleWhatsAppVerification(
-  requestId: string,
-  path: string,
-  mode: string | null,
-  token: string | null,
-  challenge: string | null
-): Promise<NextResponse | null> {
-  if (mode && token && challenge) {
-    logger.info(`[${requestId}] WhatsApp verification request received for path: ${path}`)
-
-    if (mode !== 'subscribe') {
-      logger.warn(`[${requestId}] Invalid WhatsApp verification mode: ${mode}`)
-      return new NextResponse('Invalid mode', { status: 400 })
-    }
-
-    const webhooks = await db
-      .select({ webhook })
-      .from(webhook)
-      .leftJoin(
-        workflowDeploymentVersion,
-        and(
-          eq(workflowDeploymentVersion.workflowId, webhook.workflowId),
-          eq(workflowDeploymentVersion.isActive, true)
-        )
-      )
-      .where(
-        and(
-          eq(webhook.provider, 'whatsapp'),
-          eq(webhook.path, path),
-          eq(webhook.isActive, true),
-          or(
-            eq(webhook.deploymentVersionId, workflowDeploymentVersion.id),
-            and(isNull(workflowDeploymentVersion.id), isNull(webhook.deploymentVersionId))
-          )
-        )
-      )
-
-    let candidates = 0
-
-    for (const row of webhooks) {
-      const wh = row.webhook
-      const providerConfig = (wh.providerConfig as Record<string, unknown>) || {}
-      const verificationToken = providerConfig.verificationToken
-
-      if (!verificationToken) {
-        continue
-      }
-
-      candidates++
-
-      if (safeCompare(token, verificationToken as string)) {
-        logger.info(`[${requestId}] WhatsApp verification successful for webhook ${wh.id}`)
-        return new NextResponse(challenge, {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/plain',
-          },
-        })
-      }
-    }
-
-    /**
-     * A path with no WhatsApp webhook expecting a token is not a failed verification: the
-     * `hub.*` parameters belong to whoever owns that path. Fall through so the delivery is
-     * routed normally instead of answering 403 for someone else's query parameters.
-     */
-    if (candidates === 0) {
-      return null
-    }
-
-    logger.warn(`[${requestId}] No matching WhatsApp verification token found`)
-    return new NextResponse('Verification failed', { status: 403 })
-  }
-
-  return null
-}
-
 export const whatsappHandler: WebhookProviderHandler = {
   /**
    * Meta sends the WhatsApp verification handshake as a `GET` with `hub.*` query parameters, so
@@ -250,34 +149,11 @@ export const whatsappHandler: WebhookProviderHandler = {
   challengeMethods: ['GET', 'POST'],
 
   verifyAuth({ request, rawBody, requestId, providerConfig }) {
-    const appSecret = providerConfig.appSecret as string | undefined
-    if (!appSecret) {
-      logger.warn(
-        `[${requestId}] WhatsApp webhook missing appSecret in providerConfig — rejecting request`
-      )
-      return new NextResponse('Unauthorized - WhatsApp app secret not configured', { status: 401 })
-    }
-
-    const signature = request.headers.get('x-hub-signature-256')
-    if (!signature) {
-      logger.warn(`[${requestId}] WhatsApp webhook missing signature header`)
-      return new NextResponse('Unauthorized - Missing WhatsApp signature', { status: 401 })
-    }
-
-    if (!validateWhatsAppSignature(appSecret, signature, rawBody)) {
-      logger.warn(`[${requestId}] WhatsApp signature verification failed`)
-      return new NextResponse('Unauthorized - Invalid WhatsApp signature', { status: 401 })
-    }
-
-    return null
+    return verifyMetaWebhookAuth('whatsapp', request, rawBody, requestId, providerConfig)
   },
 
   async handleChallenge(_body: unknown, request: NextRequest, requestId: string, path: string) {
-    const url = new URL(request.url)
-    const mode = url.searchParams.get('hub.mode')
-    const token = url.searchParams.get('hub.verify_token')
-    const challenge = url.searchParams.get('hub.challenge')
-    return handleWhatsAppVerification(requestId, path, mode, token, challenge)
+    return handleMetaVerification('whatsapp', request, requestId, path)
   },
 
   extractIdempotencyId(body: unknown) {

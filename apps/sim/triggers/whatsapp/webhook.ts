@@ -43,6 +43,16 @@ export const whatsappWebhookTrigger: TriggerConfig = {
       mode: 'trigger',
     },
     {
+      id: 'accessToken',
+      title: 'Access Token (for Inbox replies)',
+      type: 'short-input',
+      placeholder: 'Permanent or system-user access token',
+      description:
+        'Optional. Lets operators reply to customers from the Inbox. Use a token with whatsapp_business_messaging permission.',
+      password: true,
+      mode: 'trigger',
+    },
+    {
       id: 'triggerInstructions',
       title: 'Setup Instructions',
       hideFromPreview: true,
