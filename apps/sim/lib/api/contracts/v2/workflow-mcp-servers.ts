@@ -70,7 +70,9 @@ export const v2WorkflowMcpServerSchema = z
     id: z.string().describe('Unique workflow-MCP server identifier.'),
     name: z.string().describe('Server display name, shown to connecting MCP clients.'),
     description: z.string().nullable().describe('Optional server description, or null when unset.'),
-    isPublic: z.boolean().describe('Whether the server answers MCP clients without a Sim API key.'),
+    isPublic: z
+      .boolean()
+      .describe('Whether the server answers MCP clients without a Labbai API key.'),
     mcpServerUrl: z
       .string()
       .describe('Endpoint an MCP client connects to. Published here so callers never build it.')
@@ -153,7 +155,7 @@ export const v2CreateWorkflowMcpServerBodySchema = z
       .boolean()
       .optional()
       .describe(
-        'Whether the server answers MCP clients without a Sim API key. Defaults to false — a public server executes the workflows it publishes for anyone holding its URL.'
+        'Whether the server answers MCP clients without a Labbai API key. Defaults to false — a public server executes the workflows it publishes for anyone holding its URL.'
       )
       .meta({ default: false }),
     workflowIds: z
@@ -201,7 +203,7 @@ export const v2UpdateWorkflowMcpServerBodySchema = z
     isPublic: z
       .boolean()
       .optional()
-      .describe('Whether the server answers MCP clients without a Sim API key.'),
+      .describe('Whether the server answers MCP clients without a Labbai API key.'),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -245,7 +247,7 @@ export const v2WorkflowMcpToolSchema = z
       ),
     toolDescription: z.string().nullable().describe('Description shown to MCP clients.'),
     mcpServerUrl: z.string().describe('Endpoint an MCP client connects to.'),
-    apiEndpoint: z.string().describe('Sim execution endpoint this tool calls through.'),
+    apiEndpoint: z.string().describe('Labbai execution endpoint this tool calls through.'),
     updated: z
       .boolean()
       .describe(

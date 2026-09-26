@@ -14,10 +14,10 @@ export interface SimWordmarkProps {
   tone?: keyof typeof WORDMARK_FILLS
 }
 
-/** Canonical Sim logotype, shared by browser and bundled desktop pages. */
+/** Canonical Labbai logotype. */
 export function SimWordmark({ size = 'nav', tone = 'body' }: SimWordmarkProps) {
   const compact = size === 'tag'
-  const width = compact ? 21 : 37
+  const width = compact ? 41 : 73
   const height = compact ? 10 : 18
   const fill = WORDMARK_FILLS[tone]
 

@@ -9,6 +9,7 @@ import {
   ChipModalHeader,
   Label,
 } from '@sim/emcn'
+import { getBaseDomain } from '@/lib/core/utils/urls'
 
 interface NoOrganizationViewProps {
   orgName: string
@@ -76,7 +77,7 @@ export function NoOrganizationView({
             <Label htmlFor='orgSlug'>Team URL</Label>
             <div className='mt-1 flex items-center'>
               <div className='rounded-l-[6px] border border-[var(--border-1)] border-r-0 bg-[var(--surface-4)] px-3 py-1.5 text-[var(--text-muted)] text-small'>
-                sim.ai/team/
+                {getBaseDomain()}/team/
               </div>
               <ChipInput
                 id='orgSlug'

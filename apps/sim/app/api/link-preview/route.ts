@@ -61,7 +61,7 @@ async function fetchPreview(url: string): Promise<LinkPreview> {
     maxRedirects: MAX_REDIRECTS,
     maxResponseBytes: MAX_RESPONSE_BYTES,
     headers: {
-      'User-Agent': 'Simbot/1.0 (+https://sim.ai)',
+      'User-Agent': 'LabbaiBot/1.0',
       Accept: 'text/html,application/xhtml+xml',
     },
   })

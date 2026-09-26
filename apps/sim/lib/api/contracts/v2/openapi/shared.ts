@@ -325,14 +325,14 @@ export const V2_AUTH_SECURITY_SCHEMES = {
     in: 'header',
     name: 'X-API-Key',
     description:
-      'Your Sim API key, personal or workspace-scoped. Generate one under Settings, then API Keys. Operations that reject workspace keys say so in their own description.',
+      'Your Labbai API key, personal or workspace-scoped. Generate one under Settings, then API Keys. Operations that reject workspace keys say so in their own description.',
   },
   oauthBearer: {
     type: 'http',
     scheme: 'bearer',
     bearerFormat: 'OAuth 2.0 access token',
     description:
-      'A Sim OAuth access token obtained by a registered client through the authorization-code flow. Each operation declares its required scope: api:read permits reads and searches; api:write also permits changes and execution and implies api:read. Scope requirements follow the application operation, independent of HTTP method or workspace role.',
+      'A Labbai OAuth access token obtained by a registered client through the authorization-code flow. Each operation declares its required scope: api:read permits reads and searches; api:write also permits changes and execution and implies api:read. Scope requirements follow the application operation, independent of HTTP method or workspace role.',
   },
 } as const satisfies Readonly<Record<string, OpenApiSecurityScheme>>
 

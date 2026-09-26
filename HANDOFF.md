@@ -27,6 +27,8 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | 7 Organization UI layer (`/o/**`), Sim Search, org Search MCP, org Assistant removed; kept org-backed features live in workspace settings; DB tables kept | done |
 | + Sim cloud copilot path (Go mothership client, BYOK/API-key routes) and Local/Cloud switch removed — local copilot only | done |
 | + Telemetry only to our own `TELEMETRY_ENDPOINT`; off when unset | done |
+| Branding, part 1: name, text logo, favicons, email header, copy, agent identity | done (see below) |
+| Branding, part 2: UZ/RU interface (i18n) | todo — separate step |
 
 LICENSE RULE (critical): `apps/sim/ee` was under the Sim Enterprise License. Never read,
 copy or restore `ee` source from git history. Requirements come only from Apache code.
@@ -44,6 +46,32 @@ copy or restore `ee` source from git history. Requirements come only from Apache
   (no trigger emits it any more).
 - Biome: one `noDelete` in `lib/labbai/scim/protocol/group-patch.ts` (unsafe fix would keep
   the key as `undefined` — check SCIM semantics before changing).
+
+### Branding (2026-09-26)
+
+Owner decisions: text logo for now, keep the current colors, no support email or domain yet,
+UZ/RU translation later as its own step.
+
+- Brand config `lib/branding/defaults.ts`: name `Labbai`, no support email; terms/privacy
+  links come from `NEXT_PUBLIC_TERMS_URL` / `NEXT_PUBLIC_PRIVACY_URL` and are hidden while
+  unset (auth pages, email footer). `security.txt` returns 404 until a support email exists.
+- Logo: "Labbai" wordmark outlined from Inter SemiBold (SIL OFL) in
+  `packages/emcn/src/components/sim-wordmark/paths.ts`; app mark (green square with a white
+  "L") in `packages/emcn/src/icons/sim.tsx`; favicons, `icon.svg`, email `wordmark.png`,
+  `public/logo/wordmark.svg`. Component names (`SimWordmark`, `Sim`) are unchanged. To swap in a
+  real logo later: replace those files and `EMAIL_WORDMARK_*` in `lib/branding/wordmark.ts`.
+- Copy: product name in UI, emails, API/OpenAPI descriptions, MCP server, tool/trigger help
+  text, agent identity ("Labbai" instead of "Arena Copilot"/"Sim"). Code identifiers,
+  `@sim/*` packages and block/tool ids are unchanged.
+- Removed: Sim social links/address in the email footer and their `/x`, `/github`, … redirects;
+  Sim status-page notice; old Sim logo files. Logo links on chat and shared-file pages now open
+  the app instead of sim.ai. `README.md` rewritten; `NOTICE` keeps the Sim attribution.
+- Left as is: `docs.sim.ai` links on blocks and empty states (Labbai has no docs yet);
+  `isHosted` / sim.ai host checks (always false on our domain).
+- Fonts: `public/brand/fonts` holds Season Sans and Söhne from Sim — commercial fonts,
+  check the license before production use (Inter is the free alternative).
+- Pre-existing, not from branding: `bun run check:mcp-operations` fails on `main` (the
+  access-requests discovery schema lacks a description).
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

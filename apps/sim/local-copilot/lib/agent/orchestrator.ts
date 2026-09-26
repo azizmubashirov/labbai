@@ -2271,7 +2271,7 @@ export async function* runLocalCopilotAgent(
         userId: params.userId,
         workspaceId: params.workspaceId,
         workflowId: params.workflowId,
-        title: 'Arena Copilot (patch)',
+        title: 'Labbai (patch)',
         model: config.model,
         provider: config.provider,
       })

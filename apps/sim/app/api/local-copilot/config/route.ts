@@ -63,10 +63,7 @@ export const PATCH = withRouteHandler(async (request: NextRequest) => {
     parsed.data.body.defaultCatalogId
   )
   if (!updated) {
-    return NextResponse.json(
-      { error: 'Arena Copilot is not enabled for your account.' },
-      { status: 403 }
-    )
+    return NextResponse.json({ error: 'Labbai is not enabled for your account.' }, { status: 403 })
   }
 
   const response = toConfigResponse(updated)

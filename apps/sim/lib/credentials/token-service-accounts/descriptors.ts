@@ -187,7 +187,7 @@ export const TOKEN_SERVICE_ACCOUNT_DESCRIPTORS: Record<
     ],
     docsUrl: 'https://docs.sim.ai/integrations/trello-service-account',
     helpText:
-      'A read-only or short-expiration token validates here and then fails at run time — Sim cannot tell either from the token itself.',
+      'A read-only or short-expiration token validates here and then fails at run time — Labbai cannot tell either from the token itself.',
   },
   [CALCOM_SERVICE_ACCOUNT_PROVIDER_ID]: {
     providerId: CALCOM_SERVICE_ACCOUNT_PROVIDER_ID,

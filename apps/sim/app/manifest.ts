@@ -8,13 +8,9 @@ export default function manifest(): MetadataRoute.Manifest {
   const brand = getBrandConfig()
 
   return {
-    name:
-      brand.name === 'Sim'
-        ? 'Sim — The AI Workspace | Build, Deploy & Manage AI Agents'
-        : brand.name,
+    name: brand.name,
     short_name: brand.name,
-    description:
-      'Sim is the open-source AI workspace where teams build, deploy, and manage AI agents. Connect 1,000+ integrations and every major LLM.',
+    description: `${brand.name} is the AI workspace where teams build, deploy, and manage AI agents.`,
     start_url: '/',
     scope: '/',
     display: 'standalone',

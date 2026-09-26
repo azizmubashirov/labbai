@@ -63,7 +63,7 @@ function UnavailableInvitation({
   rateLimited = false,
   message,
   recoveryHref = APP_ENTRY_PATH,
-  recoveryLabel = 'Open Sim',
+  recoveryLabel = 'Open Labbai',
 }: UnavailableInvitationProps) {
   return (
     <PageShell>
@@ -151,7 +151,7 @@ export default async function CredentialGroupEnrollmentPage({
   if (!session.user.emailVerified)
     return (
       <UnavailableInvitation
-        message='Verify your Sim email address before connecting your accounts.'
+        message='Verify your Labbai email address before connecting your accounts.'
         recoveryHref={`/verify?redirectAfter=${encodeURIComponent(callbackUrl)}`}
         recoveryLabel='Verify email'
       />
@@ -185,7 +185,7 @@ export default async function CredentialGroupEnrollmentPage({
     !principal.organizationId &&
     ('canSearch' in enrollmentResult ? enrollmentResult.canSearch : true)
   const returnHref = canReturnToSearch ? sourceReturnPath(principal) : APP_ENTRY_PATH
-  const returnLabel = canReturnToSearch ? 'Open knowledge bases' : 'Open Sim'
+  const returnLabel = canReturnToSearch ? 'Open knowledge bases' : 'Open Labbai'
   if (!enrollment)
     return <UnavailableSearchConnection returnHref={returnHref} returnLabel={returnLabel} />
 

@@ -108,7 +108,7 @@ export const searchOnlineServerTool: BaseServerTool<OnlineSearchParams, SearchRe
     if (!hasSerperApiKey) {
       throw new OrchestrationError(
         'forbidden',
-        'Web search is not configured on this Sim deployment and cannot be enabled from a tool. Answer from the workspace instead (grep/glob/read, search_sim_docs) or tell the user web search is unavailable.'
+        'Web search is not configured on this Labbai deployment and cannot be enabled from a tool. Answer from the workspace instead (grep/glob/read, search_sim_docs) or tell the user web search is unavailable.'
       )
     }
 

@@ -137,7 +137,7 @@ export interface ActionItem {
   run: () => void
 }
 
-export type ActionGroupLabel = 'Sim' | 'Actions'
+export type ActionGroupLabel = 'Labbai' | 'Actions'
 
 /**
  * The page's own entity section, hoisted directly under its action group in
@@ -156,7 +156,7 @@ export const PAGE_CONTEXT_HOISTED_SECTION: Partial<Record<PageActionContext, Sea
 
 /** Presentation group for an action without changing its stable result identity. */
 export function getActionGroupLabel(action: ActionItem): ActionGroupLabel {
-  return action.context === 'global' ? 'Sim' : 'Actions'
+  return action.context === 'global' ? 'Labbai' : 'Actions'
 }
 
 export interface SearchModalProps {
@@ -202,7 +202,7 @@ export interface CommandItemProps {
 }
 
 export const SECTION_LABELS: Record<SearchSection, string> = {
-  actions: 'Sim',
+  actions: 'Labbai',
   blocks: 'Blocks',
   triggers: 'Triggers',
   tools: 'Tools',
@@ -611,7 +611,7 @@ export function scoreActions(
   actions: ActionItem[],
   search: string,
   maxResults = Number.POSITIVE_INFINITY,
-  groupLabel: ActionGroupLabel = 'Sim'
+  groupLabel: ActionGroupLabel = 'Labbai'
 ): Array<{ item: ActionItem; score: number }> {
   const query = search.trim().toLowerCase()
   return scoreItemsForSection(

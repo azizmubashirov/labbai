@@ -487,7 +487,7 @@ function buildSimultaneousInterpolation(
   }
   const empty = bytes ? 'b""' : '""'
   const expectedParts = accessors.length + 1
-  return `(lambda ${parts}: ${empty}.join([${values.join(', ')}]) if ${parts}.__len__() == ${expectedParts} else {}["Sim placeholder interpolation mismatch"])((${expression}).split(${sentinelLiteral}))`
+  return `(lambda ${parts}: ${empty}.join([${values.join(', ')}]) if ${parts}.__len__() == ${expectedParts} else {}["Labbai placeholder interpolation mismatch"])((${expression}).split(${sentinelLiteral}))`
 }
 
 function pythonRuntimeValue(bindingName: string): string {

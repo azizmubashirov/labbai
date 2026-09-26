@@ -225,7 +225,7 @@ export async function executeSpecialistLoop(
     const messages: ChatMessage[] = [
       {
         role: 'system',
-        content: `You are a focused Arena Copilot specialist (${params.domain}). ${domainSystemHint(params.domain)} Complete the request using your tools — you may perform domain writes when needed. You may call other specialist tools if another domain is required (nesting is budgeted). Keep the final reply under 8 sentences with actionable facts and outcomes.`,
+        content: `You are a focused Labbai specialist (${params.domain}). ${domainSystemHint(params.domain)} Complete the request using your tools — you may perform domain writes when needed. You may call other specialist tools if another domain is required (nesting is budgeted). Keep the final reply under 8 sentences with actionable facts and outcomes.`,
       },
       ...(params.toolCtx.relevantSkillGuidance
         ? [{ role: 'system' as const, content: params.toolCtx.relevantSkillGuidance }]

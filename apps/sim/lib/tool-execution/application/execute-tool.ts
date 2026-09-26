@@ -147,7 +147,7 @@ function assertNoUndeclaredInputs(
   if (hidden.length > 0) {
     throw new OrchestrationError(
       'validation',
-      `${hidden.map((key) => `input.${key}`).join(', ')} ${hidden.length === 1 ? 'is' : 'are'} supplied by Sim, not by the caller`
+      `${hidden.map((key) => `input.${key}`).join(', ')} ${hidden.length === 1 ? 'is' : 'are'} supplied by Labbai, not by the caller`
     )
   }
 

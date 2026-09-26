@@ -250,7 +250,7 @@ export async function executeManageCustomTool(
       error:
         classified && classified.code !== 'internal'
           ? classified.message
-          : `The ${operation ?? 'custom tool'} operation failed inside Sim. The write may or may not have landed — run operation "list" to check current state before retrying.`,
+          : `The ${operation ?? 'custom tool'} operation failed inside Labbai. The write may or may not have landed — run operation "list" to check current state before retrying.`,
     }
   }
 }

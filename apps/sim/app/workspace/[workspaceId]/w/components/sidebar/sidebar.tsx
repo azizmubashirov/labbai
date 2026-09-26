@@ -42,7 +42,6 @@ import { useWorkspaceAccessRequestFeatures } from '@/components/access-requests/
 import { useSession } from '@/lib/auth/auth-client'
 import { SIM_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { useDeploymentShape } from '@/lib/core/config/deployment-shape'
-import { isStatusNoticePreviewEnabled } from '@/lib/core/config/env-flags'
 import { isMacPlatform } from '@/lib/core/utils/platform'
 import { buildFolderTree, getFolderPathNames } from '@/lib/folders/tree'
 import { DOCS_URL, SLACK_COMMUNITY_URL } from '@/lib/help-links'
@@ -76,7 +75,6 @@ import {
   SidebarRowActions,
   SidebarSection,
   SidebarTooltip,
-  StatusNotice,
   TablesRailFlyout,
   WorkflowList,
   WorkspaceHeader,
@@ -363,7 +361,7 @@ export const Sidebar = memo(function Sidebar() {
   const { data: profile } = useUserProfile()
   const hostContext = useWorkspaceHostContext()
   const { workspace: routeWorkspace } = hostContext
-  const { hosted, chatEnabled } = useDeploymentShape()
+  const { chatEnabled } = useDeploymentShape()
   const { canAdmin, canEdit, isLoading: permissionsLoading } = useUserPermissionsContext()
   const {
     config: permissionConfig,
@@ -1731,10 +1729,6 @@ export const Sidebar = memo(function Sidebar() {
                     </SidebarSection>
                   </div>
                 </div>
-
-                {(hosted || isStatusNoticePreviewEnabled) && !isCollapsed ? (
-                  <StatusNotice preview={isStatusNoticePreviewEnabled} />
-                ) : null}
 
                 <SidebarFooter
                   showDivider={scrollEdges.bottom}

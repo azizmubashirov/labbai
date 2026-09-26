@@ -206,7 +206,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
       placeholder: 'Enter Telegram Chat ID',
       description: `Getting Chat ID:
 1. Add your bot as a member to desired Telegram channel
-2. Send any message to the channel (e.g. "I love Sim")
+2. Send any message to the channel (e.g. "I love Labbai")
 3. Visit https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
 4. Look for the chat field in the JSON response at the very bottom where you'll find the chat ID`,
       required: true,
@@ -959,7 +959,7 @@ export const TelegramBlockMeta = {
       icon: TelegramIcon,
       title: 'Telegram form-reply collector',
       prompt:
-        'Create a workflow that asks structured questions in Telegram one at a time, parses replies into fields, and saves the completed response as a row in a Sim table.',
+        'Create a workflow that asks structured questions in Telegram one at a time, parses replies into fields, and saves the completed response as a row in a Labbai table.',
       modules: ['tables', 'agent', 'workflows'],
       category: 'operations',
       tags: ['automation', 'communication'],

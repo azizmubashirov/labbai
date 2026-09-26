@@ -380,18 +380,18 @@ export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRegistryEntry[] 
     },
   },
   {
-    label: 'Sim API keys',
+    label: 'Labbai API keys',
     icon: TerminalWindow,
     unified: {
       id: 'apikeys',
-      description: 'Create and manage API keys for the Sim API.',
+      description: 'Create and manage API keys for the Labbai API.',
       group: 'workspace',
       order: 7,
     },
     planes: {
       account: {
         id: 'api-keys',
-        description: 'Create and manage your personal Sim API keys.',
+        description: 'Create and manage your personal Labbai API keys.',
         group: 'developer',
         order: 2,
       },

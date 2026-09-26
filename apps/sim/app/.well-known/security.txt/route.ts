@@ -1,18 +1,24 @@
+import { getBrandConfig } from '@/lib/branding'
 import { getBaseUrl } from '@/lib/core/utils/urls'
 
 export async function GET() {
+  const brand = getBrandConfig()
+  /** RFC 9116 requires a Contact field, so there is no file until one is configured. */
+  if (!brand.supportEmail) {
+    return new Response('Not Found', { status: 404 })
+  }
   const baseUrl = getBaseUrl()
 
   const expiresDate = new Date()
   expiresDate.setFullYear(expiresDate.getFullYear() + 1)
   const expires = expiresDate.toISOString()
 
-  const securityTxt = `# Security Policy for Sim
+  const securityTxt = `# Security Policy for ${brand.name}
 # https://securitytxt.org/
 # RFC 9116: https://www.rfc-editor.org/rfc/rfc9116.html
 
 # Required: Contact information for security reports
-Contact: mailto:security@sim.ai
+Contact: mailto:${brand.supportEmail}
 
 # Required: When this file expires (ISO 8601 format, within 1 year)
 Expires: ${expires}
@@ -23,14 +29,8 @@ Preferred-Languages: en
 # Canonical URL for this security.txt file
 Canonical: ${baseUrl}/.well-known/security.txt
 
-# Link to security policy page
-Policy: ${baseUrl}/security
-
-# Acknowledgments page for security researchers
-# Acknowledgments: ${baseUrl}/security/thanks
-
 # If you discover a security vulnerability, please report it responsibly.
-# We appreciate your help in keeping Sim and our users secure.
+# We appreciate your help in keeping ${brand.name} and our users secure.
 `
 
   return new Response(securityTxt, {

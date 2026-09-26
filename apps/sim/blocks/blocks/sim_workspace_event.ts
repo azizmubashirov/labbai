@@ -8,7 +8,7 @@ export const SimWorkspaceEventBlock: BlockConfig = {
   // can scrape the type for icon-map keys; a test asserts it stays equal to
   // the constant.
   type: 'sim_workspace_event',
-  name: 'Sim Workspace Events',
+  name: 'Labbai Workspace Events',
   description:
     'Run this workflow when workspace events occur: run errors or successes, deployments, and alert conditions like latency or cost spikes.',
   category: 'triggers',
@@ -24,7 +24,7 @@ export const SimWorkspaceEventBlock: BlockConfig = {
   - Compose any blocks downstream (Slack, email, webhooks, custom logic) to act on the event payload.
   `,
   canvasPresentation: {
-    defaultTitle: 'Sim Workspace Events',
+    defaultTitle: 'Labbai Workspace Events',
     /*
      * The event is what the card is about; the workflow filter narrows it and
      * stays optional, because an empty selection watches every workflow rather

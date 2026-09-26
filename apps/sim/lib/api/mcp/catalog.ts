@@ -118,7 +118,7 @@ const SEARCH_ENTRIES = OPERATION_NAMES.map((name) => {
 /** Every domain the catalog covers, e.g. `tables`, `workflows`, `knowledge`. */
 const DOMAINS = [...new Set(SEARCH_ENTRIES.map(({ entry }) => entry.domain))].sort()
 const [FIRST_DOMAIN, ...OTHER_DOMAINS] = DOMAINS
-if (!FIRST_DOMAIN) throw new Error('The Sim MCP catalog has no operations')
+if (!FIRST_DOMAIN) throw new Error('The Labbai MCP catalog has no operations')
 export const OPERATION_DOMAINS: [string, ...string[]] = [FIRST_DOMAIN, ...OTHER_DOMAINS]
 
 /**

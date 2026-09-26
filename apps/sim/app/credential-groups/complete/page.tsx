@@ -34,7 +34,7 @@ export default async function CredentialGroupCompletePage({
       />
       {error && (
         <div className='mt-6 flex justify-center'>
-          <ChipLink href={APP_ENTRY_PATH}>Open Sim</ChipLink>
+          <ChipLink href={APP_ENTRY_PATH}>Open Labbai</ChipLink>
         </div>
       )}
     </AuthShell>

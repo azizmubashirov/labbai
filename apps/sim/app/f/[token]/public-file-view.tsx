@@ -5,6 +5,7 @@ import { Chip, OverflowText, SimWordmark } from '@sim/emcn'
 import { Download } from '@sim/emcn/icons'
 import Link from 'next/link'
 import { useBrandConfig } from '@/lib/branding'
+import { APP_ENTRY_PATH } from '@/lib/navigation/paths'
 import type { WorkspaceFileRecord } from '@/lib/uploads/contexts/workspace'
 import { buildProvenance } from '@/app/f/[token]/utils'
 import { FileViewer } from '@/app/workspace/[workspaceId]/files/components/file-viewer'
@@ -70,10 +71,8 @@ export function PublicFileView({
           {!brand.logoUrl && (
             <>
               <Link
-                href='https://sim.ai'
-                target='_blank'
-                rel='noopener noreferrer'
-                aria-label='Sim home'
+                href={APP_ENTRY_PATH}
+                aria-label='Labbai home'
                 className='flex shrink-0 items-center'
               >
                 <SimWordmark />

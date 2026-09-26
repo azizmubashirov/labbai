@@ -1458,7 +1458,7 @@ export function buildOrganizationReadme(input: {
   const lines: string[] = [
     '# Organization',
     '',
-    `Read-only truth about organization \`${input.organizationId}\` as the acting user sees it. Nothing here is writable — org membership and permission groups are managed in the Sim UI.`,
+    `Read-only truth about organization \`${input.organizationId}\` as the acting user sees it. Nothing here is writable — org membership and permission groups are managed in the Labbai UI.`,
     '',
     '## Files',
     '',
@@ -1534,7 +1534,7 @@ export function serializePermissionGroupRoster(
         workspaces: group.workspaces,
         activeRestrictions: group.activeRestrictions,
       })),
-      note: 'Management view (org admins). The group governing THIS user, with resolution reason, is in access-control.json. Group membership and scopes are edited in the Sim UI.',
+      note: 'Management view (org admins). The group governing THIS user, with resolution reason, is in access-control.json. Group membership and scopes are edited in the Labbai UI.',
     },
     null,
     2

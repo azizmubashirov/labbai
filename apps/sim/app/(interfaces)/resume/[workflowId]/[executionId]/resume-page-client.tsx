@@ -874,7 +874,7 @@ export default function ResumeExecutionPage({
                       {selectedDetail.pausePoint.automaticResumeWaitingReason}
                     </p>
                     <p className='mt-1 text-[var(--text-muted)] text-caption'>
-                      Sim will retry automatically.
+                      Labbai will retry automatically.
                     </p>
                   </div>
                 )}

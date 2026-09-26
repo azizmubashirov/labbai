@@ -1021,7 +1021,7 @@ function SearchModalContent({
       page: pageContext
         ? available.filter((action) => getActionGroupLabel(action) === 'Actions')
         : [],
-      sim: available.filter((action) => getActionGroupLabel(action) === 'Sim'),
+      sim: available.filter((action) => getActionGroupLabel(action) === 'Labbai'),
     }
   }, [actions, pageContext])
   const availableBlocks = useMemo(() => (onCanvas ? blocks : []), [onCanvas, blocks])
@@ -1056,7 +1056,7 @@ function SearchModalContent({
         : items.map((item) => ({ item, score: 0 }))
     const rankedActions = [
       ...(pageContext ? rankActionGroup(actionsByGroup.page, 'Actions') : []),
-      ...rankActionGroup(actionsByGroup.sim, 'Sim'),
+      ...rankActionGroup(actionsByGroup.sim, 'Labbai'),
     ]
     const blockNames = new Set(
       [...availableBlocks, ...availableTools].map((item) => item.name.toLowerCase())
@@ -1231,8 +1231,8 @@ function SearchModalContent({
         : []),
       {
         key: 'platform-actions',
-        heading: 'Sim',
-        entries: actionEntriesByLabel('Sim'),
+        heading: 'Labbai',
+        entries: actionEntriesByLabel('Labbai'),
       },
       ...(hoistedSection ? [entityGroup(hoistedSection)] : []),
       ...CANVAS_SECTIONS.map(entityGroup),
@@ -1376,15 +1376,15 @@ function SearchModalContent({
                 surface='palette'
                 cycleResultsOnTab={!chatEnabled}
                 autoFocus
-                aria-label={askMode ? 'Ask Sim' : 'Search anything'}
+                aria-label={askMode ? 'Ask Labbai' : 'Search anything'}
                 value={search}
                 onValueChange={handleSearchChange}
                 onKeyDown={handleSearchKeyDown}
-                placeholder={askMode ? 'Ask Sim anything...' : 'Search anything...'}
+                placeholder={askMode ? 'Ask Labbai anything...' : 'Search anything...'}
                 endAdornment={
                   chatEnabled ? (
                     <span className='shrink-0 whitespace-nowrap text-[var(--text-subtle)] text-xs'>
-                      {askMode ? '⇥ Search' : '⇥ Ask Sim'}
+                      {askMode ? '⇥ Search' : '⇥ Ask Labbai'}
                     </span>
                   ) : undefined
                 }

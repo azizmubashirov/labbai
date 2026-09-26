@@ -373,41 +373,6 @@ const nextConfig: NextConfig = {
   async redirects() {
     const redirects = []
 
-    // Social link redirects (used in emails to avoid spam filter issues)
-    redirects.push(
-      {
-        source: '/discord',
-        destination: 'https://discord.gg/Hr4UWYEcTT',
-        permanent: false,
-      },
-      {
-        source: '/slack',
-        destination:
-          'https://join.slack.com/t/sim-ott9864/shared_invite/zt-43lp8tc5v-0qrrqHGBKUsvQlpoouH~TA',
-        permanent: false,
-      },
-      {
-        source: '/x',
-        destination: 'https://x.com/simdotai',
-        permanent: false,
-      },
-      {
-        source: '/linkedin',
-        destination: 'https://www.linkedin.com/company/simdotai/',
-        permanent: false,
-      },
-      {
-        source: '/github',
-        destination: 'https://github.com/simstudioai/sim',
-        permanent: false,
-      },
-      {
-        source: '/team',
-        destination: 'https://cal.com/team/sim/demo',
-        permanent: false,
-      }
-    )
-
     // Legacy chat URL support: the workspace chat route was renamed from
     // `/workspace/:workspaceId/task/:chatId` to `/workspace/:workspaceId/chat/:chatId`.
     // Preserve existing bookmarks and deeplinks.

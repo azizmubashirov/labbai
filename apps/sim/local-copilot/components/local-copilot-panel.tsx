@@ -58,7 +58,7 @@ export function LocalCopilotPanel({
       >
         {variant === 'drawer' ? <PanelHeader onClose={() => onOpenChange?.(false)} /> : null}
         <div className='flex flex-1 items-center justify-center p-4 text-center text-[13px] text-[var(--text-muted)]'>
-          Arena Copilot is disabled. Set COPILOT_ENABLED=true and set OPENAI_API_KEY on the server.
+          Labbai is disabled. Set COPILOT_ENABLED=true and set OPENAI_API_KEY on the server.
         </div>
       </aside>
     )
@@ -120,10 +120,10 @@ function PanelHeader({ onClose, subtitle }: { onClose: () => void; subtitle?: st
   return (
     <div className='flex items-center justify-between border-[var(--border-subtle)] border-b px-3 py-2'>
       <div>
-        <p className='font-medium text-[14px] text-[var(--text-body)]'>Arena Copilot</p>
+        <p className='font-medium text-[14px] text-[var(--text-body)]'>Labbai</p>
         {subtitle ? <p className='text-[11px] text-[var(--text-muted)]'>{subtitle}</p> : null}
       </div>
-      <Button size='sm' variant='ghost' onClick={onClose} aria-label='Close Arena Copilot'>
+      <Button size='sm' variant='ghost' onClick={onClose} aria-label='Close Labbai'>
         <X className='size-[14px]' />
       </Button>
     </div>

@@ -55,7 +55,7 @@ export default async function OAuthErrorPage({ searchParams }: OAuthErrorPagePro
   return (
     <MessageShell
       title='Sign-in couldn’t be completed'
-      description={`${messageForError(code)} You can close this tab and return to Sim.`}
+      description={`${messageForError(code)} You can close this tab and return to Labbai.`}
     />
   )
 }

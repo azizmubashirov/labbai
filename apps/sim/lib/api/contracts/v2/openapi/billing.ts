@@ -83,21 +83,19 @@ const routes = [
 export const billingOpenApiDocument = defineOpenApiDocument({
   output: 'apps/docs/openapi-v2-billing.json',
   info: {
-    title: 'Sim API v2 — Billing',
+    title: 'Labbai API v2 — Billing',
     description:
-      'Version 2 of the Sim REST API for billing standing, credit allowance, storage quota, and cursor-paginated usage history.',
+      'Version 2 of the Labbai REST API for billing standing, credit allowance, storage quota, and cursor-paginated usage history.',
     version: '2.0.0',
     contact: {
-      name: 'Sim Support',
-      email: 'help@sim.ai',
-      url: 'https://www.sim.ai',
+      name: 'Labbai Support',
     },
     license: {
       name: 'Apache 2.0',
       url: 'https://www.apache.org/licenses/LICENSE-2.0.html',
     },
   },
-  servers: [{ url: 'https://www.sim.ai', description: 'Production' }],
+  servers: [{ url: 'https://labbai.example.com', description: 'Your Labbai deployment' }],
   tags: [
     {
       name: 'Billing',

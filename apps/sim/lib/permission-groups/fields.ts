@@ -268,7 +268,7 @@ export const PERMISSION_GROUP_FIELDS = {
     id: 'hide-copilot',
     label: 'Chat',
     category: 'Modules',
-    hint: 'Revoke Chat. Members cannot ask Sim to build or edit anything.',
+    hint: 'Revoke Chat. Members cannot ask Labbai to build or edit anything.',
   }),
   hideIntegrationsTab: booleanRestriction('capability', {
     scope: 'workspace-or-organization',
@@ -462,7 +462,7 @@ export const PERMISSION_GROUP_FIELDS = {
     id: 'disable-cli-access',
     label: 'CLI Access',
     category: 'Credentials & Access',
-    hint: "Prevent approving a CLI login or using Sim CLI OAuth tokens for the public API. A login naming one of this group's workspaces is refused; an account-level login names none, so it is read from the organization's default group.",
+    hint: "Prevent approving a CLI login or using Labbai CLI OAuth tokens for the public API. A login naming one of this group's workspaces is refused; an account-level login names none, so it is read from the organization's default group.",
   }),
   disableWebhookTriggers: booleanRestriction('capability', {
     scope: 'workspace',

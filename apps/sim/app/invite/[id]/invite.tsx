@@ -81,7 +81,7 @@ function signedOutPrompt({
 
   if (isNewUser) {
     return {
-      description: 'Create an account to join this workspace on Sim',
+      description: 'Create an account to join this workspace on Labbai',
       actions: [
         {
           label: 'Create an account',

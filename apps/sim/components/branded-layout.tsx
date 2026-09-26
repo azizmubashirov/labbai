@@ -12,7 +12,7 @@ export function BrandedLayout({ children }: BrandedLayoutProps) {
     const config = getBrandConfig()
 
     // Update document title
-    if (config.name !== 'Sim') {
+    if (config.name !== 'Labbai') {
       document.title = config.name
     }
 

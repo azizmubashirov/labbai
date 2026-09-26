@@ -1044,7 +1044,7 @@ const BODY_SIZE_LIMIT_ERROR_MESSAGE =
 const RESPONSE_SIZE_LIMIT_ERROR_MESSAGE =
   'Tool response size limit exceeded (10MB). The response is too large to keep in workflow data. Reduce the response size or return a file reference instead.'
 const SAME_ORIGIN_EXTERNAL_TOOL_ERROR_MESSAGE =
-  'External integration tools cannot target this Sim instance; use an internal operation'
+  'External integration tools cannot target this Labbai instance; use an internal operation'
 
 /**
  * Validates request body size and throws a user-friendly error if exceeded

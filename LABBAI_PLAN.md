@@ -79,7 +79,8 @@ Gemini / Workers AI.
   agents feed this section automatically.
 - **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
   provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
-- **Branding** — Labbai name, logo, colors, emails; UZ / RU interface.
+- **Branding** — Labbai name, text logo, emails: done. Still to do: real logo, UZ / RU
+  interface.
 - Own integrations: amoCRM, Bitrix24, Exely.
 
 ## Open issues found in testing

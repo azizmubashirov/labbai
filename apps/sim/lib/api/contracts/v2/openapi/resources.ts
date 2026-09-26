@@ -110,7 +110,7 @@ const BLOCK_SUMMARY_EXAMPLE = {
   toolIds: ['slack_message', 'slack_canvas_read'],
   operationIds: ['send', 'read'],
   preview: false,
-  docsLink: 'https://docs.sim.ai/tools/slack',
+  docsLink: 'https://labbai.example.com/docs/tools/slack',
   tags: ['messaging'],
 } as const
 
@@ -245,7 +245,7 @@ const WORKFLOW_MCP_SERVER_EXAMPLE = {
   name: 'Support agents',
   description: 'Ticket triage and escalation workflows.',
   isPublic: false,
-  mcpServerUrl: 'https://www.sim.ai/api/mcp/serve/wfmcp_01J8ZK3QW4M6X2R9T7B5C0V2',
+  mcpServerUrl: 'https://labbai.example.com/api/mcp/serve/wfmcp_01J8ZK3QW4M6X2R9T7B5C0V2',
   createdAt: '2026-06-12T10:30:00.000Z',
   updatedAt: '2026-06-12T10:30:00.000Z',
 } as const
@@ -263,7 +263,8 @@ const WORKFLOW_MCP_TOOL_EXAMPLE = {
   toolName: 'triage_ticket',
   toolDescription: 'Execute Ticket triage workflow',
   mcpServerUrl: WORKFLOW_MCP_SERVER_EXAMPLE.mcpServerUrl,
-  apiEndpoint: 'https://www.sim.ai/api/v2/workflows/3b1f7c92-8d4e-4a6b-9c0d-5e2f8a714b36/execute',
+  apiEndpoint:
+    'https://labbai.example.com/api/v2/workflows/3b1f7c92-8d4e-4a6b-9c0d-5e2f8a714b36/execute',
   updated: false,
   createdAt: '2026-06-12T10:30:00.000Z',
   updatedAt: '2026-06-12T10:30:00.000Z',
@@ -419,7 +420,7 @@ const SERVICE_ACCOUNT_PROVIDER_EXAMPLE = {
   description: 'Connect Zoom with a server-to-server app.',
   providerFamily: 'zoom',
   available: true,
-  docsUrl: 'https://docs.sim.ai/integrations/zoom-service-account',
+  docsUrl: 'https://labbai.example.com/docs/integrations/zoom-service-account',
   requiresClientGeneratedCredentialId: false,
   fields: [
     {
@@ -450,7 +451,7 @@ const SERVICE_ACCOUNT_PROVIDER_EXAMPLE = {
 } as const
 
 const CREDENTIAL_CONNECTION_EXAMPLE = {
-  authorizationUrl: 'https://www.sim.ai/api/auth/oauth2/authorize?draftId=draft-123',
+  authorizationUrl: 'https://labbai.example.com/api/auth/oauth2/authorize?draftId=draft-123',
   expiresAt: '2026-06-20T14:17:11.000Z',
 } as const
 
@@ -1349,7 +1350,7 @@ const declaredRoutes = [
         v2CreateCredentialConnectionContract.response.schema,
         'CreateCredentialConnectionResponse',
         'Create credential connection response',
-        'Short-lived Sim browser entrypoint and its expiry.',
+        'Short-lived Labbai browser entrypoint and its expiry.',
         [{ data: CREDENTIAL_CONNECTION_EXAMPLE }]
       ),
     }
@@ -1533,7 +1534,7 @@ const declaredRoutes = [
       applicationOperation: mcpServerOperations.listWorkflowDeployments,
       operationId: 'listWorkflowMcpServers',
       summary: 'List Workflow MCP Servers',
-      description: `List MCP servers that expose deployed workflows to external clients. Use List MCP Servers for external servers Sim calls. Tool names share a 2,000-name page limit; inspect \`toolNamesTruncated\` and use List Workflow MCP Tools for a server's inventory. ${WORKSPACE_API_KEY_DENIED}`,
+      description: `List MCP servers that expose deployed workflows to external clients. Use List MCP Servers for external servers Labbai calls. Tool names share a 2,000-name page limit; inspect \`toolNamesTruncated\` and use List Workflow MCP Tools for a server's inventory. ${WORKSPACE_API_KEY_DENIED}`,
       errors: RESOURCE_ERRORS,
       success: { description: 'A page of published MCP servers.' },
     }),
@@ -1554,7 +1555,7 @@ const declaredRoutes = [
       applicationOperation: mcpServerOperations.createWorkflowDeploymentServer,
       operationId: 'createWorkflowMcpServer',
       summary: 'Create Workflow MCP Server',
-      description: `Create an MCP server that exposes deployed workflows as tools. Every supplied workflow must already be deployed. With \`isPublic: true\`, anyone with the server URL can execute its workflows without a Sim API key. ${WORKSPACE_API_KEY_DENIED}`,
+      description: `Create an MCP server that exposes deployed workflows as tools. Every supplied workflow must already be deployed. With \`isPublic: true\`, anyone with the server URL can execute its workflows without a Labbai API key. ${WORKSPACE_API_KEY_DENIED}`,
       errors: RESOURCE_CONFLICT_ERRORS,
       success: { description: 'The published MCP server.' },
     }),
@@ -1884,7 +1885,7 @@ const declaredRoutes = [
       applicationOperation: toolExecutionOperations.execute,
       operationId: 'executeTool',
       summary: 'Run Tool',
-      description: `Run a built-in tool using published parameter IDs. Sim resolves \`credentialId\`, hosted keys, and whole-value \`{{VAR_NAME}}\` references for \`user-only\` parameters; other values pass through verbatim. Third-party refusal returns \`200\` with \`status: "failed"\`; the error envelope covers API failures. Hidden or missing tools return \`404\`; disallowed integrations return \`403\` with \`error.details.code: INTEGRATION_NOT_ALLOWED\`. Hosted-key use is billed to the workspace. ${WORKSPACE_API_KEY_DENIED}`,
+      description: `Run a built-in tool using published parameter IDs. Labbai resolves \`credentialId\`, hosted keys, and whole-value \`{{VAR_NAME}}\` references for \`user-only\` parameters; other values pass through verbatim. Third-party refusal returns \`200\` with \`status: "failed"\`; the error envelope covers API failures. Hidden or missing tools return \`404\`; disallowed integrations return \`403\` with \`error.details.code: INTEGRATION_NOT_ALLOWED\`. Hosted-key use is billed to the workspace. ${WORKSPACE_API_KEY_DENIED}`,
       errors: RESOURCE_ERRORS,
       success: { description: 'The outcome of the tool call.' },
     }),
@@ -1956,21 +1957,19 @@ const routes = declaredRoutes.map(withRequestBodyErrors)
 export const resourcesOpenApiDocument = defineOpenApiDocument({
   output: 'apps/docs/openapi-v2-resources.json',
   info: {
-    title: 'Sim API v2 — Resources',
+    title: 'Labbai API v2 — Resources',
     description:
-      'Version 2 of the Sim REST API for workspace metadata, members, MCP servers, skills, custom tools, credentials, write-only secrets, organization permission groups, and the block, tool, and connector-type catalogs.',
+      'Version 2 of the Labbai REST API for workspace metadata, members, MCP servers, skills, custom tools, credentials, write-only secrets, organization permission groups, and the block, tool, and connector-type catalogs.',
     version: '2.0.0',
     contact: {
-      name: 'Sim Support',
-      email: 'help@sim.ai',
-      url: 'https://www.sim.ai',
+      name: 'Labbai Support',
     },
     license: {
       name: 'Apache 2.0',
       url: 'https://www.apache.org/licenses/LICENSE-2.0.html',
     },
   },
-  servers: [{ url: 'https://www.sim.ai', description: 'Production' }],
+  servers: [{ url: 'https://labbai.example.com', description: 'Your Labbai deployment' }],
   tags: [
     {
       name: 'Access Requests',

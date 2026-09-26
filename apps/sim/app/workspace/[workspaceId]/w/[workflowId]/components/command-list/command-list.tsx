@@ -7,6 +7,7 @@ import { createLogger } from '@sim/logger'
 import Image from 'next/image'
 import { useParams, useRouter } from 'next/navigation'
 import { AgentIcon } from '@/components/icons'
+import { useBrandConfig } from '@/lib/branding'
 import { usePreventZoom } from '@/app/workspace/[workspaceId]/w/[workflowId]/hooks'
 import { useSearchModalStore } from '@/stores/modals/search/store'
 
@@ -51,6 +52,7 @@ const commands: CommandItem[] = [
  */
 export function CommandList() {
   const params = useParams()
+  const brand = useBrandConfig()
   const router = useRouter()
   const openSearchModal = useSearchModalStore((s) => s.open)
   const preventZoomRef = usePreventZoom()
@@ -171,10 +173,10 @@ export function CommandList() {
         {/* Logo */}
         <div className='mb-5 flex justify-center'>
           <Image
-            src='/logo/b&w/text/b&w.svg'
-            alt='Sim'
-            width={99.56}
-            height={48.56}
+            src='/logo/wordmark.svg'
+            alt={brand.name}
+            width={100}
+            height={25}
             className='opacity-70'
             style={{
               filter:

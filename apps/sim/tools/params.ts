@@ -290,7 +290,7 @@ export function createUserToolSchema(
     if (paramId === hostedApiKeyParam) {
       propertySchema.description = [
         propertySchema.description,
-        'Optional: Sim provides a hosted key for this tool. Omit this parameter unless intentionally overriding with your own key.',
+        'Optional: Labbai provides a hosted key for this tool. Omit this parameter unless intentionally overriding with your own key.',
       ]
         .filter(Boolean)
         .join(' ')

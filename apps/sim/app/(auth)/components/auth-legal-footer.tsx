@@ -1,3 +1,6 @@
+'use client'
+
+import { useBrandConfig } from '@/lib/branding'
 import { AuthTextLink } from '@/app/(auth)/components/auth-text-link'
 
 interface AuthLegalFooterProps {
@@ -7,20 +10,28 @@ interface AuthLegalFooterProps {
 
 /**
  * The "By {action}, you agree to our Terms / Privacy" fine print shared by the
- * login and signup pages. Restyled to muted light tokens with the legal links
- * routed through {@link AuthTextLink}, so the consent copy has one source.
+ * login and signup pages. Renders only the documents this deployment has
+ * configured (`NEXT_PUBLIC_TERMS_URL`, `NEXT_PUBLIC_PRIVACY_URL`), and nothing
+ * when neither is set.
  */
 export function AuthLegalFooter({ action }: AuthLegalFooterProps) {
+  const { termsUrl, privacyUrl } = useBrandConfig()
+  if (!termsUrl && !privacyUrl) return null
+
   return (
     <p className='text-center text-[var(--text-muted)] text-caption leading-relaxed'>
       By {action}, you agree to our{' '}
-      <AuthTextLink href='/terms' external>
-        Terms of Service
-      </AuthTextLink>{' '}
-      and{' '}
-      <AuthTextLink href='/privacy' external>
-        Privacy Policy
-      </AuthTextLink>
+      {termsUrl && (
+        <AuthTextLink href={termsUrl} external>
+          Terms of Service
+        </AuthTextLink>
+      )}
+      {termsUrl && privacyUrl && ' and '}
+      {privacyUrl && (
+        <AuthTextLink href={privacyUrl} external>
+          Privacy Policy
+        </AuthTextLink>
+      )}
     </p>
   )
 }

@@ -438,9 +438,9 @@ export const MySQLBlockMeta = {
     },
     {
       icon: Database,
-      title: 'Sync records from a Sim table into MySQL',
+      title: 'Sync records from a Labbai table into MySQL',
       prompt:
-        'Create a workflow that reads rows from a Sim table and upserts each one into a MySQL table — updating the row when a matching key exists and inserting it otherwise — so the two stay in sync.',
+        'Create a workflow that reads rows from a Labbai table and upserts each one into a MySQL table — updating the row when a matching key exists and inserting it otherwise — so the two stay in sync.',
       modules: ['tables', 'agent', 'workflows'],
       category: 'operations',
       tags: ['automation', 'database'],

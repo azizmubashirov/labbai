@@ -75,7 +75,7 @@ export function LocalCopilotChat({
       <div className='flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3'>
         {messages.length === 0 ? (
           <div className='flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center'>
-            <p className='font-medium text-[14px] text-[var(--text-body)]'>Arena Copilot</p>
+            <p className='font-medium text-[14px] text-[var(--text-body)]'>Labbai</p>
             <p className='text-[13px] text-[var(--text-muted)]'>
               Build, debug, and understand workflows using natural language. Changes require your
               confirmation before applying.

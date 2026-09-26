@@ -587,12 +587,12 @@ export async function runLocalCopilotMothershipLifecycle(
   }
 
   if (!workspaceId || !userId) {
-    context.errors.push('Arena Copilot requires workspaceId')
+    context.errors.push('Labbai requires workspaceId')
     await dispatchStreamEvent(
       {
         type: MothershipStreamV1EventType.error,
         payload: {
-          message: 'Workspace context is required for Arena Copilot',
+          message: 'Workspace context is required for Labbai',
           code: 'missing_workspace_context',
         },
       },
@@ -790,7 +790,7 @@ export async function runLocalCopilotMothershipLifecycle(
       }
     }
   } catch (error) {
-    const messageText = getErrorMessage(error, 'Arena Copilot failed')
+    const messageText = getErrorMessage(error, 'Labbai failed')
     logger.error('Arena Copilot mothership lifecycle failed', {
       error: messageText,
       stack: error instanceof Error ? error.stack : undefined,

@@ -44,7 +44,7 @@ describe('email wordmark asset', () => {
   })
 
   it('carries every glyph of the logotype', () => {
-    expect(WORDMARK_PATHS).toHaveLength(4)
+    expect(WORDMARK_PATHS).toHaveLength(6)
     for (const d of WORDMARK_PATHS) expect(d.startsWith('M')).toBe(true)
     expect(WORDMARK_VIEW_BOX.width).toBeGreaterThan(WORDMARK_VIEW_BOX.height)
   })

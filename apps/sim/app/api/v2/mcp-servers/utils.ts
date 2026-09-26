@@ -104,7 +104,7 @@ export const v2McpToolDiscoveryErrorPolicy = {
     if (error instanceof McpOauthAuthorizationRequiredError || error instanceof UnauthorizedError) {
       return v2Error(
         'CONFLICT',
-        'The MCP server must be reauthorized in Sim before its tools can be listed',
+        'The MCP server must be reauthorized in Labbai before its tools can be listed',
         { details: { code: MCP_SERVER_REAUTHORIZATION_REQUIRED } }
       )
     }

@@ -4,6 +4,7 @@ import { SimWordmark } from '@sim/emcn'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useBrandConfig } from '@/lib/branding'
+import { APP_ENTRY_PATH } from '@/lib/navigation/paths'
 
 interface ChatHeaderProps {
   chatConfig: {
@@ -46,14 +47,7 @@ export function ChatHeader({ chatConfig }: ChatHeaderProps) {
 
       {!brand.logoUrl && (
         <div className='flex items-center gap-4'>
-          {/* Only show Sim logo if no custom branding is set */}
-          <Link
-            href='https://sim.ai'
-            target='_blank'
-            rel='noopener noreferrer'
-            aria-label='Sim home'
-            className='flex items-center'
-          >
+          <Link href={APP_ENTRY_PATH} aria-label='Labbai home' className='flex items-center'>
             <SimWordmark />
           </Link>
         </div>

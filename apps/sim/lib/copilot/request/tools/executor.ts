@@ -266,7 +266,7 @@ export function pendingToolWaitBudgetMs(
 class ToolExecutionTimeoutError extends Error {
   constructor(toolName: string, timeoutMs: number) {
     super(
-      `Tool '${toolName}' timed out after ${Math.round(timeoutMs / 1000)}s on the Sim executor and was abandoned.`
+      `Tool '${toolName}' timed out after ${Math.round(timeoutMs / 1000)}s on the Labbai executor and was abandoned.`
     )
     this.name = 'ToolExecutionTimeoutError'
   }

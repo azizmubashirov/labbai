@@ -28,7 +28,7 @@ export async function createConversation(params: {
     userId: params.userId,
     workspaceId: params.workspaceId,
     workflowId: params.workflowId ?? null,
-    title: params.title ?? 'Arena Copilot',
+    title: params.title ?? 'Labbai',
     model: params.model,
     provider: params.provider,
   })

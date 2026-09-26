@@ -246,21 +246,19 @@ const routes = declaredRoutes.map(withRequestBodyErrors)
 export const logsOpenApiDocument = defineOpenApiDocument({
   output: 'apps/docs/openapi-v2-logs.json',
   info: {
-    title: 'Sim API v2 — Logs',
+    title: 'Labbai API v2 — Logs',
     description:
-      'Version 2 of the Sim REST API for workflow execution logs: listing and sorting runs with filters, retrieving complete diagnostic run snapshots, and reading bucketed execution statistics.',
+      'Version 2 of the Labbai REST API for workflow execution logs: listing and sorting runs with filters, retrieving complete diagnostic run snapshots, and reading bucketed execution statistics.',
     version: '2.0.0',
     contact: {
-      name: 'Sim Support',
-      email: 'help@sim.ai',
-      url: 'https://www.sim.ai',
+      name: 'Labbai Support',
     },
     license: {
       name: 'Apache 2.0',
       url: 'https://www.apache.org/licenses/LICENSE-2.0.html',
     },
   },
-  servers: [{ url: 'https://www.sim.ai', description: 'Production' }],
+  servers: [{ url: 'https://labbai.example.com', description: 'Your Labbai deployment' }],
   tags: [
     {
       name: 'Logs',

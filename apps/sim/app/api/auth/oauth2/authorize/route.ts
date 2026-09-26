@@ -116,7 +116,7 @@ export const GET = withRouteHandler(async (request: NextRequest) => {
     const scopes = rawScope.split(' ').filter(Boolean)
     const invalidRequest = (description: string) =>
       oauthAuthorizationErrorResponse(request, 'invalid_request', description)
-    const searchScopeRequired = 'Sim Search requires its server URL and the search:read scope.'
+    const searchScopeRequired = 'Labbai Search requires its server URL and the search:read scope.'
     let resource: OAuthResource | null
     try {
       resource = parseOAuthResource(params.get('resource'))
@@ -140,7 +140,9 @@ export const GET = withRouteHandler(async (request: NextRequest) => {
       scopes.some((scope) => scope === OAUTH_API_READ_SCOPE || scope === OAUTH_API_WRITE_SCOPE) &&
       (await isPubliclyRegisteredOAuthClient(params.get('client_id') ?? ''))
     ) {
-      return invalidRequest('This app must request Sim API access for the Sim MCP server URL.')
+      return invalidRequest(
+        'This app must request Labbai API access for the Labbai MCP server URL.'
+      )
     }
     if (params.has('request_uri')) {
       return oauthAuthorizationErrorResponse(

@@ -65,7 +65,7 @@ export class SimMcpOauthProvider implements OAuthClientProvider {
 
   get clientMetadata(): OAuthClientMetadata {
     const meta: OAuthClientMetadata = {
-      client_name: 'Sim',
+      client_name: 'Labbai',
       redirect_uris: [this.redirectUrl],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],

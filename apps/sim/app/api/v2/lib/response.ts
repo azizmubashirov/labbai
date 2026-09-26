@@ -86,7 +86,7 @@ const RETRY_AFTER_SECONDS_BY_STATUS: Partial<Record<number, number>> = {
  * built-in handler for it: the challenge surfaces to a human, and the real
  * channel is named outright in the `header` parameter beside it.
  */
-const V2_API_KEY_CHALLENGE = 'SimApiKey realm="Sim API", header="x-api-key"'
+const V2_API_KEY_CHALLENGE = 'SimApiKey realm="Labbai API", header="x-api-key"'
 
 /**
  * The `WWW-Authenticate` value for a v2 `401`, so a 401 is a complete one.
@@ -104,7 +104,9 @@ const V2_API_KEY_CHALLENGE = 'SimApiKey realm="Sim API", header="x-api-key"'
  */
 function v2AuthChallenge(tried: 'api_key' | 'bearer' = 'api_key'): string {
   const bearer =
-    tried === 'bearer' ? 'Bearer realm="Sim API", error="invalid_token"' : 'Bearer realm="Sim API"'
+    tried === 'bearer'
+      ? 'Bearer realm="Labbai API", error="invalid_token"'
+      : 'Bearer realm="Labbai API"'
   return tried === 'bearer'
     ? `${bearer}, ${V2_API_KEY_CHALLENGE}`
     : `${V2_API_KEY_CHALLENGE}, ${bearer}`
@@ -119,7 +121,7 @@ export function v2InsufficientScope(error: InsufficientScopeError): NextResponse
   return v2Error('FORBIDDEN', error.message, {
     details: { code: error.detailCode },
     headers: {
-      'WWW-Authenticate': `Bearer realm="Sim API", error="insufficient_scope", scope="${error.requiredScope}"`,
+      'WWW-Authenticate': `Bearer realm="Labbai API", error="insufficient_scope", scope="${error.requiredScope}"`,
     },
   })
 }

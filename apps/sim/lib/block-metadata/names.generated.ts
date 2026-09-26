@@ -51,7 +51,7 @@ export const BLOCK_NAMES: Readonly<Record<string, string>> = {
   search: 'Search',
   serper: 'Serper',
   shopify: 'Shopify',
-  sim_workspace_event: 'Sim Workspace Events',
+  sim_workspace_event: 'Labbai Workspace Events',
   smtp: 'SMTP',
   start_trigger: 'Start',
   stt_v2: 'Speech-to-Text',

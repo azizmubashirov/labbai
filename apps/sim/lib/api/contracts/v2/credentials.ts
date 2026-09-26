@@ -255,7 +255,7 @@ const v2CredentialConnectionBaseFields = {
     .trim()
     .min(1, 'displayName cannot be empty')
     .max(255, 'displayName must be at most 255 characters')
-    .describe('Name shown for the new credential in Sim.'),
+    .describe('Name shown for the new credential in Labbai.'),
 }
 
 const v2CreateStandardOAuthCredentialConnectionSchema = z
@@ -294,7 +294,7 @@ export const v2CredentialConnectionAuthorizationSchema = z
     authorizationUrl: z
       .string()
       .url('authorizationUrl must be an absolute URL')
-      .describe('Short-lived Sim browser URL that starts the OAuth authorization flow.'),
+      .describe('Short-lived Labbai browser URL that starts the OAuth authorization flow.'),
     expiresAt: v2TimestampSchema.describe('ISO 8601 timestamp when the connection link expires.'),
   })
   .meta({
@@ -661,7 +661,7 @@ export const v2UpdateCredentialBodySchema = z
       .min(1, 'displayName cannot be empty')
       .max(255, 'displayName must be at most 255 characters')
       .optional()
-      .describe('New name shown for the credential in Sim.'),
+      .describe('New name shown for the credential in Labbai.'),
     description: z
       .string()
       .trim()

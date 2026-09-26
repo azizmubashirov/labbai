@@ -252,7 +252,7 @@ export const v2BlockSummarySchema = z
       })
       .optional()
       .describe('Post-release lifecycle state. Absent for a block in normal support.'),
-    docsLink: z.string().optional().describe('Sim documentation page for the integration.'),
+    docsLink: z.string().optional().describe('Labbai documentation page for the integration.'),
     tags: z.array(z.string()).describe('Catalog tags, e.g. `messaging`, `version-control`.'),
   })
   .meta({
@@ -361,7 +361,7 @@ export type V2ToolOutput = z.output<typeof v2ToolOutputSchema>
 const v2HostedApiKeySchema = z
   .enum(['always', 'conditional', 'none'])
   .describe(
-    'Whether Sim supplies the API key on THIS deployment: `always`, `conditional` (only for some parameter combinations), or `none` (bring your own). Self-hosted deployments supply no hosted keys, so every tool reports `none` there regardless of what it declares.'
+    'Whether Labbai supplies the API key on THIS deployment: `always`, `conditional` (only for some parameter combinations), or `none` (bring your own). Self-hosted deployments supply no hosted keys, so every tool reports `none` there regardless of what it declares.'
   )
 
 const v2ToolOAuthSchema = z.object({

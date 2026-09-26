@@ -154,7 +154,7 @@ function isHiddenToolCall(toolName: string | undefined): boolean {
 }
 
 function resolveAgentLabel(key: string): string {
-  if (key === 'mothership') return 'Sim'
+  if (key === 'mothership') return 'Labbai'
   return SUBAGENT_LABELS[key] ?? humanizeToolName(key)
 }
 

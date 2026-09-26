@@ -341,7 +341,7 @@ export function domainSystemHint(domain: LocalCopilotSpecialistDomain): string {
     case 'agent':
       return 'Focus on integration tools, MCP tools, skills, and function_execute.'
     case 'research':
-      return 'Focus on research. For ANY real-world factual or current question, call a live search tool FIRST (exa_answer via invoke_integration_tool, or search_online) before answering — never answer from training memory alone. When the question is about a workspace file, glob/read/grep that exact VFS path — do not open a similarly named file. Use search_documentation only for Sim product questions.'
+      return 'Focus on research. For ANY real-world factual or current question, call a live search tool FIRST (exa_answer via invoke_integration_tool, or search_online) before answering — never answer from training memory alone. When the question is about a workspace file, glob/read/grep that exact VFS path — do not open a similarly named file. Use search_documentation only for Labbai product questions.'
     case 'media':
       return 'Focus on image/audio/video generation and ffmpeg.'
     case 'file':

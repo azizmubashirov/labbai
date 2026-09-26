@@ -478,9 +478,9 @@ export const PostgreSQLBlockMeta = {
     },
     {
       icon: PostgresIcon,
-      title: 'Postgres results to Sim table',
+      title: 'Postgres results to Labbai table',
       prompt:
-        'Create a scheduled workflow that runs a PostgreSQL query for the latest records and writes each row into a Sim table, so the data is available for downstream blocks without a live database call.',
+        'Create a scheduled workflow that runs a PostgreSQL query for the latest records and writes each row into a Labbai table, so the data is available for downstream blocks without a live database call.',
       modules: ['scheduled', 'tables', 'agent', 'workflows'],
       category: 'operations',
       tags: ['database', 'sync'],
