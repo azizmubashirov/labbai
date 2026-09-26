@@ -5,7 +5,8 @@
  *
  * Motion blur: each output frame is the average of `--blur` sub-frames spread over half a
  * frame interval (a 180° shutter), blended by ffmpeg's tmix.
- * Requires Playwright (Chromium) and an ffmpeg binary with libx264 (FFMPEG env or PATH).
+ * Requires Playwright (Chromium; CHROMIUM_PATH overrides the browser binary) and an ffmpeg
+ * binary with libx264 (FFMPEG env or PATH).
  */
 const { spawn } = require('node:child_process')
 const path = require('node:path')
@@ -24,7 +25,7 @@ const BLUR = Number(arg('blur', '5'))
 const FFMPEG = process.env.FFMPEG || 'ffmpeg'
 
 async function main() {
-  const browser = await chromium.launch()
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined })
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 })
   await page.goto(`file://${path.join(__dirname, 'promo.html')}`)
   await page.evaluate(() => window.ready)

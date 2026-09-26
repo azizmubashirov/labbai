@@ -202,8 +202,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--duration", type=float, default=27.0)
     parser.add_argument("--scenes", default="2.6,6.9,10.2,14.6,18.2,22.6")
-    parser.add_argument("--pops", default="0.3,2.85,2.97,3.08,3.5,3.68,3.86,7.05,10.3,11.0,11.42,11.84,12.26,14.72,15.0,15.3,15.6,18.32,18.6,19.8,20.5,21.2,21.4")
-    parser.add_argument("--taps", default="9.22,13.15")
+    parser.add_argument("--pops", default="0.3,2.85,2.97,3.08,3.5,3.68,3.86,7.05,10.3,10.55,10.79,11.03,11.27,11.51,13.1,13.3,13.5,13.7,13.9,14.72,15.0,15.3,15.6,18.32,18.6,19.8,20.5,21.2,21.4")
+    parser.add_argument("--taps", default="9.22,12.77")
     parser.add_argument("--hits", default="0.25,22.7")
     args = parser.parse_args()
 

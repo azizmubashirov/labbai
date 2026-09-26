@@ -1,0 +1,12 @@
+@import "../../../apps/sim/app/_styles/globals.css";
+@import "@xyflow/react/dist/style.css";
+
+@font-face {
+  font-family: "Season";
+  src: url("../../../apps/sim/app/_styles/fonts/season/SeasonSansUprightsVF.woff2") format("woff2");
+  font-weight: 300 800;
+}
+
+:root {
+  --font-season: "Season";
+}

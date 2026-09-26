@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <title>Labbai Promo</title>
+<link rel="stylesheet" href="canvas/dist/canvas.css" />
 <style>
   @font-face { font-family: Inter; font-weight: 400; src: url(fonts/inter-latin-400-normal.woff2) format('woff2'); }
   @font-face { font-family: Inter; font-weight: 500; src: url(fonts/inter-latin-500-normal.woff2) format('woff2'); }
@@ -19,12 +20,12 @@
     --muted: #7c828c;
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @layer base { * { box-sizing: border-box; margin: 0; padding: 0; } }
   html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--dark); }
   body { font-family: Inter, sans-serif; -webkit-font-smoothing: antialiased; }
 
   #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
-  .scene { position: absolute; inset: 0; display: none; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
   .scene.dark { background: radial-gradient(ellipse 70% 60% at 50% 45%, #1a1c21 0%, var(--dark) 70%); color: #fff; }
   .scene.light { background: radial-gradient(ellipse 70% 60% at 50% 45%, #ffffff 0%, var(--light) 75%); color: var(--ink); }
 
@@ -103,26 +104,29 @@
     position: relative; width: 100%; height: 100%; border-radius: 44px; background: #fff; overflow: hidden;
     box-shadow: 0 2px 3px rgba(0,0,0,0.06), 0 40px 80px -30px rgba(10,20,40,0.35), 0 0 0 1px rgba(10,20,40,0.05);
   }
-  .card-head {
-    height: 128px; padding: 0 44px; display: flex; flex-direction: column; justify-content: center;
-    background: linear-gradient(135deg, #3fd894, #22a868); color: #fff;
-  }
-  .card-head .t { font-size: 38px; font-weight: 800; letter-spacing: -0.02em; }
-  .card-head .s { font-size: 22px; font-weight: 600; opacity: 0.85; margin-top: 4px; }
-  .rows { padding: 22px 44px 0; }
-  .row { display: flex; align-items: center; gap: 22px; height: 86px; border-bottom: 1px solid #eef0f3; }
-  .check { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #cfd3da; position: relative; flex: none; }
-  .check .fill { position: absolute; inset: -3px; border-radius: 50%; background: var(--green); display: grid; place-items: center; }
   .mini { width: 52px; height: 52px; flex: none; }
   .mini .tile { border-radius: 30%; }
   .mini .tile img { width: 64%; height: 64%; }
-  .label { position: relative; z-index: 0; font-size: 30px; font-weight: 600; color: #1d2026; }
-  .label .hl { position: absolute; left: -6px; top: 55%; height: 40%; border-radius: 6px; background: rgba(51,196,130,0.28); z-index: -1; }
-  .foot { position: absolute; left: 44px; right: 44px; bottom: 34px; height: 90px; display: flex; align-items: center; justify-content: space-between; }
-  .foot .gl { font-size: 32px; font-weight: 800; color: #1d2026; display: flex; align-items: center; gap: 14px; }
-  .foot .dot { width: 16px; height: 16px; border-radius: 50%; }
-  .toggle { width: 132px; height: 78px; border-radius: 39px; position: relative; box-shadow: inset 0 2px 4px rgba(0,0,0,0.12); }
-  .knob { position: absolute; top: 6px; left: 6px; width: 66px; height: 66px; border-radius: 50%; background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.25); }
+
+  /* Scene 4: the real workflow canvas (canvas/dist) in an app-like window */
+  .wf-window {
+    position: relative; width: 100%; height: 100%; border-radius: 28px; overflow: hidden; background: #fefefe;
+    box-shadow: 0 2px 3px rgba(0,0,0,0.06), 0 50px 100px -30px rgba(10,20,40,0.35), 0 0 0 1px rgba(10,20,40,0.07);
+  }
+  .wf-bar {
+    position: absolute; left: 0; right: 0; top: 0; height: 76px; padding: 0 22px 0 26px; display: flex; align-items: center; gap: 16px;
+    border-bottom: 1px solid #ededed; background: #fbfbfb; font-family: Inter, sans-serif;
+  }
+  .wf-bar .logo { width: 38px; height: 38px; flex: none; }
+  .wf-bar .nm { font-size: 24px; font-weight: 600; color: #1d2026; letter-spacing: -0.01em; }
+  .wf-bar .crumb { font-size: 22px; font-weight: 500; color: #9aa0a8; }
+  .deploy {
+    margin-left: auto; height: 48px; padding: 0 26px; border-radius: 12px; display: flex; align-items: center; gap: 10px;
+    font-size: 22px; font-weight: 600; color: #fff; background: #1d2026; white-space: nowrap;
+  }
+  .deploy .dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+  #labbai-canvas { position: absolute; left: 0; right: 0; top: 76px; bottom: 0; background: var(--bg, #fefefe); font-family: 'Season', sans-serif; }
+  #labbai-canvas .react-flow__node > * { transform-origin: 50% 50%; }
 
   /* Scene 5 hub */
   svg.links { position: absolute; inset: 0; }
@@ -177,15 +181,13 @@
 
   <section class="scene light" id="s4">
     <div class="obj" id="s4-card">
-      <div class="card">
-        <div id="s4-content">
-          <div class="card-head"><div class="t">Barbershop agent</div><div class="s">Built by Labbai AI · just now</div></div>
-          <div class="rows" id="s4-rows"></div>
-          <div class="foot">
-            <div class="gl"><span class="dot" id="s4-dot"></span><span id="s4-status">Go live</span></div>
-            <div class="toggle" id="s4-toggle"><div class="knob" id="s4-knob"></div></div>
-          </div>
+      <div class="wf-window">
+        <div class="wf-bar" id="s4-bar">
+          <div class="logo"><div class="labbai-tile" id="s4-logo"></div></div>
+          <span class="crumb">Aziz's Workspace /</span><span class="nm">Barbershop agent</span>
+          <div class="deploy" id="s4-deploy"><span class="dot" id="s4-dot"></span><span id="s4-status">Deploy</span></div>
         </div>
+        <div id="labbai-canvas"></div>
       </div>
     </div>
   </section>
@@ -259,6 +261,7 @@
   <div id="fade"></div>
 </div>
 
+<script src="canvas/dist/canvas.js"></script>
 <script>
   /** Total video length in seconds. */
   const DURATION = 27
@@ -275,13 +278,6 @@
   const HUB_ICONS = [
     'telegram', 'whats-app', 'instagram', 'gmail', 'google-sheets', 'google-calendar', 'google-drive', 'hubspot',
     'notion', 'shopify', 'zoom', 'postgres', 'cal-com-mark', 'airtable', 'trello', 'supabase',
-  ]
-
-  const ROWS = [
-    ['telegram', 'Replies on Telegram'],
-    ['google-sheets', 'Knows your price list'],
-    ['cal-com-mark', 'Books visits in Cal.com'],
-    ['open-ai', 'Answers with gpt-5-mini'],
   ]
 
   const PROMPT = 'Build a Telegram agent for my barbershop'
@@ -323,11 +319,7 @@
   }
 
   function build() {
-    for (const id of ['s1-tile', 's5-hubtile', 's7-tile']) $(id).innerHTML = LABBAI_GLYPH
-    $('s4-rows').innerHTML = ROWS.map(
-      ([icon, text], i) =>
-        `<div class="row" id="r${i}"><div class="check"><div class="fill" id="c${i}"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></div></div><div class="mini">${tileHtml(icon)}</div><div class="label"><span class="hl" id="h${i}"></span>${text}</div></div>`
-    ).join('')
+    for (const id of ['s1-tile', 's4-logo', 's5-hubtile', 's7-tile']) $(id).innerHTML = LABBAI_GLYPH
     $('s5-tiles').innerHTML = HUB_ICONS.map((n, i) => `<div class="obj" id="t${i}" style="width:128px;height:128px">${tileHtml(n)}</div>`).join('')
     $('s5-links').innerHTML = HUB_ICONS.map(
       (_, i) => `<line id="l${i}" stroke="rgba(51,196,130,0.35)" stroke-width="3" stroke-linecap="round"/><circle id="p${i}" r="6" fill="#5df0ad"/>`
@@ -405,38 +397,48 @@
     hand(lerp(1650, bx, inP) + outP * 500, lerp(1150, 540, inP) + outP * 500, 1 - 0.12 * tap, t > 8.5 ? 1 : 0)
   }
 
+  /** Block ids in the order they are built and then run (see canvas/canvas.tsx). */
+  const WF_NODES = ['tg', 'kb', 'agent', 'cal', 'reply']
+
   function scene4(t) {
     const g = spring(t, 10.2, 1.7, 0.5)
     const exit = easeIn(prog(t, 14.2, 0.4))
-    const cardW = lerp(1060, 700, g)
-    place($('s4-card'), { w: cardW, h: lerp(132, 640, g), r: -55 * exit, s: 1 - 0.8 * exit, ry: 25 * exit })
-    $('s4-content').style.opacity = prog(t, 10.4, 0.25)
-    ROWS.forEach((_, i) => {
-      const row = $(`r${i}`)
-      const appear = spring(t, 10.45 + 0.09 * i, 1.8, 0.6)
-      row.style.transform = `translateY(${(1 - appear) * 40}px)`
-      row.style.opacity = clamp(appear)
-      const at = 10.95 + 0.42 * i
-      $(`c${i}`).style.transform = `scale(${spring(t, at, 2.3, 0.4)})`
-      $(`h${i}`).style.width = `calc(${100 * easeOut(prog(t, at + 0.05, 0.3))}% + 12px)`
-      $(`h${i}`).style.opacity = t > at ? 1 : 0
-    })
-    const on = t > 13.25
-    const squash = press(t, 13.1, 0.3)
-    $('s4-knob').style.transform = `translateX(${54 * spring(t, 13.25, 2, 0.55)}px) scale(${1 + 0.15 * squash}, ${1 - 0.1 * squash})`
-    $('s4-toggle').style.background = on ? '#33c482' : '#d7dbe1'
-    $('s4-status').textContent = on ? 'Live' : 'Go live'
-    $('s4-status').style.color = on ? '#1c9a5f' : '#1d2026'
-    const ring = on ? ((t - 13.25) % 0.9) / 0.9 : 0
-    $('s4-dot').style.background = on ? '#33c482' : '#c4c9d1'
-    $('s4-dot').style.boxShadow = on ? `0 0 0 ${ring * 16}px rgba(51,196,130,${0.5 * (1 - ring)})` : 'none'
+    const w = lerp(1060, 1760, g)
+    const h = lerp(132, 580, g)
+    place($('s4-card'), { w, h, r: -35 * exit, s: 1 - 0.8 * exit, ry: 25 * exit })
+    $('s4-bar').style.opacity = prog(t, 10.35, 0.2)
 
-    const tx = 960 + cardW / 2 - 44 - 66 + 27
-    const ty = 540 + 320 - 34 - 45
-    const inP = easeInOut(prog(t, 12.45, 0.6))
-    const outP = easeIn(prog(t, 13.5, 0.55))
-    const tap = press(t, 13.1, 0.2)
-    hand(lerp(1700, tx, inP) + outP * 450, lerp(1200, ty, inP) + outP * 400, 1 - 0.12 * tap, t > 12.4 && t < 14.1 ? 1 : 0)
+    WF_NODES.forEach((id, i) => {
+      const at = 10.5 + 0.24 * i
+      const pop = spring(t, at, 2.1, 0.45)
+      const node = document.querySelector(`#labbai-canvas .react-flow__node[data-id="${id}"] > *`)
+      if (node) {
+        node.style.transform = `translateY(${(1 - clamp(pop)) * 40}px) scale(${lerp(0.4, 1, pop)})`
+        node.style.opacity = clamp(pop * 1.6)
+      }
+      if (i > 0) {
+        const edge = document.querySelector(`#labbai-canvas .react-flow__edge[data-id="e${i - 1}"]`)
+        if (edge) edge.style.opacity = prog(t, at + 0.05, 0.2)
+      }
+    })
+
+    const tap = press(t, 12.75, 0.2)
+    const live = t > 12.85
+    const deploy = $('s4-deploy')
+    deploy.style.transform = `scale(${(1 - 0.1 * tap) * (1 + 0.1 * press(t, 12.85, 0.3))})`
+    deploy.style.background = live ? '#33c482' : '#1d2026'
+    $('s4-status').textContent = live ? 'Live' : 'Deploy'
+    const ring = live ? ((t - 12.85) % 0.8) / 0.8 : 0
+    $('s4-dot').style.boxShadow = live ? `0 0 0 ${ring * 12}px rgba(255,255,255,${0.6 * (1 - ring)})` : 'none'
+
+    const ran = WF_NODES.filter((_, i) => t > 13.05 + 0.2 * i)
+    window.labbaiCanvas?.setRun(ran)
+
+    const bx = 960 + w / 2 - 22 - 60
+    const by = 540 - h / 2 + 38
+    const inP = easeInOut(prog(t, 12.1, 0.6))
+    const outP = easeIn(prog(t, 13.0, 0.5))
+    hand(lerp(1500, bx, inP) + outP * 400, lerp(1250, by, inP) + outP * 700, 1 - 0.12 * tap, t > 12.05 && t < 13.6 ? 1 : 0)
   }
 
   function scene5(t) {
@@ -500,8 +502,8 @@
   /** Moments something lands or gets tapped: [time, strength]. Each one kicks the camera. */
   const IMPACTS = [
     [0.3, 1], [2.85, 0.8], [2.97, 0.8], [3.08, 0.8], [3.5, 0.4], [3.68, 0.4], [3.86, 0.4],
-    [7.05, 0.7], [9.22, 0.9], [10.3, 0.8], [11.0, 0.25], [11.42, 0.25], [11.84, 0.25], [12.26, 0.25],
-    [13.15, 1], [14.72, 0.9], [18.32, 0.8], [19.8, 0.3], [21.2, 0.3], [21.4, 0.5], [22.75, 1.1], [23.6, 0.5],
+    [7.05, 0.7], [9.22, 0.9], [10.3, 0.8], [10.55, 0.3], [10.79, 0.3], [11.03, 0.3], [11.27, 0.3],
+    [11.51, 0.3], [12.77, 1], [13.1, 0.2], [13.3, 0.2], [13.5, 0.2], [13.7, 0.2], [13.9, 0.2], [14.72, 0.9], [18.32, 0.8], [19.8, 0.3], [21.2, 0.3], [21.4, 0.5], [22.75, 1.1], [23.6, 0.5],
   ]
 
   /**
@@ -531,7 +533,9 @@
     for (const [id, start, end] of SCENES) {
       const active = t >= start && t < end
       const el = $(id)
-      el.style.display = active ? 'block' : 'none'
+      /** Opacity, not display/visibility: React Flow must keep measuring the hidden canvas and
+       *  its nodes set `visibility: visible` on themselves. */
+      el.style.opacity = active ? 1 : 0
       if (active) {
         RENDER[id](t)
         const cam = camera(t, start, id === 's7' ? DURATION + 1 : end)
@@ -548,6 +552,7 @@
   build()
   window.ready = Promise.all([
     document.fonts.ready,
+    window.labbaiCanvas.ready,
     ...[...document.images].map((img) => img.decode().catch(() => undefined)),
   ])
   const params = new URLSearchParams(location.search)

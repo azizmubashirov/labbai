@@ -10,13 +10,25 @@ English narration, an original music track and synced sound effects (-16 LUFS).
 | 0–2.6 s | Green dot springs into the 3D Labbai icon, wordmark wipes in |
 | 2.6–6.9 s | Telegram, WhatsApp and Instagram tiles drop in, unread badges count up |
 | 6.9–10.2 s | Prompt pill: "Build a Telegram agent for my barbershop", hand taps send |
-| 10.2–14.6 s | Pill morphs into the agent card, steps tick, hand flips the Go-live toggle |
+| 10.2–14.6 s | Pill morphs into the workflow editor: real block cards build up and connect, hand taps Deploy, blocks run in order |
 | 14.6–18.2 s | Integrations orbit the Labbai hub with data pulses |
 | 18.2–22.6 s | Telegram chat: customer books a visit, "Replied in 2s" / "Booking created" chips |
 | 22.6–27 s | Logo hit: "AI agents that automate real work." |
 
 Brand icons in `icons/` are exported from `apps/sim/components/icons.tsx`
 (`cal-com-mark.svg` is the Cal.com wordmark cropped to "Cal" for a square tile).
+
+## The workflow scene uses the app's real canvas
+
+`canvas/canvas.tsx` renders the workflow with the same components the editor uses
+(`WorkflowBlockView`, `WorkflowEdgeView`, `SubBlockRowView` from `@sim/workflow-renderer`, block
+icons from `apps/sim/components/icons.tsx`) inside React Flow, styled by the app's own
+`globals.css` through Tailwind. Build it before previewing or rendering (needs `bun install`
+at the repo root):
+
+```bash
+bun marketing/promo-video/canvas/build.mjs   # -> canvas/dist (git-ignored)
+```
 
 ## Editing and re-rendering
 
@@ -42,6 +54,7 @@ Video (Playwright + ffmpeg with libx264 on PATH or in `$FFMPEG`):
 # stills for review (writes still-<t>.png)
 NODE_PATH=$(npm root -g) node render.cjs --stills 2.5,12,20
 # full video; --blur is the number of motion-blur sub-frames per frame
+# (set CHROMIUM_PATH if the repo's Playwright version has no matching browser installed)
 NODE_PATH=$(npm root -g) node render.cjs --blur 8 --audio audio/build/mix.wav --out labbai-promo.mp4
 ```
 
