@@ -24,11 +24,11 @@ describe('getActionGroupLabel', () => {
     run: () => {},
   }
 
-  it('separates page actions from Sim actions', () => {
+  it('separates page actions from Labbai actions', () => {
     expect(getActionGroupLabel({ ...action, context: 'workflow' })).toBe('Actions')
     expect(getActionGroupLabel({ ...action, context: 'tables' })).toBe('Actions')
     expect(getActionGroupLabel({ ...action, context: 'logsDashboard' })).toBe('Actions')
-    expect(getActionGroupLabel({ ...action, context: 'global' })).toBe('Sim')
+    expect(getActionGroupLabel({ ...action, context: 'global' })).toBe('Labbai')
   })
 
   it('lets an action group label surface actions whose names do not match', () => {

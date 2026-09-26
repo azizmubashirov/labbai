@@ -66,7 +66,7 @@ describe('resolveInstagramMedia', () => {
 
     expect(result.error).toEqual({
       status: 400,
-      message: 'Media must be a Sim file',
+      message: 'Media must be a Labbai file',
     })
     expect(mockResolveFileInputToUrl).not.toHaveBeenCalled()
   })

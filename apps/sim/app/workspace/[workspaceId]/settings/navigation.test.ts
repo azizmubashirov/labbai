@@ -31,7 +31,7 @@ describe('unified settings navigation', () => {
       { id: 'connected-accounts', label: 'Credential groups', section: 'organization' },
       { id: 'custom-tools', label: 'Custom tools', section: 'workspace' },
       { id: 'mcp', label: 'MCP tools', section: 'workspace' },
-      { id: 'apikeys', label: 'Sim API keys', section: 'workspace' },
+      { id: 'apikeys', label: 'Labbai API keys', section: 'workspace' },
       { id: 'workflow-mcp-servers', label: 'MCP servers', section: 'workspace' },
       { id: 'recently-deleted', label: 'Recently deleted', section: 'workspace' },
       { id: 'security', label: 'Security', section: 'organization' },

@@ -32,8 +32,8 @@ describe('billing usage sources', () => {
     expect(result['sim-chat']).toBeCloseTo(0.6)
   })
 
-  it('uses the Sim Chat product name for billing display', () => {
-    expect(BILLING_USAGE_LOG_SOURCE_LABELS['sim-chat']).toBe('Sim Chat')
+  it('uses the Labbai Chat product name for billing display', () => {
+    expect(BILLING_USAGE_LOG_SOURCE_LABELS['sim-chat']).toBe('Labbai Chat')
   })
 
   it('fails fast when a new internal ledger source has no public mapping', () => {

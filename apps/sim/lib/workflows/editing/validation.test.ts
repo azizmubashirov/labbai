@@ -578,7 +578,7 @@ describe('validateInputsForBlock', () => {
     expect(invalid.errors[0]?.error).toContain('Unknown model id')
   })
 
-  it("does not apply model validation to blocks whose model field is not Sim's catalog", () => {
+  it("does not apply model validation to blocks whose model field is not Labbai's catalog", () => {
     const result = validateInputsForBlock(
       'huggingface',
       { model: 'mistralai/Mistral-7B-Instruct-v0.3' },
@@ -709,7 +709,7 @@ describe('preValidateCredentialInputs (hosted-tool blocks)', () => {
 
   const ctx = { userId: 'user-1', workspaceId: 'workspace-1' }
 
-  it('strips apiKey when the block resolves to a hosted tool on hosted Sim', async () => {
+  it('strips apiKey when the block resolves to a hosted tool on hosted Labbai', async () => {
     const operations = [
       {
         operation_type: 'add' as const,
@@ -726,7 +726,7 @@ describe('preValidateCredentialInputs (hosted-tool blocks)', () => {
     expect(result.filteredOperations[0]?.params?.inputs?.apiKey).toBeUndefined()
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0]).toMatchObject({ blockId: 'video-1', field: 'apiKey' })
-    expect(result.errors[0]?.error).toContain('managed by Sim')
+    expect(result.errors[0]?.error).toContain('managed by Labbai')
   })
 
   it('preserves apiKey when the resolved tool has no hosting (non-falai provider)', async () => {

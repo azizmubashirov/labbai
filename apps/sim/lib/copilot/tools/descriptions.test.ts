@@ -32,7 +32,7 @@ describe('getCopilotToolDescription', () => {
           hostedApiKey: deriveHostedApiKeySupport({ apiKeyParam: 'apiKey' } as never),
         }
       )
-    ).toBe('Search for brands by company name <note>API key is hosted by Sim.</note>')
+    ).toBe('Search for brands by company name <note>API key is hosted by Labbai.</note>')
   })
 
   it.concurrent('does not claim unconditional hosting for a conditional hosted tool', () => {
@@ -52,7 +52,7 @@ describe('getCopilotToolDescription', () => {
         }
       )
     ).toBe(
-      'Generate an image <note>API key is hosted by Sim when hosted-key support applies to the selected configuration.</note>'
+      'Generate an image <note>API key is hosted by Labbai when hosted-key support applies to the selected configuration.</note>'
     )
   })
 
@@ -70,7 +70,7 @@ describe('getCopilotToolDescription', () => {
           fallbackName: 'brandfetch_search',
         }
       )
-    ).toBe('brandfetch_search <note>API key is hosted by Sim.</note>')
+    ).toBe('brandfetch_search <note>API key is hosted by Labbai.</note>')
   })
 
   it.concurrent('appends the email tagline instruction for Gmail tools when enabled', () => {

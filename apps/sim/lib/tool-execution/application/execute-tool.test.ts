@@ -495,7 +495,7 @@ describe('executeToolForCaller', () => {
       })
     ).rejects.toMatchObject({
       code: 'validation',
-      message: expect.stringContaining('input.accessToken is supplied by Sim'),
+      message: expect.stringContaining('input.accessToken is supplied by Labbai'),
     })
     expect(mocks.executeRegistryTool).not.toHaveBeenCalled()
   })
@@ -619,7 +619,7 @@ describe('executeToolForCaller', () => {
    * registry's verdict, carried by the presence of the cost it alone writes,
    * gets this right.
    */
-  it('does not bill a BYOK call, where the key was omitted but Sim did not pay', async () => {
+  it('does not bill a BYOK call, where the key was omitted but Labbai did not pay', async () => {
     mocks.executeRegistryTool.mockResolvedValue({
       success: true,
       output: { markdown: '# Hi' },

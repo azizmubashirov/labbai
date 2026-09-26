@@ -153,7 +153,7 @@ describe('SearchModal', () => {
     vi.unstubAllGlobals()
   })
 
-  it('toggles ask mode with Tab and hands the query to Sim on Enter', async () => {
+  it('toggles ask mode with Tab and hands the query to Labbai on Enter', async () => {
     const onOpenChange = vi.fn()
     await act(async () => {
       root.render(<SearchModal open onOpenChange={onOpenChange} />)
@@ -174,7 +174,7 @@ describe('SearchModal', () => {
 
     act(() => {
       document
-        .querySelector<HTMLInputElement>('input[aria-label="Ask Sim"]')
+        .querySelector<HTMLInputElement>('input[aria-label="Ask Labbai"]')
         ?.dispatchEvent(
           new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
         )
@@ -216,7 +216,7 @@ describe('SearchModal', () => {
 
     act(() => {
       document
-        .querySelector<HTMLInputElement>('input[aria-label="Ask Sim"]')
+        .querySelector<HTMLInputElement>('input[aria-label="Ask Labbai"]')
         ?.dispatchEvent(
           new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
         )
@@ -592,7 +592,7 @@ describe('SearchModal', () => {
     expect(rows.some((row) => row.includes('Run') && !row.includes('Run workflow'))).toBe(true)
   })
 
-  it('orders canvas browse groups as Actions, Sim, building blocks, then the standard tail', async () => {
+  it('orders canvas browse groups as Actions, Labbai, building blocks, then the standard tail', async () => {
     const Icon = () => null
     const block = { id: 'agent', name: 'Agent', icon: Icon, bgColor: '#111', type: 'agent' }
     const original = { ...mockSearchState.data }
@@ -646,7 +646,7 @@ describe('SearchModal', () => {
       ).map((el) => el.textContent)
       expect(headings.slice(0, 7)).toEqual([
         'Actions',
-        'Sim',
+        'Labbai',
         'Blocks',
         'Triggers',
         'Tools',
@@ -661,7 +661,7 @@ describe('SearchModal', () => {
     }
   })
 
-  it('hoists a module page’s actions and its entity section directly under the Sim group', async () => {
+  it('hoists a module page’s actions and its entity section directly under the Labbai group', async () => {
     mockTables.current = [{ id: 'table-1', name: 'Leads', folderId: null }]
     await act(async () => {
       root.render(<SearchModal open onOpenChange={vi.fn()} pageContext='tables' canEdit />)
@@ -670,7 +670,7 @@ describe('SearchModal', () => {
     const headings = Array.from(document.querySelectorAll<HTMLElement>('[cmdk-group-heading]')).map(
       (el) => el.textContent
     )
-    expect(headings.slice(0, 4)).toEqual(['Actions', 'Sim', 'Tables', 'Pages'])
+    expect(headings.slice(0, 4)).toEqual(['Actions', 'Labbai', 'Tables', 'Pages'])
   })
 
   it('browses the integrations catalog from every page', async () => {
@@ -758,7 +758,7 @@ describe('SearchModal', () => {
           new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
         )
     })
-    expect(document.querySelector('input[aria-label="Ask Sim"]')).not.toBeNull()
+    expect(document.querySelector('input[aria-label="Ask Labbai"]')).not.toBeNull()
 
     await act(async () => {
       root.render(<SearchModal open={false} onOpenChange={vi.fn()} />)
@@ -771,7 +771,7 @@ describe('SearchModal', () => {
     })
     const input = document.querySelector<HTMLInputElement>('input[aria-label="Search anything"]')
     expect(input?.value).toBe('')
-    expect(document.querySelector('input[aria-label="Ask Sim"]')).toBeNull()
+    expect(document.querySelector('input[aria-label="Ask Labbai"]')).toBeNull()
   })
 
   it('hides tool operations in browse but keeps them searchable', async () => {

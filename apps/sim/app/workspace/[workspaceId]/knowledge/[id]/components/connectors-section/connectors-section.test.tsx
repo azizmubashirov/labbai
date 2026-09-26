@@ -959,7 +959,7 @@ describe('shared connector lifecycle actions', () => {
       const dialog = container.querySelector('[role="dialog"]')!
       expect(Boolean(dialog.querySelector('input'))).toBe(accessMode === 'workspace')
       if (accessMode !== 'workspace') {
-        expect(dialog.textContent).toContain('deletes its synced documents from Sim')
+        expect(dialog.textContent).toContain('deletes its synced documents from Labbai')
         expect(dialog.textContent).not.toContain('remain unless')
       }
       act(() => findButton(dialog, 'Remove').click())

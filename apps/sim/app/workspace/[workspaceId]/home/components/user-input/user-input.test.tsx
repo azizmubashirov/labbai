@@ -187,7 +187,7 @@ describe('workspace composer', () => {
   it('keeps workspace controls and ignores legacy search-mode URLs', () => {
     mount()
     expect(textarea().value).toBe('Initial draft')
-    expect(textarea().placeholder).toBe('Ask Sim to ')
+    expect(textarea().placeholder).toBe('Ask Labbai to ')
     expect(container?.querySelector('[aria-label^="Mode:"]')).toBeNull()
     for (const label of ['Add resources', 'Attach file', 'Skills']) {
       expect(container?.querySelector(`[aria-label="${label}"]`)).not.toBeNull()

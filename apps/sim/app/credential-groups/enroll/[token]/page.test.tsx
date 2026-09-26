@@ -148,7 +148,7 @@ describe('focused Search enrollment', () => {
     expect(mocks.read).toHaveBeenCalledWith({ principal, input: {} })
   })
 
-  it('keeps existing account reconnect links focused and returns to Sim', async () => {
+  it('keeps existing account reconnect links focused and returns to Labbai', async () => {
     await render({ returnTo: 'accounts', optionId: 'site-two' })
     expect(oauthLinks().map((link) => link.getAttribute('href'))).toEqual([
       '/api/credential-groups/enroll/invitation/oauth/site-two?returnTo=accounts',
@@ -156,7 +156,7 @@ describe('focused Search enrollment', () => {
     expect(document.querySelector('form')).toBeNull()
     expect(
       Array.from(document.querySelectorAll('a'))
-        .find((link) => link.textContent === 'Open Sim')
+        .find((link) => link.textContent === 'Open Labbai')
         ?.getAttribute('href')
     ).toBe('/home')
   })
@@ -180,7 +180,7 @@ describe('focused Search enrollment', () => {
   })
 
   it.each([true, false])(
-    'returns organization enrollments to Sim regardless of Search eligibility: %s',
+    'returns organization enrollments to Labbai regardless of Search eligibility: %s',
     async (canSearch) => {
       mocks.authenticate.mockResolvedValue({
         ...principal,
@@ -191,7 +191,7 @@ describe('focused Search enrollment', () => {
       await render({ returnTo: 'search', optionId: 'site-two' })
       expect(
         Array.from(document.querySelectorAll('a'))
-          .find((link) => link.textContent === 'Open Sim')
+          .find((link) => link.textContent === 'Open Labbai')
           ?.getAttribute('href')
       ).toBe('/home')
     }

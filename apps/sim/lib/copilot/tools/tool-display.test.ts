@@ -82,21 +82,21 @@ describe('getToolDisplayTitle natural-language coverage', () => {
   })
 
   it('includes the query in search_docs titles', () => {
-    expect(getToolDisplayTitle('search_docs')).toBe('Searching Sim docs')
+    expect(getToolDisplayTitle('search_docs')).toBe('Searching docs')
     expect(getToolDisplayTitle('search_docs', { query: 'loop blocks iteration' })).toBe(
-      'Searching Sim docs for "loop blocks iteration"'
+      'Searching docs for "loop blocks iteration"'
     )
     expect(
       getToolCompletedTitle(
         getToolDisplayTitle('search_docs', { query: 'how to read workflow logs' })
       )
-    ).toBe('Searched Sim docs for "how to read workflow logs"')
+    ).toBe('Searched docs for "how to read workflow logs"')
     expect(
       getToolDisplayTitle('search_docs', {
         query:
           'reference block outputs connection tags blockname.field pass data between blocks in a workflow',
       })?.length
-    ).toBeLessThanOrEqual('Searching Sim docs for ""'.length + 32 + '...'.length)
+    ).toBeLessThanOrEqual('Searching docs for ""'.length + 32 + '...'.length)
   })
 
   it('falls back to running code for run_function without a title', () => {
@@ -646,7 +646,7 @@ describe('terminal-title projection is idempotent', () => {
   })
 
   it('leaves unsuccessful action wording intact and labels cancellation', () => {
-    expect(getToolStatusDisplayTitle('Searching Sim docs', 'error')).toBe('Searching Sim docs')
+    expect(getToolStatusDisplayTitle('Searching docs', 'error')).toBe('Searching docs')
     expect(getToolStatusDisplayTitle('Running workflow', 'cancelled')).toBe(
       'Stopped running workflow'
     )
