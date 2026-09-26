@@ -65,6 +65,7 @@ import {
   RESOLVED_SECRET_PROVENANCE_FIELD,
   RESOLVED_SECRET_PROVENANCE_METADATA_V1,
 } from '@/lib/execution/private-tool-metadata'
+import { INBOX_SEND_TOOL_IDS } from '@/lib/inbox/tool-ids'
 import { executeFunctionTool } from '@/lib/internal/function/execute'
 import { createInternalToolFileResult } from '@/lib/internal/tool-operations/file-result'
 import {
@@ -1602,6 +1603,26 @@ export async function executeTool(
   toolId: string,
   params: Record<string, any>,
   options: ExecuteToolOptions = {}
+): Promise<ToolResponse> {
+  const result = await executeToolWithTraceRegistry(toolId, params, options)
+  if (result.success && typeof window === 'undefined' && INBOX_SEND_TOOL_IDS.has(toolId)) {
+    const scope = resolveToolScope(params, options.executionContext)
+    const { captureAgentToolSend } = await import('@/lib/inbox/outbound')
+    await captureAgentToolSend({
+      toolId,
+      toolParams: params,
+      output: result.output,
+      workspaceId: scope.workspaceId,
+      executionId: scope.executionId,
+    })
+  }
+  return result
+}
+
+async function executeToolWithTraceRegistry(
+  toolId: string,
+  params: Record<string, any>,
+  options: ExecuteToolOptions
 ): Promise<ToolResponse> {
   const parentRegistry =
     options.resolvedSecretTraceRegistry ??

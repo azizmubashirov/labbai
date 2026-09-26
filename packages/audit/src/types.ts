@@ -184,6 +184,10 @@ export const AuditAction = {
   PERMISSION_ACCESS_REQUEST_CLOSED: 'permission_access_request.closed',
   PERMISSION_ACCESS_REQUEST_SETTINGS_CHANGED: 'permission_access_request.settings_changed',
 
+  // Inbox
+  INBOX_CONVERSATION_UPDATED: 'inbox_conversation.updated',
+  INBOX_REPLY_SENT: 'inbox_conversation.reply_sent',
+
   // Sandboxes
   SANDBOX_CREATED: 'sandbox.created',
   SANDBOX_UPDATED: 'sandbox.updated',
@@ -278,6 +282,7 @@ export const AuditResourceType = {
   ENVIRONMENT: 'environment',
   FILE: 'file',
   FOLDER: 'folder',
+  INBOX_CONVERSATION: 'inbox_conversation',
   KNOWLEDGE_BASE: 'knowledge_base',
   MCP_SERVER: 'mcp_server',
   OAUTH: 'oauth',
