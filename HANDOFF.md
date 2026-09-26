@@ -28,7 +28,8 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | + Sim cloud copilot path (Go mothership client, BYOK/API-key routes) and Local/Cloud switch removed — local copilot only | done |
 | + Telemetry only to our own `TELEMETRY_ENDPOINT`; off when unset | done |
 | Branding, part 1: name, text logo, favicons, email header, copy, agent identity | done (see below) |
-| Branding, part 2: UZ/RU interface (i18n) | todo — separate step |
+| Branding, part 2: UZ/RU interface (i18n) + real logo | todo — owner: at the very end |
+| Inbox (customer conversations from Telegram / WhatsApp / Instagram) | done (see below) |
 
 LICENSE RULE (critical): `apps/sim/ee` was under the Sim Enterprise License. Never read,
 copy or restore `ee` source from git history. Requirements come only from Apache code.
@@ -72,6 +73,40 @@ UZ/RU translation later as its own step.
   check the license before production use (Inter is the free alternative).
 - Pre-existing, not from branding: `bun run check:mcp-operations` fails on `main` (the
   access-requests discovery schema lacks a description).
+
+### Inbox (2026-09-27)
+
+Owner: the section is called **Inbox** (not "Chat"). Sidebar → Inbox, route `/workspace/[id]/inbox`.
+
+- Data: `inbox_conversation` + `inbox_message` (migration `0381_labbai_inbox`, additive; verified by
+  migrating a fresh Postgres 16 + pgvector 0.8 from 0000 to 0381).
+- Inbound: `lib/webhooks/processor.ts` → `lib/inbox/webhook.ts` records every customer message from
+  Telegram / WhatsApp / Instagram trigger deliveries (idempotent on provider message id) before
+  preprocessing. If AI is off for every conversation in the delivery, the run is not queued and the
+  provider still gets 200 (`reason: 'inbox-ai-off'`). Recording errors are logged, never fail delivery.
+- Agent messages: `tools/index.ts` `executeTool` → `lib/inbox/outbound.ts` appends successful
+  `telegram_message` / `whatsapp_send_message` / `instagram_send_text_message` calls made inside a
+  workflow run to the matching existing thread (no new threads for unknown chats).
+- Operator replies: `lib/inbox/send.ts` sends through the trigger that last received the thread:
+  Telegram bot token; WhatsApp needs the new optional **Access Token (for Inbox replies)** field on
+  the WhatsApp trigger; Instagram uses the account selected on the new trigger. A rejected reply is
+  stored as `failed` with the reason and shown in the thread.
+- New trigger `instagram_webhook` (Instagram block → trigger mode): Meta handshake + app-secret
+  signature, customer DMs only (echoes skipped). WhatsApp and Instagram share
+  `lib/webhooks/providers/meta.ts`.
+- API: `lib/api/contracts/inbox.ts`, `lib/inbox/application/*` (operations `inbox.conversations.*`,
+  session-only, `capability: 'none'`; AI toggles and delivered replies are audited),
+  routes under `app/api/workspaces/[id]/inbox/conversations/**`.
+- UI: `app/workspace/[workspaceId]/inbox/*` — list (search, channel, unread filters), thread,
+  AI on/off switch, reply box (Enter sends). Polls every 5 s (no realtime socket event yet).
+- Verified: unit tests (`lib/inbox/**`, Instagram handler), SQL against real Postgres, and the UI
+  in a browser (list, thread, AI toggle, mark-read, failed reply display).
+- Known limits: only text is sent (media shows as `[photo]` etc.); Instagram replies only within
+  Meta's 24-hour window; Telegram deliveries are not signature-checked (existing behaviour,
+  no `secret_token`); one Telegram bot / Meta app per workflow (last deploy wins).
+- Pre-existing check failures not from this work (not in CI): `check:api-validation:strict`,
+  `check:utils`, `check:react-query` flag local-copilot code; `check:mcp-operations` fails on the
+  access-requests schema.
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

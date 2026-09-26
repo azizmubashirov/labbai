@@ -26,6 +26,7 @@ import {
   Database,
   Files,
   Integration,
+  MessageSquareText,
   MoreHorizontal,
   PanelLeft,
   Pin,
@@ -743,6 +744,13 @@ export const Sidebar = memo(function Sidebar() {
   const workspaceNavItems = useMemo(
     () =>
       [
+        {
+          id: 'inbox',
+          label: 'Inbox',
+          icon: MessageSquareText,
+          href: `/workspace/${workspaceId}/inbox`,
+          restricted: false,
+        },
         {
           id: 'tables',
           label: 'Tables',

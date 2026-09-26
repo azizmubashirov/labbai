@@ -22,6 +22,7 @@ import {
   Home,
   Integration,
   Key,
+  MessageSquareText,
   Pencil,
   Play,
   Plus,
@@ -273,6 +274,12 @@ function SearchModalContent({
           icon: Hammer,
           href: `/workspace/${workspaceId}/skills`,
           hidden: permissionConfig.hideIntegrationsTab,
+        },
+        {
+          id: 'inbox',
+          name: 'Inbox',
+          icon: MessageSquareText,
+          href: `/workspace/${workspaceId}/inbox`,
         },
         {
           id: 'tables',

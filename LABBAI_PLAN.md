@@ -72,15 +72,15 @@ Gemini / Workers AI.
 
 ## Build (new, after cleanup)
 
-- **Chats (customer inbox)** — native section inside Labbai: every customer thread from
+- **Inbox** (done 2026-09-27; see HANDOFF.md) — native section inside Labbai: every customer thread from
   Telegram / WhatsApp / Instagram (via Sim channel triggers) stored as a conversation,
   Telegram-like list + thread view, operator reply from the UI, per-conversation
   AI on/off (when off, the agent workflow skips that customer). Copilot-built channel
   agents feed this section automatically.
 - **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
   provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
-- **Branding** — Labbai name, text logo, emails: done. Still to do: real logo, UZ / RU
-  interface.
+- **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,
+  UZ / RU interface.
 - Own integrations: amoCRM, Bitrix24, Exely.
 
 ## Open issues found in testing
