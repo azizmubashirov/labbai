@@ -342,7 +342,27 @@
 </div>
 
 <script>
+  /** Length of the authored timeline: every `--d` delay and `data-in/out` window is in these seconds. */
   const DURATION = 50
+  /** Length of the rendered video. */
+  const VIDEO_DURATION = 44
+
+  /**
+   * Scene boundaries as [authored time, video time]. Seeking maps video time onto the
+   * authored timeline piecewise-linearly, so each scene plays at the pace the narration needs.
+   */
+  const PACE = [
+    [0, 0], [4.6, 5.0], [10.6, 11.4], [21, 19.6], [28, 24.8], [35, 30.8], [44.2, 38.0], [50, 44],
+  ]
+
+  function toStoryTime(t) {
+    for (let i = 1; i < PACE.length; i++) {
+      const [s0, v0] = PACE[i - 1]
+      const [s1, v1] = PACE[i]
+      if (t <= v1 || i === PACE.length - 1) return s0 + ((t - v0) * (s1 - s0)) / (v1 - v0)
+    }
+    return t
+  }
 
   const INTEGRATIONS = [
     ['Telegram', '#2aa3e0'], ['WhatsApp', '#25d366'], ['Instagram', '#e1306c'], ['Twilio SMS', '#f22f46'], ['Gmail', '#ea4335'], ['SMTP', '#9aa1a9'],
@@ -438,15 +458,16 @@
 
   let animations = null
 
-  /** Pauses every animation and moves it to `t` seconds on the video timeline. */
+  /** Pauses every animation and moves it to `t` seconds of the rendered video. */
   window.seek = (t) => {
     animations ??= document.getAnimations()
+    const story = toStoryTime(t) * 1000
     for (const a of animations) {
       a.pause()
-      a.currentTime = t * 1000
+      a.currentTime = story
     }
   }
-  window.DURATION = DURATION
+  window.DURATION = VIDEO_DURATION
 
   const params = new URLSearchParams(location.search)
   if (params.has('t')) {

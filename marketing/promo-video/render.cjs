@@ -1,7 +1,7 @@
 /**
  * Renders promo.html frame by frame and encodes it to MP4.
  *
- * Usage: node render.cjs [--fps 30] [--out labbai-promo.mp4] [--stills 1,12,19]
+ * Usage: node render.cjs [--fps 30] [--out labbai-promo.mp4] [--audio audio/build/mix.wav] [--stills 1,12,19]
  * Requires Playwright (Chromium) and an ffmpeg binary with libx264 (FFMPEG env or PATH).
  */
 const { spawn } = require('node:child_process')
@@ -16,6 +16,7 @@ function arg(name, fallback) {
 const FPS = Number(arg('fps', '30'))
 const OUT = path.resolve(__dirname, arg('out', 'labbai-promo.mp4'))
 const STILLS = arg('stills', null)
+const AUDIO = arg('audio', null)
 const FFMPEG = process.env.FFMPEG || 'ffmpeg'
 
 async function main() {
@@ -34,9 +35,13 @@ async function main() {
     return
   }
 
+  const audioArgs = AUDIO
+    ? ['-i', path.resolve(__dirname, AUDIO), '-map', '0:v', '-map', '1:a',
+        '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-shortest']
+    : []
   const ff = spawn(
     FFMPEG,
-    ['-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
+    ['-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-', ...audioArgs,
       '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', OUT],
     { stdio: ['pipe', 'inherit', 'inherit'] }
   )
