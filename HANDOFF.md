@@ -181,14 +181,15 @@ test real sends per channel before relying on it.
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 
-CI on every push to `main` (`.github/workflows/typecheck.yml`):
-1. `bun install --frozen-lockfile` → `tsc --noEmit` (apps/sim) → vitest (local copilot +
-   a few suites) → whole apps/sim vitest suite → results pushed to
-   branch `ci-reports`:
-   `https://raw.githubusercontent.com/azizmubashirov/labbai-sim/ci-reports/{status,typecheck,tests,full-tests,full-tests-failed,install}.txt`
-2. `next build` job → `ci-build-report` branch (`status.txt`, `build.txt`).
-3. `Build images` (`.github/workflows/build-images.yml`) runs only after the type-check
-   workflow succeeds on `main` → pushes `ghcr.io/azizmubashirov/labbai-sim-{simstudio,realtime,migrations,cron}:latest`.
+CI on every push to `main` (`.github/workflows/ci.yml`), all jobs in parallel:
+1. `tsc` — `bun install` (cached) → `tsc --noEmit` (apps/sim) → local copilot tests.
+2. `tests` — the whole apps/sim vitest suite in 3 shards (`--shard=N/3`).
+3. `next-build` — the app's `next build` outside Docker (its output is published).
+4. `images` — builds the 4 images and pushes `ghcr.io/azizmubashirov/labbai-sim-{simstudio,realtime,migrations,cron}:<sha>`.
+5. `promote` — only when 1–4 all passed: retags `:<sha>` → `:latest` (deploys pull `:latest`).
+6. `report` — publishes `ci-reports` (`{status,typecheck,tests,full-tests,full-tests-failed,install}.txt`;
+   `status.txt` has sha, tsc, tests, full_tests, next_build, images, latest) and `ci-build-report`
+   (`status.txt`, `build.txt`): `https://raw.githubusercontent.com/azizmubashirov/labbai-sim/ci-reports/status.txt`.
 
 Job logs need repo-admin auth; the report branches exist so results are readable publicly.
 To test a WIP branch in CI, merge it to `main` only when it type-checks, or temporarily
