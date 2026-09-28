@@ -26,7 +26,7 @@ packages/         shared packages (@sim/db, @sim/auth, @sim/emcn, …)
 
 Images are built in GitHub Actions and published to GHCR
 (`ghcr.io/azizmubashirov/labbai-sim-{simstudio,realtime,migrations,cron}`).
-`docker-compose.labbai.yml` runs that stack; the test-server steps are in `HANDOFF.md`.
+`docker-compose.prod.yml` runs that stack on the production server; deploy steps are in `HANDOFF.md`.
 
 Local development uses `bun`:
 

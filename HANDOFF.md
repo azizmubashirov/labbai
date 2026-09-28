@@ -199,10 +199,27 @@ add the branch to the workflow `on.push.branches`.
 patches/ into an empty dir and run
 `docker run --rm -v $PWD:/w -w /w oven/bun:1.4.1-alpine bun install --lockfile-only`.
 
+## Production server
+
+- Host `46.8.195.221`, SSH as `ubuntu` (not root). It also runs Mehmon.AI (app.labbai.uz),
+  Uysot and Paynet — never touch their containers. RAM is tight (5.3 GB total): Labbai app is
+  capped at 1.5 GB, realtime at 384 MB.
+- Stack in `/home/ubuntu/labbai`: `docker-compose.prod.yml` + `deploy.sh`
+  (copies of `docker-compose.prod.yml` and `infra/labbai-prod/deploy.sh` from this repo),
+  `.env` (secrets generated on the server, mode 600), `uploads/` (local file storage), DB volume `labbai_pg`.
+- Deploy: `ssh ubuntu@46.8.195.221 sh /home/ubuntu/labbai/deploy.sh` (pull GHCR images, migrate, up).
+- No published ports. Ingress = the shared `edge` Cloudflare tunnel (`/home/ubuntu/edge`,
+  routes set in the Cloudflare dashboard → Public hostnames):
+  `studio.labbai.uz` → `http://labbai-app:3000`, `studio-ws.labbai.uz` → `http://labbai-realtime:3002`.
+- Owner fills in `OPENAI_API_KEY` (new, rotated) and `GOOGLE_CLIENT_ID/SECRET` in `.env`, and adds
+  `https://studio.labbai.uz/api/auth/oauth2/callback/google-{email,drive,docs,sheets,calendar,forms}`
+  to the Google OAuth client.
+
 ## Test server
 
+
 - Host `147.93.62.159` (ssh alias `hostinger-root`), stack in `/root/labbai/arena`
-  (`docker-compose.labbai.yml` from this repo, fresh DB volume `labbai_pg_v2`).
+  (its own `docker-compose.labbai.yml` on the server; no longer in the repo; DB volume `labbai_pg_v2`).
 - Deploy: `sh /root/labbai/deploy-labbai.sh` (pull GHCR images, migrate, up).
 - App bound to 127.0.0.1 only: `ssh -f -N -L 3300:127.0.0.1:3300 -L 3302:127.0.0.1:3302 hostinger-root`
   then open http://localhost:3300.
