@@ -210,7 +210,8 @@ patches/ into an empty dir and run
 - Deploy: `ssh ubuntu@46.8.195.221 sh /home/ubuntu/labbai/deploy.sh` (pull GHCR images, migrate, up).
 - No published ports. Ingress = the `labbai-prod` Cloudflare tunnel (Mehmon's `mehmonai-cloudflared`, network `mehmonai_default`; the stack also joins the shared `edge` network, `/home/ubuntu/edge`,
   routes set in the Cloudflare dashboard → Public hostnames):
-  `studio.labbai.uz` → `http://labbai-app:3000`, `studio-ws.labbai.uz` → `http://labbai-realtime:3002`.
+  `studio.labbai.uz` path `socket.io` → `http://labbai-realtime:3002` (must be listed first), then
+  `studio.labbai.uz` → `http://labbai-app:3000`. `.env` `NEXT_PUBLIC_SOCKET_URL=https://studio.labbai.uz` (same origin).
 - Owner fills in `OPENAI_API_KEY` (new, rotated) and `GOOGLE_CLIENT_ID/SECRET` in `.env`, and adds
   `https://studio.labbai.uz/api/auth/oauth2/callback/google-{email,drive,docs,sheets,calendar,forms}`
   to the Google OAuth client.

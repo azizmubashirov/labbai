@@ -3,8 +3,9 @@
 # in the Cloudflare dashboard on the `labbai-prod` tunnel (mehmonai-cloudflared, network
 # `mehmonai_default`); the shared `edge` tunnel network is joined too, so the routes can
 # be moved there without changing this file:
-#   studio.labbai.uz     -> http://labbai-app:3000
-#   studio-ws.labbai.uz  -> http://labbai-realtime:3002
+#   studio.labbai.uz path socket.io -> http://labbai-realtime:3002  (listed first)
+#   studio.labbai.uz                -> http://labbai-app:3000
+# NEXT_PUBLIC_SOCKET_URL is the app origin, so the socket is same-origin.
 # Images are built by .github/workflows/build-images.yml and pulled from GHCR.
 name: labbai
 services:
