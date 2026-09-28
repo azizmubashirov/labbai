@@ -1,7 +1,11 @@
 import { z } from 'zod'
 import { workspaceIdSchema } from '@/lib/api/contracts/primitives'
 import { defineRouteContract } from '@/lib/api/contracts/types'
-import { INBOX_ATTACHMENT_KINDS } from '@/lib/inbox/attachments'
+import {
+  INBOX_ATTACHMENT_KINDS,
+  INBOX_CAPTION_MAX_LENGTH,
+  INBOX_OPERATOR_FILE_MAX_BYTES,
+} from '@/lib/inbox/attachments'
 
 /** Longest operator reply accepted; Telegram's 4096-character message limit is the tightest. */
 export const INBOX_REPLY_MAX_LENGTH = 4000
@@ -160,13 +164,63 @@ export const updateInboxConversationContract = defineRouteContract({
   },
 })
 
-export const replyToInboxConversationBodySchema = z.object({
-  text: z
-    .string({ error: 'Message text is required' })
+/** Base64 length of the largest file an operator can send. */
+export const INBOX_OPERATOR_FILE_MAX_BASE64_LENGTH =
+  Math.ceil(INBOX_OPERATOR_FILE_MAX_BYTES / 3) * 4
+
+/** Request body cap for a reply: the base64 file plus its caption and field names. */
+export const INBOX_REPLY_MAX_BODY_BYTES = INBOX_OPERATOR_FILE_MAX_BASE64_LENGTH + 64 * 1024
+
+/**
+ * A file the operator sends with a reply, base64-encoded. `voice` marks a recording made in the
+ * reply box so it goes out as a voice note rather than a file.
+ */
+export const inboxOutgoingAttachmentSchema = z.object({
+  fileName: z
+    .string({ error: 'File name is required' })
     .trim()
-    .min(1, 'Message text cannot be empty')
-    .max(INBOX_REPLY_MAX_LENGTH, `Message must be ${INBOX_REPLY_MAX_LENGTH} characters or fewer`),
+    .min(1, 'File name is required')
+    .max(255, 'File name must be 255 characters or fewer'),
+  contentType: z
+    .string({ error: 'File type is required' })
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9._+-]+\/[a-z0-9._+-]+(\s*;.*)?$/, 'File type is not valid')
+    .max(255, 'File type is not valid'),
+  data: z
+    .string({ error: 'File content is required' })
+    .min(1, 'The file is empty')
+    .max(
+      INBOX_OPERATOR_FILE_MAX_BASE64_LENGTH,
+      `Files up to ${INBOX_OPERATOR_FILE_MAX_BYTES / (1024 * 1024)} MB can be sent from the Inbox`
+    )
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/, 'File content must be base64'),
+  voice: z.boolean().optional(),
 })
+
+export type InboxOutgoingAttachmentBody = z.input<typeof inboxOutgoingAttachmentSchema>
+
+export const replyToInboxConversationBodySchema = z
+  .object({
+    text: z
+      .string({ error: 'Message text must be text' })
+      .trim()
+      .max(INBOX_REPLY_MAX_LENGTH, `Message must be ${INBOX_REPLY_MAX_LENGTH} characters or fewer`)
+      .default(''),
+    attachment: inboxOutgoingAttachmentSchema.optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (!body.attachment && body.text.length === 0) {
+      ctx.addIssue({ code: 'custom', message: 'Message text cannot be empty', path: ['text'] })
+    }
+    if (body.attachment && body.text.length > INBOX_CAPTION_MAX_LENGTH) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `A caption must be ${INBOX_CAPTION_MAX_LENGTH} characters or fewer`,
+        path: ['text'],
+      })
+    }
+  })
 
 export type ReplyToInboxConversationBody = z.input<typeof replyToInboxConversationBodySchema>
 

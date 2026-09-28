@@ -3,12 +3,18 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ resolveConfig: vi.fn() }))
+const mocks = vi.hoisted(() => ({ resolveConfig: vi.fn(), readOperatorFile: vi.fn() }))
 
 vi.mock('@/lib/inbox/channel-config', () => ({
   resolveConversationChannelConfig: mocks.resolveConfig,
   configString: (config: Record<string, unknown>, key: string) =>
     typeof config[key] === 'string' ? config[key] : null,
+}))
+
+vi.mock('@/lib/inbox/operator-media', () => ({
+  inboxOperatorMediaPrefix: (workspaceId: string, conversationId: string) =>
+    `workspace/${workspaceId}/inbox/${conversationId}/`,
+  readInboxOperatorFile: mocks.readOperatorFile,
 }))
 
 import type { InboxAttachment } from '@/lib/inbox/attachments'
@@ -63,6 +69,33 @@ describe('fetchInboxAttachment', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('streams a file an operator sent from storage without calling the channel', async () => {
+    const body = new ReadableStream<Uint8Array>()
+    mocks.readOperatorFile.mockResolvedValue(body)
+    const media = await fetchInboxAttachment(
+      conversation('telegram'),
+      attachment({
+        kind: 'voice',
+        mimeType: 'audio/ogg',
+        storageKey: 'workspace/ws/inbox/c1/1-abc-voice.ogg',
+      })
+    )
+    expect(mocks.readOperatorFile).toHaveBeenCalledWith('workspace/ws/inbox/c1/1-abc-voice.ogg')
+    expect(media).toMatchObject({ body, contentType: 'audio/ogg', fileName: 'voice.ogg' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mocks.resolveConfig).not.toHaveBeenCalled()
+  })
+
+  it('refuses a stored file key outside the conversation', async () => {
+    await expect(
+      fetchInboxAttachment(
+        conversation('telegram'),
+        attachment({ storageKey: 'workspace/other/inbox/c9/1-abc-photo.jpg' })
+      )
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(mocks.readOperatorFile).not.toHaveBeenCalled()
   })
 
   it('resolves a Telegram file id through getFile with the trigger bot token', async () => {

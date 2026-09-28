@@ -1,4 +1,7 @@
-import { replyToInboxConversationContract } from '@/lib/api/contracts/inbox'
+import {
+  INBOX_REPLY_MAX_BODY_BYTES,
+  replyToInboxConversationContract,
+} from '@/lib/api/contracts/inbox'
 import {
   defineInternalJsonRoute,
   internalOrchestrationErrorPolicy,
@@ -16,10 +19,12 @@ export const POST = defineInternalJsonRoute({
     reason: 'Each reply is one channel API call made by a signed-in operator',
   }),
   errorPolicy: internalOrchestrationErrorPolicy,
+  parseOptions: { maxBodyBytes: INBOX_REPLY_MAX_BODY_BYTES },
   mapInput: ({ params, body }) => ({
     workspaceId: params.id,
     conversationId: params.conversationId,
     text: body.text,
+    attachment: body.attachment,
   }),
   useCase: replyToInboxConversationOperation,
   present: ({ messageId, delivered, error }) => ({

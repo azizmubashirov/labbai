@@ -14,6 +14,7 @@ import {
   type InboxConversation,
   type InboxMessage,
   type InboxMessageAttachment,
+  type InboxOutgoingAttachmentBody,
   listInboxConversationsContract,
   type ReplyToInboxConversationResponse,
   replyToInboxConversationContract,
@@ -21,7 +22,13 @@ import {
   updateInboxConversationContract,
 } from '@/lib/api/contracts/inbox'
 
-export type { InboxChannel, InboxConversation, InboxMessage, InboxMessageAttachment }
+export type {
+  InboxChannel,
+  InboxConversation,
+  InboxMessage,
+  InboxMessageAttachment,
+  InboxOutgoingAttachmentBody,
+}
 
 export const INBOX_CONVERSATIONS_STALE_TIME = 2 * 1000
 export const INBOX_THREAD_STALE_TIME = 2 * 1000
@@ -173,13 +180,16 @@ export function useReplyToInboxConversation(workspaceId: string) {
     mutationFn: ({
       conversationId,
       text,
+      attachment,
     }: {
       conversationId: string
       text: string
+      /** A photo, file or voice recording; `text` becomes its caption. */
+      attachment?: InboxOutgoingAttachmentBody
     }): Promise<ReplyToInboxConversationResponse> =>
       requestJson(replyToInboxConversationContract, {
         params: { id: workspaceId, conversationId },
-        body: { text },
+        body: attachment ? { text, attachment } : { text },
       }),
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: inboxKeys.workspaceLists(workspaceId) })

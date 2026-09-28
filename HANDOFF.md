@@ -131,9 +131,50 @@ Owner: the section is called **Inbox** (not "Chat"). Sidebar → Inbox, route `/
   (keyset paging across equal timestamps, attachment round trip, unread count, contact fill),
   Telegram secret check through the real webhook route, and the UI in a browser (media, load
   earlier keeping scroll position, sidebar badge).
-- Remaining limits: operators send text only (no media upload yet); WhatsApp free-form replies
-  and Instagram replies only inside Meta's 24-hour window; one Telegram bot / Meta app per
-  workflow (last deploy wins).
+- Remaining limits: WhatsApp free-form replies and Instagram replies only inside Meta's
+  24-hour window; one Telegram bot / Meta app per workflow (last deploy wins).
+
+#### Operator media (2026-09-28)
+
+Operators send photos, files and voice messages from the reply box (paperclip → pick a file,
+removable preview, the text box becomes the caption; mic → tap to record, timer, Cancel / Send,
+5 min max). Written without local builds: verify with CI (tsc + vitest) and in a browser, and
+test real sends per channel before relying on it.
+
+- API: same reply endpoint, `attachment: { fileName, contentType, data (base64), voice? }` in
+  `replyToInboxConversationContract`; `text` is optional when a file is attached (caption ≤ 1024).
+  JSON + base64 because internal routes are contract JSON routes and the app accepts request
+  bodies up to 10 MB (Next.js proxy default) → **7 MB per file** (`INBOX_OPERATOR_FILE_MAX_BYTES`).
+- `lib/inbox/application/conversations.ts` checks the size, converts a recording, stores the file
+  (`lib/inbox/operator-media.ts` → `StorageService.uploadFile`, key
+  `workspace/<ws>/inbox/<conversation>/…`, no `workspace_files` row, so it is not in Files and
+  not counted in storage usage), sends, and saves the message with
+  `attachments: [{ kind, mimeType, fileName, storageKey }]` (no migration: jsonb). Sent/failed,
+  audit ("Replied to X on telegram (photo)") and realtime notify work as for text. The thread
+  streams operator files from storage (`media.ts`, key must be under the conversation's prefix).
+- Kinds: JPEG/PNG → photo; recordings → voice; everything else (other images, PDF, video,
+  audio files…) → file/document.
+- Telegram: multipart `sendPhoto` / `sendVoice` / `sendDocument` with caption. Voice needs
+  OGG/Opus (MP3/M4A also accepted); anything else goes as a document.
+- WhatsApp: upload to `/{phone-number-id}/media`, then send `image` / `audio` / `document` by
+  media id (caption on image/document, `filename` on documents). Audio has no caption, so the
+  text follows as a normal text message. Photos ≤ 5 MB. 24-hour window error is explained as for
+  text; `131053` → "WhatsApp did not accept this file".
+- Instagram: `POST graph.instagram.com/<ig-user>/messages` with
+  `attachment: { type: image|audio|video|file, payload: { url } }`, token resolved as the operator
+  (`resolveExecutorCredentialToken`, credential access enforced); the caption follows as a text
+  message. **Meta downloads the file from a public link**: a 1-hour presigned URL, available only
+  with cloud storage (S3 / Azure Blob / GCS, reachable from the internet). With local disk storage
+  (the test server today, app URL `http://localhost:3300`) Instagram files fail with a clear
+  message; text replies still work.
+- Voice format: browsers record WebM/Opus (Chrome), OGG/Opus (Firefox) or MP4/AAC (Safari). The
+  server converts with ffmpeg (already in `docker/app.Dockerfile`, via `lib/media/ffmpeg.ts`):
+  → OGG/Opus for Telegram and WhatsApp, → M4A/AAC for Instagram. If ffmpeg fails the original is
+  sent as a file instead of a voice note.
+- If a caption sent as a follow-up fails, the message is marked failed with
+  "The file was delivered, but the text was not: …".
+- Not done: several files in one reply, drag-and-drop/paste, video notes, stickers, removing
+  stored files when a workspace is deleted, files over 7 MB (would need the upload-session flow).
 - Pre-existing check failures not from this work (not in CI): `check:api-validation:strict`,
   `check:utils`, `check:react-query` flag local-copilot code; `check:mcp-operations` fails on the
   access-requests schema.

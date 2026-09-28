@@ -1,10 +1,24 @@
 import { AuditAction, AuditResourceType } from '@sim/audit'
+import { createLogger } from '@sim/logger'
+import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
 import { defineAuthorizedWorkspaceUseCase } from '@/lib/core/application'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { inboxOperations } from '@/lib/inbox/application/operations'
+import {
+  INBOX_ATTACHMENT_LABELS,
+  type InboxAttachment,
+  inboxOutgoingKind,
+  inboxOutgoingSizeError,
+} from '@/lib/inbox/attachments'
 import type { InboxChannel } from '@/lib/inbox/channels'
 import { fetchInboxAttachment, type InboxMediaStream } from '@/lib/inbox/media'
+import {
+  type InboxOperatorFile,
+  prepareInboxVoiceNote,
+  publicInboxOperatorFileUrl,
+  storeInboxOperatorFile,
+} from '@/lib/inbox/operator-media'
 import {
   countUnreadInboxConversations,
   getInboxConversation,
@@ -16,9 +30,11 @@ import {
   listInboxMessages,
   updateInboxConversation,
 } from '@/lib/inbox/repository'
-import { sendInboxReply } from '@/lib/inbox/send'
+import { type InboxOutgoingMedia, sendInboxReply } from '@/lib/inbox/send'
 import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 import { resolveActiveWorkspaceApplicationContext } from '@/lib/workspaces/application/workspace-context'
+
+const logger = createLogger('InboxConversations')
 
 /** Most messages a thread loads at once; earlier ones page in with `before`. */
 export const INBOX_THREAD_PAGE_SIZE = 100
@@ -56,10 +72,21 @@ export interface UpdateInboxConversationInput {
   markRead?: boolean
 }
 
+/** A file attached to an operator reply, as the reply box uploads it. */
+export interface InboxReplyAttachmentInput {
+  fileName: string
+  contentType: string
+  /** File bytes, base64-encoded. */
+  data: string
+  /** A recording from the reply box, sent as a voice note. */
+  voice?: boolean
+}
+
 export interface ReplyToInboxConversationInput {
   workspaceId: string
   conversationId: string
   text: string
+  attachment?: InboxReplyAttachmentInput
 }
 
 async function resolveInboxContext({ input }: { input: { workspaceId: string } }) {
@@ -77,6 +104,57 @@ async function requireConversation(
 
 function describeConversation(conversation: InboxConversationRecord): string {
   return conversation.contactName ?? conversation.contactHandle ?? conversation.externalChatId
+}
+
+/**
+ * Checks an operator's file against the channel's limits, turns a recording into the channel's
+ * voice format, and stores it so the thread can show it. Returns what the channel sends and what
+ * the message keeps.
+ */
+async function prepareOperatorAttachment(
+  conversation: InboxConversationRecord,
+  input: InboxReplyAttachmentInput
+): Promise<{ media: InboxOutgoingMedia; attachment: InboxAttachment }> {
+  const kind = inboxOutgoingKind(input.contentType, input.voice === true)
+  let file: InboxOperatorFile = {
+    buffer: Buffer.from(input.data, 'base64'),
+    mimeType: input.contentType,
+    fileName: input.fileName,
+  }
+  const sizeError = inboxOutgoingSizeError(conversation.channel, kind, file.buffer.length)
+  if (sizeError) {
+    throw new OrchestrationError(
+      file.buffer.length === 0 ? 'validation' : 'payload_too_large',
+      sizeError
+    )
+  }
+  if (kind === 'voice') file = await prepareInboxVoiceNote(conversation.channel, file)
+
+  let storageKey: string
+  try {
+    storageKey = await storeInboxOperatorFile({
+      workspaceId: conversation.workspaceId,
+      conversationId: conversation.id,
+      file,
+    })
+  } catch (error) {
+    logger.error('Could not store an Inbox file', { error: getErrorMessage(error) })
+    throw new OrchestrationError('internal', 'The file could not be saved.')
+  }
+
+  const publicUrl =
+    conversation.channel === 'instagram' ? await publicInboxOperatorFileUrl(storageKey) : null
+  return {
+    media: { kind, ...file, publicUrl },
+    attachment: {
+      kind,
+      fileId: null,
+      url: null,
+      mimeType: file.mimeType,
+      fileName: file.fileName,
+      storageKey,
+    },
+  }
 }
 
 export const listInboxConversationsOperation = defineAuthorizedWorkspaceUseCase({
@@ -162,10 +240,14 @@ export const replyToInboxConversationOperation = defineAuthorizedWorkspaceUseCas
   authorizationOptions: {},
   async execute({ principal, input }) {
     const conversation = await requireConversation(input.workspaceId, input.conversationId)
+    const prepared = input.attachment
+      ? await prepareOperatorAttachment(conversation, input.attachment)
+      : null
     const outcome = await sendInboxReply({
       conversation,
       text: input.text,
       operatorUserId: principal.userId,
+      ...(prepared ? { media: prepared.media } : {}),
     })
     const messageId = generateId()
     await insertOperatorMessage({
@@ -174,6 +256,7 @@ export const replyToInboxConversationOperation = defineAuthorizedWorkspaceUseCas
       workspaceId: conversation.workspaceId,
       operatorUserId: principal.userId,
       text: input.text,
+      attachments: prepared ? [prepared.attachment] : [],
       status: outcome.status,
       externalMessageId: outcome.status === 'sent' ? outcome.externalMessageId : null,
       error: outcome.status === 'failed' ? outcome.error : null,
@@ -182,18 +265,23 @@ export const replyToInboxConversationOperation = defineAuthorizedWorkspaceUseCas
     return {
       conversation,
       messageId,
+      attachmentKind: prepared?.attachment.kind ?? null,
       delivered: outcome.status === 'sent',
       error: outcome.status === 'failed' ? outcome.error : null,
     }
   },
   projectAudit({ result }) {
     if (!result.delivered) return []
+    const contact = describeConversation(result.conversation)
+    const sentFile = result.attachmentKind
+      ? ` (${INBOX_ATTACHMENT_LABELS[result.attachmentKind].toLowerCase()})`
+      : ''
     return {
       action: AuditAction.INBOX_REPLY_SENT,
       resourceType: AuditResourceType.INBOX_CONVERSATION,
       resourceId: result.conversation.id,
-      resourceName: describeConversation(result.conversation),
-      description: `Replied to ${describeConversation(result.conversation)} on ${result.conversation.channel}`,
+      resourceName: contact,
+      description: `Replied to ${contact} on ${result.conversation.channel}${sentFile}`,
     }
   },
 })

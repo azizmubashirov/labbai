@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   fetchAttachment: vi.fn(),
   notifyInbox: vi.fn(),
   sendReply: vi.fn(),
+  storeFile: vi.fn(),
+  prepareVoice: vi.fn(),
+  publicUrl: vi.fn(),
 }))
 
 vi.mock('@sim/platform-authz/workspace', () => ({
@@ -50,6 +53,11 @@ vi.mock('@/lib/inbox/repository', () => ({
 vi.mock('@/lib/inbox/send', () => ({ sendInboxReply: mocks.sendReply }))
 vi.mock('@/lib/inbox/media', () => ({ fetchInboxAttachment: mocks.fetchAttachment }))
 vi.mock('@/lib/realtime/notify', () => ({ notifyWorkspaceInboxChanged: mocks.notifyInbox }))
+vi.mock('@/lib/inbox/operator-media', () => ({
+  storeInboxOperatorFile: mocks.storeFile,
+  prepareInboxVoiceNote: mocks.prepareVoice,
+  publicInboxOperatorFileUrl: mocks.publicUrl,
+}))
 
 import {
   countUnreadInboxOperation,
@@ -234,5 +242,151 @@ describe('Inbox conversation use cases', () => {
       input: { workspaceId: 'ws-1', conversationId: 'conv-1', markRead: true },
     })
     expect(mocks.recordAudit).not.toHaveBeenCalled()
+  })
+
+  it('stores a photo, sends it with its caption, and keeps it on the message', async () => {
+    mocks.storeFile.mockResolvedValue('workspace/ws-1/inbox/conv-1/1-a-menu.jpg')
+    mocks.sendReply.mockResolvedValue({ status: 'sent', externalMessageId: '901' })
+    const data = Buffer.from('jpeg-bytes').toString('base64')
+
+    const result = await replyToInboxConversationOperation.execute({
+      principal,
+      input: {
+        workspaceId: 'ws-1',
+        conversationId: 'conv-1',
+        text: 'Menyu',
+        attachment: { fileName: 'menu.jpg', contentType: 'image/jpeg', data },
+      },
+    })
+
+    expect(mocks.storeFile).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      conversationId: 'conv-1',
+      file: { buffer: Buffer.from('jpeg-bytes'), mimeType: 'image/jpeg', fileName: 'menu.jpg' },
+    })
+    expect(mocks.prepareVoice).not.toHaveBeenCalled()
+    expect(mocks.publicUrl).not.toHaveBeenCalled()
+    expect(mocks.sendReply).toHaveBeenCalledWith({
+      conversation,
+      text: 'Menyu',
+      operatorUserId: 'operator-1',
+      media: {
+        kind: 'image',
+        buffer: Buffer.from('jpeg-bytes'),
+        mimeType: 'image/jpeg',
+        fileName: 'menu.jpg',
+        publicUrl: null,
+      },
+    })
+    expect(mocks.insertOperatorMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'Menyu',
+        status: 'sent',
+        attachments: [
+          {
+            kind: 'image',
+            fileId: null,
+            url: null,
+            mimeType: 'image/jpeg',
+            fileName: 'menu.jpg',
+            storageKey: 'workspace/ws-1/inbox/conv-1/1-a-menu.jpg',
+          },
+        ],
+      })
+    )
+    expect(result).toMatchObject({ delivered: true, attachmentKind: 'image' })
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Replied to Aziz on telegram (photo)' })
+    )
+  })
+
+  it('converts a recording to the channel voice format before storing and sending it', async () => {
+    const converted = {
+      buffer: Buffer.from('ogg'),
+      mimeType: 'audio/ogg',
+      fileName: 'voice.ogg',
+    }
+    mocks.prepareVoice.mockResolvedValue(converted)
+    mocks.storeFile.mockResolvedValue('workspace/ws-1/inbox/conv-1/1-a-voice.ogg')
+    mocks.sendReply.mockResolvedValue({ status: 'sent', externalMessageId: '902' })
+
+    await replyToInboxConversationOperation.execute({
+      principal,
+      input: {
+        workspaceId: 'ws-1',
+        conversationId: 'conv-1',
+        text: '',
+        attachment: {
+          fileName: 'voice.webm',
+          contentType: 'audio/webm;codecs=opus',
+          data: Buffer.from('webm').toString('base64'),
+          voice: true,
+        },
+      },
+    })
+
+    expect(mocks.prepareVoice).toHaveBeenCalledWith('telegram', {
+      buffer: Buffer.from('webm'),
+      mimeType: 'audio/webm;codecs=opus',
+      fileName: 'voice.webm',
+    })
+    expect(mocks.storeFile).toHaveBeenCalledWith(expect.objectContaining({ file: converted }))
+    expect(mocks.sendReply).toHaveBeenCalledWith(
+      expect.objectContaining({ media: { kind: 'voice', ...converted, publicUrl: null } })
+    )
+  })
+
+  it('gives Instagram a public link to the stored file', async () => {
+    mocks.getConversation.mockResolvedValue({ ...conversation, channel: 'instagram' })
+    mocks.storeFile.mockResolvedValue('workspace/ws-1/inbox/conv-1/1-a-price.pdf')
+    mocks.publicUrl.mockResolvedValue('https://bucket.example.com/price.pdf?sig=1')
+    mocks.sendReply.mockResolvedValue({ status: 'sent', externalMessageId: 'mid.1' })
+
+    await replyToInboxConversationOperation.execute({
+      principal,
+      input: {
+        workspaceId: 'ws-1',
+        conversationId: 'conv-1',
+        text: '',
+        attachment: {
+          fileName: 'price.pdf',
+          contentType: 'application/pdf',
+          data: Buffer.from('%PDF').toString('base64'),
+        },
+      },
+    })
+
+    expect(mocks.publicUrl).toHaveBeenCalledWith('workspace/ws-1/inbox/conv-1/1-a-price.pdf')
+    expect(mocks.sendReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        media: expect.objectContaining({
+          kind: 'document',
+          publicUrl: 'https://bucket.example.com/price.pdf?sig=1',
+        }),
+      })
+    )
+  })
+
+  it('refuses a photo over the channel limit before storing or sending it', async () => {
+    mocks.getConversation.mockResolvedValue({ ...conversation, channel: 'whatsapp' })
+    const data = Buffer.alloc(6 * 1024 * 1024).toString('base64')
+
+    await expect(
+      replyToInboxConversationOperation.execute({
+        principal,
+        input: {
+          workspaceId: 'ws-1',
+          conversationId: 'conv-1',
+          text: '',
+          attachment: { fileName: 'big.jpg', contentType: 'image/jpeg', data },
+        },
+      })
+    ).rejects.toMatchObject({
+      code: 'payload_too_large',
+      message: 'WhatsApp accepts photos up to 5 MB.',
+    })
+    expect(mocks.storeFile).not.toHaveBeenCalled()
+    expect(mocks.sendReply).not.toHaveBeenCalled()
+    expect(mocks.insertOperatorMessage).not.toHaveBeenCalled()
   })
 })

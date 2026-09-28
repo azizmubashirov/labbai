@@ -1,22 +1,21 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Chip, ChipSwitch, ChipTextarea, cn, toast } from '@sim/emcn'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { Chip, ChipSwitch, cn, toast } from '@sim/emcn'
 import { CircleAlert } from '@sim/emcn/icons'
 import { getErrorMessage } from '@sim/utils/errors'
 import { format, isSameDay } from 'date-fns'
-import { INBOX_REPLY_MAX_LENGTH } from '@/lib/api/contracts/inbox'
 import {
   ChannelIcon,
   INBOX_CHANNEL_LABELS,
 } from '@/app/workspace/[workspaceId]/inbox/components/channel-icon'
 import { MessageAttachments } from '@/app/workspace/[workspaceId]/inbox/components/message-attachments'
+import { ReplyBox } from '@/app/workspace/[workspaceId]/inbox/components/reply-box'
 import { conversationTitle } from '@/app/workspace/[workspaceId]/inbox/utils'
 import {
   type InboxConversation,
   type InboxMessage,
   useInboxThread,
-  useReplyToInboxConversation,
   useUpdateInboxConversation,
 } from '@/hooks/queries/inbox'
 
@@ -133,8 +132,6 @@ export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }:
     { pollIntervalMs }
   )
   const updateConversation = useUpdateInboxConversation(workspaceId)
-  const reply = useReplyToInboxConversation(workspaceId)
-  const [draft, setDraft] = useState('')
 
   const pages = data?.pages ?? []
   const conversation = pages[0]?.conversation
@@ -182,22 +179,6 @@ export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }:
       {
         onError: (mutationError) =>
           toast.error(getErrorMessage(mutationError, 'Could not change AI replies')),
-      }
-    )
-  }
-
-  const handleSend = () => {
-    const text = draft.trim()
-    if (!text || reply.isPending) return
-    reply.mutate(
-      { conversationId, text },
-      {
-        onSuccess: (result) => {
-          setDraft('')
-          if (!result.delivered) toast.error(result.error ?? 'The message was not delivered')
-        },
-        onError: (mutationError) =>
-          toast.error(getErrorMessage(mutationError, 'Could not send the message')),
       }
     )
   }
@@ -253,38 +234,7 @@ export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }:
         </div>
       </div>
 
-      <footer className='flex flex-col gap-2 border-[var(--border)] border-t p-3'>
-        {conversation.aiEnabled && (
-          <p className='text-[var(--text-muted)] text-caption'>
-            AI is answering this customer. Turn AI off to take over the conversation.
-          </p>
-        )}
-        <div className='flex items-end gap-2'>
-          <ChipTextarea
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                event.preventDefault()
-                handleSend()
-              }
-            }}
-            placeholder={canEdit ? 'Write a reply…' : 'You have read-only access'}
-            aria-label='Reply'
-            maxLength={INBOX_REPLY_MAX_LENGTH}
-            disabled={!canEdit || reply.isPending}
-            rows={2}
-            className='min-w-0 flex-1'
-          />
-          <Chip
-            variant='primary'
-            onClick={handleSend}
-            disabled={!canEdit || reply.isPending || draft.trim().length === 0}
-          >
-            {reply.isPending ? 'Sending…' : 'Send'}
-          </Chip>
-        </div>
-      </footer>
+      <ReplyBox workspaceId={workspaceId} conversation={conversation} canEdit={canEdit} />
     </section>
   )
 }

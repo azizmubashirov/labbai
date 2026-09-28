@@ -1,7 +1,7 @@
 import { db } from '@sim/db'
 import { inboxConversation, inboxMessage, user, webhook, workflow } from '@sim/db/schema'
 import { and, count, desc, eq, gt, ilike, inArray, isNull, or, type SQL, sql } from 'drizzle-orm'
-import type { InboxAttachment } from '@/lib/inbox/attachments'
+import { type InboxAttachment, inboxMessageSummary } from '@/lib/inbox/attachments'
 import type { InboxChannel } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
 
@@ -210,10 +210,12 @@ export async function insertOperatorMessage(params: {
   workspaceId: string
   operatorUserId: string
   text: string
+  attachments?: InboxAttachment[]
   status: 'sent' | 'failed'
   externalMessageId: string | null
   error: string | null
 }): Promise<void> {
+  const attachments = params.attachments ?? []
   const sentAt = new Date()
   await db.transaction(async (tx) => {
     await tx.insert(inboxMessage).values({
@@ -223,6 +225,7 @@ export async function insertOperatorMessage(params: {
       author: 'operator',
       operatorUserId: params.operatorUserId,
       text: params.text,
+      attachments,
       status: params.status,
       externalMessageId: params.externalMessageId,
       error: params.error,
@@ -233,7 +236,7 @@ export async function insertOperatorMessage(params: {
         .update(inboxConversation)
         .set({
           lastMessageAt: sentAt,
-          lastMessagePreview: inboxPreview(params.text),
+          lastMessagePreview: inboxPreview(inboxMessageSummary(params.text, attachments)),
           unreadCount: 0,
           updatedAt: sentAt,
         })

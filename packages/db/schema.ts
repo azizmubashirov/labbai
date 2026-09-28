@@ -7956,7 +7956,8 @@ export const inboxMessage = pgTable(
     text: text('text').notNull(),
     /**
      * Media on the message (`InboxAttachment[]` in `apps/sim/lib/inbox/attachments.ts`): channel
-     * media ids or links, never the bytes, which are fetched from the channel on demand.
+     * media ids or links, never the bytes, which are fetched from the channel on demand. Files an
+     * operator sends are kept in file storage and referenced by `storageKey`.
      */
     attachments: jsonb('attachments')
       .$type<
@@ -7966,6 +7967,7 @@ export const inboxMessage = pgTable(
           url: string | null
           mimeType: string | null
           fileName: string | null
+          storageKey?: string | null
         }>
       >()
       .notNull()

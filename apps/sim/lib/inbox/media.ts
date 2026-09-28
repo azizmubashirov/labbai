@@ -5,6 +5,7 @@ import { toRecord } from '@sim/utils/object'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { type InboxAttachment, isInboxAttachmentFetchable } from '@/lib/inbox/attachments'
 import { configString, resolveConversationChannelConfig } from '@/lib/inbox/channel-config'
+import { inboxOperatorMediaPrefix, readInboxOperatorFile } from '@/lib/inbox/operator-media'
 import type { InboxConversationRecord } from '@/lib/inbox/repository'
 import { buildAuthHeaders, buildMediaUrl } from '@/tools/whatsapp/utils'
 
@@ -171,9 +172,35 @@ async function fetchMedia(
   throw unavailable('The channel did not return this file.')
 }
 
+/** Streams a file an operator sent from the app's own storage. */
+async function fetchStoredOperatorFile(
+  conversation: InboxConversationRecord,
+  attachment: InboxAttachment,
+  storageKey: string
+): Promise<InboxMediaStream> {
+  if (!storageKey.startsWith(inboxOperatorMediaPrefix(conversation.workspaceId, conversation.id))) {
+    throw unavailable('This attachment has no media to show.')
+  }
+  let body: ReadableStream<Uint8Array>
+  try {
+    body = await readInboxOperatorFile(storageKey)
+  } catch (error) {
+    logger.warn('Inbox operator file read failed', { error: getErrorMessage(error) })
+    throw unavailable('This file is no longer stored.')
+  }
+  const contentType = attachment.mimeType ?? 'application/octet-stream'
+  return {
+    body,
+    contentType,
+    contentLength: null,
+    fileName: inboxAttachmentFileName(attachment, contentType),
+  }
+}
+
 /**
- * Streams one attachment's bytes from the channel it arrived on. Nothing is stored: channel
- * media ids and links are enough to fetch the file again while the channel keeps it.
+ * Streams one attachment's bytes. Customer media is fetched from the channel it arrived on;
+ * nothing is stored, since channel media ids and links are enough to fetch the file again while
+ * the channel keeps it. Files an operator sent are read from the app's storage.
  */
 export async function fetchInboxAttachment(
   conversation: InboxConversationRecord,
@@ -181,6 +208,9 @@ export async function fetchInboxAttachment(
 ): Promise<InboxMediaStream> {
   if (!isInboxAttachmentFetchable(attachment)) {
     throw unavailable('This attachment has no media to show.')
+  }
+  if (attachment.storageKey) {
+    return fetchStoredOperatorFile(conversation, attachment, attachment.storageKey)
   }
 
   const download = await resolveDownload(conversation, attachment)

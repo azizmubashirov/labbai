@@ -79,7 +79,10 @@ Gemini / Workers AI.
   agents feed this section automatically. Completed 2026-09-28: live updates over the
   realtime server, customer media (photos, voice, video, documents, locations), earlier
   history paging, sidebar unread badge, Telegram secret token, Instagram contact names,
-  plain-language 24-hour-window errors. Open: operator media sending.
+  plain-language 24-hour-window errors. Operator media sending done 2026-09-28: photos, files
+  and voice messages from the reply box (7 MB per file; WhatsApp photos 5 MB; captions 1024;
+  voice converted to OGG/Opus for Telegram/WhatsApp and M4A for Instagram; Instagram files need
+  cloud storage so Meta can fetch a public link).
 - **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
   provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,
