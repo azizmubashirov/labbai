@@ -219,6 +219,8 @@ jobs:
         run: echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/labbai-sim-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -259,8 +261,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Only our report artifacts; build-push-action also uploads `.dockerbuild` records.
       - uses: actions/download-artifact@v4
         with:
+          pattern: '{tsc,tests-*,next-build}'
           path: art
 
       - name: Publish ci-reports
