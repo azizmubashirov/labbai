@@ -208,7 +208,7 @@ patches/ into an empty dir and run
   (copies of `docker-compose.prod.yml` and `infra/labbai-prod/deploy.sh` from this repo),
   `.env` (secrets generated on the server, mode 600), `uploads/` (local file storage), DB volume `labbai_pg`.
 - Deploy: `ssh ubuntu@46.8.195.221 sh /home/ubuntu/labbai/deploy.sh` (pull GHCR images, migrate, up).
-- No published ports. Ingress = the shared `edge` Cloudflare tunnel (`/home/ubuntu/edge`,
+- No published ports. Ingress = the `labbai-prod` Cloudflare tunnel (Mehmon's `mehmonai-cloudflared`, network `mehmonai_default`; the stack also joins the shared `edge` network, `/home/ubuntu/edge`,
   routes set in the Cloudflare dashboard → Public hostnames):
   `studio.labbai.uz` → `http://labbai-app:3000`, `studio-ws.labbai.uz` → `http://labbai-realtime:3002`.
 - Owner fills in `OPENAI_API_KEY` (new, rotated) and `GOOGLE_CLIENT_ID/SECRET` in `.env`, and adds

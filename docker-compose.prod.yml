@@ -1,7 +1,8 @@
 # Labbai production stack (46.8.195.221, /home/ubuntu/labbai).
-# The server also runs other projects: no published ports. Ingress is the shared
-# `edge` Cloudflare tunnel (edge-cloudflared); public hostnames are set in the
-# Cloudflare dashboard:
+# The server also runs other projects: no published ports. Public hostnames are set
+# in the Cloudflare dashboard on the `labbai-prod` tunnel (mehmonai-cloudflared, network
+# `mehmonai_default`); the shared `edge` tunnel network is joined too, so the routes can
+# be moved there without changing this file:
 #   studio.labbai.uz     -> http://labbai-app:3000
 #   studio-ws.labbai.uz  -> http://labbai-realtime:3002
 # Images are built by .github/workflows/build-images.yml and pulled from GHCR.
@@ -27,6 +28,7 @@ services:
     networks:
       default: {}
       edge: {aliases: [labbai-app]}
+      mehmonai: {aliases: [labbai-app]}
     deploy: {resources: {limits: {memory: 1536M}}}
 
   uploads-init:
@@ -61,6 +63,7 @@ services:
     networks:
       default: {}
       edge: {aliases: [labbai-realtime]}
+      mehmonai: {aliases: [labbai-realtime]}
     deploy: {resources: {limits: {memory: 384M}}}
 
   migrations:
@@ -91,6 +94,9 @@ services:
 
 networks:
   edge:
+    external: true
+  mehmonai:
+    name: mehmonai_default
     external: true
 
 volumes:
