@@ -1,5 +1,6 @@
 import { toStringOrNull } from '@sim/utils/coerce'
 import { toArray, toRecord } from '@sim/utils/object'
+import type { InboxAttachment, InboxAttachmentKind } from '@/lib/inbox/attachments'
 import { getInstagramDirectMessages } from '@/lib/webhooks/providers/instagram'
 
 /** Messaging channels that feed the Inbox; mirrors the `inbox_channel` database enum. */
@@ -15,7 +16,9 @@ export interface InboundInboxMessage {
   /** Customer address: Telegram chat id, WhatsApp number, Instagram-scoped user id. */
   externalChatId: string
   externalMessageId: string
+  /** Message text or media caption; empty when the message is only media. */
   text: string
+  attachments: InboxAttachment[]
   contactName: string | null
   contactHandle: string | null
   sentAt: Date
@@ -53,24 +56,105 @@ function joinName(...parts: Array<string | null>): string | null {
   return name.length > 0 ? name : null
 }
 
-/** Human-readable stand-in for a message without text (photo, voice note, sticker…). */
+/** Stand-in text for a message type the Inbox cannot show (polls, games, unsupported types). */
 function placeholderFor(kind: string | null): string {
-  return `[${kind && kind.length > 0 ? kind : 'attachment'}]`
+  return `[${kind && kind.length > 0 ? kind : 'unsupported message'}]`
 }
 
-const TELEGRAM_MEDIA_KINDS = [
-  'photo',
-  'video',
-  'voice',
-  'audio',
-  'document',
-  'sticker',
-  'animation',
-  'video_note',
-  'location',
-  'contact',
-  'poll',
-] as const
+function mapsLink(latitude: unknown, longitude: unknown): string | null {
+  const lat = typeof latitude === 'number' ? latitude : Number(latitude)
+  const lng = typeof longitude === 'number' ? longitude : Number(longitude)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  return `https://www.google.com/maps?q=${lat},${lng}`
+}
+
+function attachment(
+  kind: InboxAttachmentKind,
+  fields: Partial<Omit<InboxAttachment, 'kind'>>
+): InboxAttachment {
+  return {
+    kind,
+    fileId: fields.fileId ?? null,
+    url: fields.url ?? null,
+    mimeType: fields.mimeType ?? null,
+    fileName: fields.fileName ?? null,
+  }
+}
+
+function contactText(name: string | null, phone: string | null): string {
+  return `Contact: ${[name, phone].filter(Boolean).join(', ') || 'shared'}`
+}
+
+function telegramStickerMime(sticker: Record<string, unknown>): string {
+  if (sticker.is_video === true) return 'video/webm'
+  if (sticker.is_animated === true) return 'application/x-tgsticker'
+  return 'image/webp'
+}
+
+/** Media on a Telegram message; `photo` lists sizes smallest first, so the last is kept. */
+function telegramAttachments(message: Record<string, unknown>): InboxAttachment[] {
+  const photos = toArray(message.photo)
+  if (photos.length > 0) {
+    const largest = toRecord(photos[photos.length - 1])
+    return [
+      attachment('image', { fileId: toStringOrNull(largest.file_id), mimeType: 'image/jpeg' }),
+    ]
+  }
+  const media: Array<[string, InboxAttachmentKind, string | null]> = [
+    ['voice', 'voice', 'audio/ogg'],
+    ['audio', 'audio', null],
+    ['video', 'video', 'video/mp4'],
+    ['video_note', 'video', 'video/mp4'],
+    ['animation', 'video', 'video/mp4'],
+    ['document', 'document', null],
+  ]
+  for (const [field, kind, fallbackMime] of media) {
+    if (message[field] === undefined) continue
+    const file = toRecord(message[field])
+    return [
+      attachment(kind, {
+        fileId: toStringOrNull(file.file_id),
+        mimeType: toStringOrNull(file.mime_type) ?? fallbackMime,
+        fileName: toStringOrNull(file.file_name),
+      }),
+    ]
+  }
+  if (message.sticker !== undefined) {
+    const sticker = toRecord(message.sticker)
+    return [
+      attachment('sticker', {
+        fileId: toStringOrNull(sticker.file_id),
+        mimeType: telegramStickerMime(sticker),
+      }),
+    ]
+  }
+  const location = toRecord(message.venue ?? message.location)
+  const venueLocation = toRecord(location.location)
+  const link =
+    mapsLink(location.latitude, location.longitude) ??
+    mapsLink(venueLocation.latitude, venueLocation.longitude)
+  if (link) {
+    return [attachment('location', { url: link, fileName: toStringOrNull(location.title) })]
+  }
+  return []
+}
+
+function telegramFallbackText(message: Record<string, unknown>): string {
+  if (message.contact !== undefined) {
+    const contact = toRecord(message.contact)
+    return contactText(
+      joinName(toStringOrNull(contact.first_name), toStringOrNull(contact.last_name)),
+      toStringOrNull(contact.phone_number)
+    )
+  }
+  if (message.poll !== undefined) {
+    return `Poll: ${toStringOrNull(toRecord(message.poll).question) ?? ''}`.trim()
+  }
+  const kind = Object.keys(message).find((key) =>
+    ['dice', 'game', 'story', 'invoice'].includes(key)
+  )
+  return placeholderFor(kind ?? null)
+}
 
 function extractTelegram(body: unknown, botId: string | null): InboundInboxMessage[] {
   if (!botId) return []
@@ -84,9 +168,11 @@ function extractTelegram(body: unknown, botId: string | null): InboundInboxMessa
   const from = toRecord(message.from)
   if (from.is_bot === true) return []
 
-  const mediaKind = TELEGRAM_MEDIA_KINDS.find((kind) => message[kind] !== undefined) ?? null
+  const attachments = telegramAttachments(message)
   const text =
-    toStringOrNull(message.text) ?? toStringOrNull(message.caption) ?? placeholderFor(mediaKind)
+    toStringOrNull(message.text) ??
+    toStringOrNull(message.caption) ??
+    (attachments.length > 0 ? '' : telegramFallbackText(message))
   const isPrivate = chat.type === 'private'
   const username = toStringOrNull(from.username)
 
@@ -97,6 +183,7 @@ function extractTelegram(body: unknown, botId: string | null): InboundInboxMessa
       externalChatId: chatId,
       externalMessageId: messageId,
       text,
+      attachments,
       contactName: isPrivate
         ? joinName(toStringOrNull(from.first_name), toStringOrNull(from.last_name))
         : toStringOrNull(chat.title),
@@ -106,19 +193,67 @@ function extractTelegram(body: unknown, botId: string | null): InboundInboxMessa
   ]
 }
 
-function whatsappText(message: Record<string, unknown>): string {
+const WHATSAPP_MEDIA_KINDS: Record<string, InboxAttachmentKind> = {
+  image: 'image',
+  video: 'video',
+  audio: 'audio',
+  document: 'document',
+  sticker: 'sticker',
+}
+
+function whatsappAttachments(message: Record<string, unknown>): InboxAttachment[] {
+  const type = toStringOrNull(message.type)
+  if (!type) return []
+  const mediaKind = WHATSAPP_MEDIA_KINDS[type]
+  if (mediaKind) {
+    const media = toRecord(message[type])
+    return [
+      attachment(mediaKind === 'audio' && media.voice === true ? 'voice' : mediaKind, {
+        fileId: toStringOrNull(media.id),
+        mimeType: toStringOrNull(media.mime_type),
+        fileName: toStringOrNull(media.filename),
+      }),
+    ]
+  }
+  if (type === 'location') {
+    const location = toRecord(message.location)
+    const link = mapsLink(location.latitude, location.longitude)
+    if (link) {
+      return [
+        attachment('location', {
+          url: link,
+          fileName: toStringOrNull(location.name) ?? toStringOrNull(location.address),
+        }),
+      ]
+    }
+  }
+  return []
+}
+
+function whatsappText(message: Record<string, unknown>, hasAttachments: boolean): string {
   const type = toStringOrNull(message.type)
   const text = toStringOrNull(toRecord(message.text).body)
   if (text) return text
-  if (type) {
-    const caption = toStringOrNull(toRecord(message[type]).caption)
-    if (caption) return caption
-    const interactive = toRecord(message.interactive)
-    const reply = toRecord(interactive.button_reply ?? interactive.list_reply)
-    const replyTitle = toStringOrNull(reply.title)
-    if (replyTitle) return replyTitle
-    const buttonText = toStringOrNull(toRecord(message.button).text)
-    if (buttonText) return buttonText
+  if (!type) return placeholderFor(null)
+  const caption = toStringOrNull(toRecord(message[type]).caption)
+  if (caption) return caption
+  if (hasAttachments) return ''
+  const interactive = toRecord(message.interactive)
+  const reply = toRecord(interactive.button_reply ?? interactive.list_reply)
+  const replyTitle = toStringOrNull(reply.title)
+  if (replyTitle) return replyTitle
+  const buttonText = toStringOrNull(toRecord(message.button).text)
+  if (buttonText) return buttonText
+  if (type === 'reaction') {
+    const emoji = toStringOrNull(toRecord(message.reaction).emoji)
+    return emoji ? `Reacted ${emoji}` : 'Removed a reaction'
+  }
+  if (type === 'contacts') {
+    const contact = toRecord(toArray(message.contacts)[0])
+    return contactText(
+      toStringOrNull(toRecord(contact.name).formatted_name),
+      toStringOrNull(toRecord(toArray(contact.phones)[0]).phone)
+    )
   }
   return placeholderFor(type)
 }
@@ -142,12 +277,14 @@ function extractWhatsApp(body: unknown): InboundInboxMessage[] {
         const from = toStringOrNull(message.from)
         const id = toStringOrNull(message.id)
         if (!from || !id) continue
+        const attachments = whatsappAttachments(message)
         messages.push({
           channel: 'whatsapp',
           accountId,
           externalChatId: from,
           externalMessageId: id,
-          text: whatsappText(message),
+          text: whatsappText(message, attachments.length > 0),
+          attachments,
           contactName: namesByWaId.get(from) ?? null,
           contactHandle: `+${from}`,
           sentAt: secondsToDate(message.timestamp),
@@ -158,17 +295,43 @@ function extractWhatsApp(body: unknown): InboundInboxMessage[] {
   return messages
 }
 
+const INSTAGRAM_MEDIA_KINDS: Record<string, InboxAttachmentKind> = {
+  image: 'image',
+  animated_image: 'image',
+  video: 'video',
+  reel: 'video',
+  ig_reel: 'video',
+  audio: 'audio',
+  file: 'document',
+}
+
+function instagramAttachments(
+  attachments: Array<{ type: string | null; url: string | null }>
+): InboxAttachment[] {
+  return attachments
+    .filter((item) => item.url)
+    .map((item) =>
+      attachment((item.type && INSTAGRAM_MEDIA_KINDS[item.type]) || 'link', { url: item.url })
+    )
+}
+
 function extractInstagram(body: unknown): InboundInboxMessage[] {
-  return getInstagramDirectMessages(body).map((message) => ({
-    channel: 'instagram',
-    accountId: message.recipientId,
-    externalChatId: message.senderId,
-    externalMessageId: message.messageId,
-    text: message.text ?? placeholderFor(message.attachments[0]?.type ?? null),
-    contactName: null,
-    contactHandle: null,
-    sentAt: millisToDate(message.timestamp),
-  }))
+  return getInstagramDirectMessages(body).map((message) => {
+    const attachments = instagramAttachments(message.attachments)
+    return {
+      channel: 'instagram',
+      accountId: message.recipientId,
+      externalChatId: message.senderId,
+      externalMessageId: message.messageId,
+      text:
+        message.text ??
+        (attachments.length > 0 ? '' : placeholderFor(message.attachments[0]?.type ?? null)),
+      attachments,
+      contactName: null,
+      contactHandle: null,
+      sentAt: millisToDate(message.timestamp),
+    }
+  })
 }
 
 /**

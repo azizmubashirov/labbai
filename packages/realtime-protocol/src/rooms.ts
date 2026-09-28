@@ -53,6 +53,14 @@ export const ROOM_TYPES = {
    * workspace id, mirroring {@link ROOM_TYPES.WORKSPACE_TABLES}.
    */
   WORKSPACE_WORKFLOWS: 'workspace-workflows',
+  /**
+   * The workspace Inbox (one room per workspace). Presence-free like the other
+   * list rooms: it carries only a lossy `workspace-inbox-changed` invalidation
+   * signal so every open Inbox (and the sidebar unread badge) refetches when a
+   * customer writes, an agent answers, or an operator replies or toggles AI. Its
+   * id space is the workspace id.
+   */
+  WORKSPACE_INBOX: 'workspace-inbox',
 } as const
 
 export type RoomType = (typeof ROOM_TYPES)[keyof typeof ROOM_TYPES]
@@ -70,6 +78,7 @@ export const WORKSPACE_LIST_ROOM_TYPES = [
   ROOM_TYPES.WORKSPACE_FILES,
   ROOM_TYPES.WORKSPACE_TABLES,
   ROOM_TYPES.WORKSPACE_WORKFLOWS,
+  ROOM_TYPES.WORKSPACE_INBOX,
 ] as const
 
 /** Universal address of a realtime room. */

@@ -14,6 +14,19 @@ export interface SidebarNavItemData {
   restricted?: boolean
   /** Extra path prefixes that should also mark this item as active (e.g. sibling tabs). */
   additionalActivePaths?: string[]
+  /** Count shown after the label, such as unread Inbox conversations; hidden at zero. */
+  badge?: number
+}
+
+/** Largest count a nav badge spells out before collapsing to `99+`. */
+const NAV_BADGE_MAX = 99
+
+function NavBadge({ count }: { count: number }) {
+  return (
+    <span className='min-w-[18px] shrink-0 rounded-full bg-[var(--brand-accent)] px-1.5 text-center text-micro text-white tabular-nums leading-[18px]'>
+      {count > NAV_BADGE_MAX ? `${NAV_BADGE_MAX}+` : count}
+    </span>
+  )
 }
 
 /**
@@ -57,7 +70,16 @@ export const SidebarNavChip = forwardRef<HTMLElement, SidebarNavChipProps>(funct
         data-item-id={item.id}
         leftIcon={item.icon}
         rightIcon={item.restricted ? Lock : undefined}
-        aria-label={item.restricted ? `${item.label}: access required` : undefined}
+        rightAdornment={
+          !item.restricted && item.badge ? <NavBadge count={item.badge} /> : undefined
+        }
+        aria-label={
+          item.restricted
+            ? `${item.label}: access required`
+            : item.badge
+              ? `${item.label}: ${item.badge} unread`
+              : undefined
+        }
         active={active}
         fullWidth
         className={chipClassName}

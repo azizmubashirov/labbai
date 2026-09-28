@@ -2668,6 +2668,13 @@
       "when": 1790180336617,
       "tag": "0381_labbai_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 382,
+      "version": "7",
+      "when": 1790266736617,
+      "tag": "0382_labbai_inbox_attachments",
+      "breakpoints": true
     }
   ]
 }

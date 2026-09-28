@@ -7954,6 +7954,22 @@ export const inboxMessage = pgTable(
     /** Operator who sent the message; null for customer and agent messages. */
     operatorUserId: text('operator_user_id').references(() => user.id, { onDelete: 'set null' }),
     text: text('text').notNull(),
+    /**
+     * Media on the message (`InboxAttachment[]` in `apps/sim/lib/inbox/attachments.ts`): channel
+     * media ids or links, never the bytes, which are fetched from the channel on demand.
+     */
+    attachments: jsonb('attachments')
+      .$type<
+        Array<{
+          kind: string
+          fileId: string | null
+          url: string | null
+          mimeType: string | null
+          fileName: string | null
+        }>
+      >()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     /** Provider message id; makes webhook retries and repeated tool results idempotent. */
     externalMessageId: text('external_message_id'),
     status: inboxMessageStatusEnum('status').notNull(),

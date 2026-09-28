@@ -1,6 +1,7 @@
 import { db } from '@sim/db'
 import { inboxConversation, inboxMessage, user, webhook, workflow } from '@sim/db/schema'
-import { and, desc, eq, ilike, lt, or, type SQL, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gt, ilike, inArray, isNull, or, type SQL, sql } from 'drizzle-orm'
+import type { InboxAttachment } from '@/lib/inbox/attachments'
 import type { InboxChannel } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
 
@@ -12,6 +13,7 @@ export interface InboxMessageRecord {
   author: 'customer' | 'agent' | 'operator'
   operatorName: string | null
   text: string
+  attachments: InboxAttachment[]
   status: 'received' | 'sent' | 'failed'
   error: string | null
   createdAt: Date
@@ -73,15 +75,23 @@ export async function getInboxConversation(
 }
 
 /**
- * The most recent `limit` messages of a conversation in chronological order, optionally only
- * those older than `before` for loading earlier history.
+ * The most recent `limit` messages of a conversation in chronological order. With `beforeId`,
+ * only messages older than that message (by time, then id, so messages sharing a timestamp are
+ * never skipped) are returned, for loading earlier history.
  */
 export async function listInboxMessages(
   conversationId: string,
-  options: { limit: number; before?: Date }
+  options: { limit: number; beforeId?: string }
 ): Promise<InboxMessageRecord[]> {
   const filters: SQL[] = [eq(inboxMessage.conversationId, conversationId)]
-  if (options.before) filters.push(lt(inboxMessage.createdAt, options.before))
+  if (options.beforeId) {
+    filters.push(
+      sql`(${inboxMessage.createdAt}, ${inboxMessage.id}) < (
+        select anchor.created_at, anchor.id from ${inboxMessage} as anchor
+        where anchor.id = ${options.beforeId} and anchor.conversation_id = ${conversationId}
+      )`
+    )
+  }
 
   const rows = await db
     .select({
@@ -90,6 +100,7 @@ export async function listInboxMessages(
       author: inboxMessage.author,
       operatorName: user.name,
       text: inboxMessage.text,
+      attachments: inboxMessage.attachments,
       status: inboxMessage.status,
       error: inboxMessage.error,
       createdAt: inboxMessage.createdAt,
@@ -100,7 +111,65 @@ export async function listInboxMessages(
     .orderBy(desc(inboxMessage.createdAt), desc(inboxMessage.id))
     .limit(options.limit)
 
-  return rows.reverse()
+  return rows.reverse().map((row) => ({
+    ...row,
+    attachments: row.attachments as InboxAttachment[],
+  }))
+}
+
+/** The attachments of one message in a conversation, or null when the message is not there. */
+export async function getInboxMessageAttachments(
+  conversationId: string,
+  messageId: string
+): Promise<InboxAttachment[] | null> {
+  const [row] = await db
+    .select({ attachments: inboxMessage.attachments })
+    .from(inboxMessage)
+    .where(and(eq(inboxMessage.id, messageId), eq(inboxMessage.conversationId, conversationId)))
+    .limit(1)
+  return row ? (row.attachments as InboxAttachment[]) : null
+}
+
+/** How many conversations in a workspace have unread customer messages. */
+export async function countUnreadInboxConversations(workspaceId: string): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(inboxConversation)
+    .where(
+      and(eq(inboxConversation.workspaceId, workspaceId), gt(inboxConversation.unreadCount, 0))
+    )
+  return Number(row?.value ?? 0)
+}
+
+/** Instagram conversations among `ids` that still have no contact name. */
+export async function listUnnamedInstagramConversations(
+  ids: string[]
+): Promise<Array<{ id: string; externalChatId: string }>> {
+  if (ids.length === 0) return []
+  return db
+    .select({ id: inboxConversation.id, externalChatId: inboxConversation.externalChatId })
+    .from(inboxConversation)
+    .where(
+      and(
+        inArray(inboxConversation.id, ids),
+        eq(inboxConversation.channel, 'instagram'),
+        isNull(inboxConversation.contactName)
+      )
+    )
+}
+
+/** Stores a looked-up contact name and handle on a conversation that has none yet. */
+export async function setInboxContact(
+  conversationId: string,
+  contact: { name: string | null; handle: string | null }
+): Promise<void> {
+  await db
+    .update(inboxConversation)
+    .set({
+      contactName: sql`coalesce(${inboxConversation.contactName}, ${contact.name})`,
+      contactHandle: sql`coalesce(${inboxConversation.contactHandle}, ${contact.handle})`,
+    })
+    .where(eq(inboxConversation.id, conversationId))
 }
 
 /** Applies an AI toggle and/or clears the unread counter; returns the updated row. */

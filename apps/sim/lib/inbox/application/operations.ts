@@ -21,6 +21,22 @@ export const inboxOperations = {
     ...INBOX_PRINCIPALS,
   }),
   // permission-group-exempt: the Inbox is not a governed permission-group surface yet; workspace roles gate it
+  readAttachment: defineWorkspaceOperation({
+    id: 'inbox.attachments.read',
+    minimumRole: 'read',
+    workspaceApiKey: 'deny',
+    capability: 'none',
+    ...INBOX_PRINCIPALS,
+  }),
+  // permission-group-exempt: the Inbox is not a governed permission-group surface yet; workspace roles gate it
+  unreadCount: defineWorkspaceOperation({
+    id: 'inbox.unread.count',
+    minimumRole: 'read',
+    workspaceApiKey: 'deny',
+    capability: 'none',
+    ...INBOX_PRINCIPALS,
+  }),
+  // permission-group-exempt: the Inbox is not a governed permission-group surface yet; workspace roles gate it
   updateConversation: defineWorkspaceOperation({
     id: 'inbox.conversations.update',
     minimumRole: 'write',

@@ -1,8 +1,8 @@
 import { getErrorMessage } from '@sim/utils/errors'
+import { configString, resolveConversationChannelConfig } from '@/lib/inbox/channel-config'
+import type { InboxChannel } from '@/lib/inbox/channels'
 import { parseOutboundToolMessage } from '@/lib/inbox/outbound'
 import type { InboxConversationRecord } from '@/lib/inbox/repository'
-import { getInboxReplyRoute } from '@/lib/inbox/repository'
-import { resolveWebhookProviderConfig } from '@/lib/webhooks/env-resolver'
 import { executeTool } from '@/tools'
 
 export type InboxSendOutcome =
@@ -17,6 +17,53 @@ function unavailable(error: string): InboxSendOutcome {
   return { status: 'failed', error }
 }
 
+/**
+ * Channel errors an operator can act on, rewritten in plain words. Anything else is shown as the
+ * channel reported it.
+ */
+const FRIENDLY_CHANNEL_ERRORS: Array<{
+  channels: InboxChannel[]
+  pattern: RegExp
+  message: string
+}> = [
+  {
+    channels: ['instagram'],
+    pattern: /outside of (the )?allowed window|2534022/i,
+    message:
+      "Instagram only allows replies within 24 hours of the customer's last message. Wait for the customer to write again.",
+  },
+  {
+    channels: ['whatsapp'],
+    pattern: /131047|re-engagement|more than 24 hours/i,
+    message:
+      "WhatsApp only allows free-form replies within 24 hours of the customer's last message. Send an approved template from a workflow, or wait for the customer to write again.",
+  },
+  {
+    channels: ['telegram'],
+    pattern: /bot was blocked by the user/i,
+    message: 'The customer blocked this bot on Telegram.',
+  },
+  {
+    channels: ['telegram'],
+    pattern: /user is deactivated/i,
+    message: "The customer's Telegram account is deleted.",
+  },
+  {
+    channels: ['telegram', 'whatsapp', 'instagram'],
+    pattern: /\b401\b|invalid (oauth )?access token|unauthorized|session has expired/i,
+    message:
+      "The channel rejected the trigger's credentials. Reconnect the account on the trigger.",
+  },
+]
+
+/** Plain-language version of a channel error when one is known. */
+export function friendlyChannelError(channel: InboxChannel, error: string): string {
+  const match = FRIENDLY_CHANNEL_ERRORS.find(
+    (entry) => entry.channels.includes(channel) && entry.pattern.test(error)
+  )
+  return match?.message ?? error
+}
+
 function toolCall(
   conversation: InboxConversationRecord,
   providerConfig: Record<string, unknown>,
@@ -24,8 +71,8 @@ function toolCall(
 ): { toolId: string; params: Record<string, unknown> } | string {
   switch (conversation.channel) {
     case 'telegram': {
-      const botToken = providerConfig.botToken
-      if (typeof botToken !== 'string' || !botToken) {
+      const botToken = configString(providerConfig, 'botToken')
+      if (!botToken) {
         return 'The Telegram trigger has no bot token.'
       }
       return {
@@ -34,8 +81,8 @@ function toolCall(
       }
     }
     case 'whatsapp': {
-      const accessToken = providerConfig.accessToken
-      if (typeof accessToken !== 'string' || !accessToken) {
+      const accessToken = configString(providerConfig, 'accessToken')
+      if (!accessToken) {
         return 'Add an access token to the WhatsApp trigger to reply from the Inbox.'
       }
       return {
@@ -49,8 +96,8 @@ function toolCall(
       }
     }
     case 'instagram': {
-      const credentialId = providerConfig.credentialId
-      if (typeof credentialId !== 'string' || !credentialId) {
+      const credentialId = configString(providerConfig, 'credentialId')
+      if (!credentialId) {
         return 'Select an Instagram account on the Instagram trigger to reply from the Inbox.'
       }
       return {
@@ -77,19 +124,10 @@ export async function sendInboxReply(params: {
   operatorUserId: string
 }): Promise<InboxSendOutcome> {
   const { conversation } = params
-  if (!conversation.webhookId) {
-    return unavailable('The trigger that received this conversation no longer exists.')
-  }
-  const route = await getInboxReplyRoute(conversation.webhookId)
-  if (!route || route.provider !== conversation.channel) {
-    return unavailable('The trigger that received this conversation no longer exists.')
-  }
+  const channelConfig = await resolveConversationChannelConfig(conversation)
+  if (!channelConfig.ok) return unavailable(channelConfig.error)
 
-  const providerConfig = await resolveWebhookProviderConfig(
-    route.providerConfig,
-    route.workflowOwnerId,
-    conversation.workspaceId
-  )
+  const providerConfig = channelConfig.providerConfig
   const call = toolCall(conversation, providerConfig, params.text)
   if (typeof call === 'string') return unavailable(call)
 
@@ -103,11 +141,23 @@ export async function sendInboxReply(params: {
       },
     })
     if (!result.success) {
-      return { status: 'failed', error: result.error ?? 'The channel rejected the message.' }
+      return {
+        status: 'failed',
+        error: friendlyChannelError(
+          conversation.channel,
+          result.error ?? 'The channel rejected the message.'
+        ),
+      }
     }
     const sent = parseOutboundToolMessage(call.toolId, call.params, result.output)
     return { status: 'sent', externalMessageId: sent?.externalMessageId ?? null }
   } catch (error) {
-    return { status: 'failed', error: getErrorMessage(error, 'The channel rejected the message.') }
+    return {
+      status: 'failed',
+      error: friendlyChannelError(
+        conversation.channel,
+        getErrorMessage(error, 'The channel rejected the message.')
+      ),
+    }
   }
 }

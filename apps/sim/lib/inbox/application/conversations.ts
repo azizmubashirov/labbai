@@ -4,8 +4,11 @@ import { defineAuthorizedWorkspaceUseCase } from '@/lib/core/application'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { inboxOperations } from '@/lib/inbox/application/operations'
 import type { InboxChannel } from '@/lib/inbox/channels'
+import { fetchInboxAttachment, type InboxMediaStream } from '@/lib/inbox/media'
 import {
+  countUnreadInboxConversations,
   getInboxConversation,
+  getInboxMessageAttachments,
   type InboxConversationRecord,
   type InboxMessageRecord,
   insertOperatorMessage,
@@ -14,6 +17,7 @@ import {
   updateInboxConversation,
 } from '@/lib/inbox/repository'
 import { sendInboxReply } from '@/lib/inbox/send'
+import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 import { resolveActiveWorkspaceApplicationContext } from '@/lib/workspaces/application/workspace-context'
 
 /** Most messages a thread loads at once; earlier ones page in with `before`. */
@@ -30,7 +34,19 @@ export interface ListInboxConversationsInput {
 export interface GetInboxConversationInput {
   workspaceId: string
   conversationId: string
-  before?: Date
+  /** Id of the oldest message the caller has; returns the page before it. */
+  beforeMessageId?: string
+}
+
+export interface ReadInboxAttachmentInput {
+  workspaceId: string
+  conversationId: string
+  messageId: string
+  index: number
+}
+
+export interface CountUnreadInboxInput {
+  workspaceId: string
 }
 
 export interface UpdateInboxConversationInput {
@@ -84,10 +100,32 @@ export const getInboxConversationOperation = defineAuthorizedWorkspaceUseCase({
     const conversation = await requireConversation(input.workspaceId, input.conversationId)
     const messages = await listInboxMessages(conversation.id, {
       limit: INBOX_THREAD_PAGE_SIZE + 1,
-      before: input.before,
+      beforeId: input.beforeMessageId,
     })
     const hasMore = messages.length > INBOX_THREAD_PAGE_SIZE
     return { conversation, messages: hasMore ? messages.slice(1) : messages, hasMore }
+  },
+})
+
+export const readInboxAttachmentOperation = defineAuthorizedWorkspaceUseCase({
+  operation: inboxOperations.readAttachment,
+  resolveContext: (args: { input: ReadInboxAttachmentInput }) => resolveInboxContext(args),
+  authorizationOptions: {},
+  async execute({ input }): Promise<InboxMediaStream> {
+    const conversation = await requireConversation(input.workspaceId, input.conversationId)
+    const attachments = await getInboxMessageAttachments(conversation.id, input.messageId)
+    const attachment = attachments?.[input.index]
+    if (!attachment) throw new OrchestrationError('not_found', 'Attachment not found')
+    return fetchInboxAttachment(conversation, attachment)
+  },
+})
+
+export const countUnreadInboxOperation = defineAuthorizedWorkspaceUseCase({
+  operation: inboxOperations.unreadCount,
+  resolveContext: (args: { input: CountUnreadInboxInput }) => resolveInboxContext(args),
+  authorizationOptions: {},
+  async execute({ input }) {
+    return { unreadConversations: await countUnreadInboxConversations(input.workspaceId) }
   },
 })
 
@@ -102,6 +140,7 @@ export const updateInboxConversationOperation = defineAuthorizedWorkspaceUseCase
       markRead: input.markRead,
     })
     if (!conversation) throw new OrchestrationError('not_found', 'Conversation not found')
+    await notifyWorkspaceInboxChanged(conversation.workspaceId)
     return { conversation, previousAiEnabled: existing.aiEnabled }
   },
   /** Only an AI toggle is a semantic change worth auditing; marking read is not. */
@@ -139,6 +178,7 @@ export const replyToInboxConversationOperation = defineAuthorizedWorkspaceUseCas
       externalMessageId: outcome.status === 'sent' ? outcome.externalMessageId : null,
       error: outcome.status === 'failed' ? outcome.error : null,
     })
+    await notifyWorkspaceInboxChanged(conversation.workspaceId)
     return {
       conversation,
       messageId,

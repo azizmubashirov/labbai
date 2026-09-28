@@ -7,6 +7,8 @@ import {
   telegramBotIdFromToken,
 } from '@/lib/inbox/channels'
 import { type RecordInboundResult, recordInboundInboxMessages } from '@/lib/inbox/ingest'
+import { fillInstagramContactNames } from '@/lib/inbox/instagram-profile'
+import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 import { resolveEnvVarReferences } from '@/executor/utils/reference-validation'
 
 const logger = createLogger('InboxWebhook')
@@ -46,12 +48,23 @@ export async function recordInboxWebhookDelivery(
     const messages = extractInboundInboxMessages(channel, toRecord(delivery.body), telegramBotId)
     if (messages.length === 0) return null
 
-    return await recordInboundInboxMessages({
+    const result = await recordInboundInboxMessages({
       workspaceId,
       workflowId: delivery.workflow.id,
       webhookId: delivery.webhook.id,
       messages,
     })
+    if (result.insertedCount > 0) {
+      if (channel === 'instagram') {
+        await fillInstagramContactNames({
+          conversationIds: result.conversationIds,
+          credentialId: delivery.webhook.providerConfig.credentialId,
+          requestId: delivery.requestId,
+        })
+      }
+      await notifyWorkspaceInboxChanged(workspaceId)
+    }
+    return result
   } catch (error) {
     logger.error(`[${delivery.requestId}] Failed to record Inbox messages`, {
       webhookId: delivery.webhook.id,

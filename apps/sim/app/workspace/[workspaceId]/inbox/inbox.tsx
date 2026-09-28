@@ -7,6 +7,7 @@ import { SEARCH_DEBOUNCE_MS } from '@/lib/url-state'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import { ConversationList } from '@/app/workspace/[workspaceId]/inbox/components/conversation-list'
 import { Thread } from '@/app/workspace/[workspaceId]/inbox/components/thread'
+import { useWorkspaceInboxRoom } from '@/app/workspace/[workspaceId]/inbox/hooks/use-workspace-inbox-room'
 import { inboxParsers, inboxUrlKeys } from '@/app/workspace/[workspaceId]/inbox/search-params'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
 import { useInboxConversations } from '@/hooks/queries/inbox'
@@ -26,12 +27,17 @@ export function Inbox() {
     setParams({ search: value }, options)
   )
   const debouncedSearch = useDebounce(params.search, SEARCH_DEBOUNCE_MS)
+  const pollIntervalMs = useWorkspaceInboxRoom(workspaceId)
 
-  const { data: conversations = [], isLoading } = useInboxConversations(workspaceId, {
-    channel: params.channel === 'all' ? undefined : params.channel,
-    search: debouncedSearch.trim() || undefined,
-    unreadOnly: params.unread,
-  })
+  const { data: conversations = [], isLoading } = useInboxConversations(
+    workspaceId,
+    {
+      channel: params.channel === 'all' ? undefined : params.channel,
+      search: debouncedSearch.trim() || undefined,
+      unreadOnly: params.unread,
+    },
+    { pollIntervalMs }
+  )
 
   return (
     <Resource>
@@ -57,6 +63,7 @@ export function Inbox() {
             workspaceId={workspaceId}
             conversationId={params.conversation}
             canEdit={canEdit}
+            pollIntervalMs={pollIntervalMs}
           />
         ) : (
           <div className='flex flex-1 items-center justify-center text-[var(--text-muted)] text-small'>

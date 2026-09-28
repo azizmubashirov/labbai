@@ -76,7 +76,10 @@ Gemini / Workers AI.
   Telegram / WhatsApp / Instagram (via Sim channel triggers) stored as a conversation,
   Telegram-like list + thread view, operator reply from the UI, per-conversation
   AI on/off (when off, the agent workflow skips that customer). Copilot-built channel
-  agents feed this section automatically.
+  agents feed this section automatically. Completed 2026-09-28: live updates over the
+  realtime server, customer media (photos, voice, video, documents, locations), earlier
+  history paging, sidebar unread badge, Telegram secret token, Instagram contact names,
+  plain-language 24-hour-window errors. Open: operator media sending.
 - **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
   provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,

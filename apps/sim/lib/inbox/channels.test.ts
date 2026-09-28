@@ -56,15 +56,53 @@ describe('extractInboundInboxMessages', () => {
     expect(message.sentAt.getTime()).toBe(1_790_000_000_000)
   })
 
-  it('uses a placeholder for Telegram media without a caption', () => {
+  it('keeps the largest Telegram photo as an attachment with an empty text', () => {
     const [message] = extractInboundInboxMessages(
       'telegram',
       {
-        message: { message_id: 1, chat: { id: 1, type: 'private' }, from: { id: 1 }, photo: [{}] },
+        message: {
+          message_id: 1,
+          chat: { id: 1, type: 'private' },
+          from: { id: 1 },
+          photo: [{ file_id: 'small' }, { file_id: 'large' }],
+        },
       },
       '9'
     )
-    expect(message.text).toBe('[photo]')
+    expect(message.text).toBe('')
+    expect(message.attachments).toEqual([
+      { kind: 'image', fileId: 'large', url: null, mimeType: 'image/jpeg', fileName: null },
+    ])
+  })
+
+  it('reads Telegram voice notes, documents with captions, locations and contacts', () => {
+    const read = (fields: Record<string, unknown>) =>
+      extractInboundInboxMessages(
+        'telegram',
+        { message: { message_id: 1, chat: { id: 1 }, from: { id: 1 }, ...fields } },
+        '9'
+      )[0]
+
+    expect(read({ voice: { file_id: 'v1', mime_type: 'audio/ogg' } }).attachments[0]).toMatchObject(
+      { kind: 'voice', fileId: 'v1', mimeType: 'audio/ogg' }
+    )
+    const document = read({
+      caption: 'Narxlar',
+      document: { file_id: 'd1', file_name: 'price.pdf', mime_type: 'application/pdf' },
+    })
+    expect(document.text).toBe('Narxlar')
+    expect(document.attachments[0]).toMatchObject({ kind: 'document', fileName: 'price.pdf' })
+    expect(read({ location: { latitude: 41.3, longitude: 69.2 } }).attachments[0]).toMatchObject({
+      kind: 'location',
+      url: 'https://www.google.com/maps?q=41.3,69.2',
+    })
+    const contact = read({ contact: { first_name: 'Ali', phone_number: '+998901112233' } })
+    expect(contact.text).toBe('Contact: Ali, +998901112233')
+    expect(contact.attachments).toEqual([])
+    expect(read({ sticker: { file_id: 's1', is_animated: true } }).attachments[0]).toMatchObject({
+      kind: 'sticker',
+      mimeType: 'application/x-tgsticker',
+    })
   })
 
   it('skips Telegram updates without a bot id, bot senders, and edits', () => {
@@ -122,6 +160,9 @@ describe('extractInboundInboxMessages', () => {
       ['wamid.1', 'Narxi?'],
       ['wamid.2', 'Shu'],
     ])
+    expect(messages[1].attachments).toEqual([
+      { kind: 'image', fileId: null, url: null, mimeType: null, fileName: null },
+    ])
     expect(messages[0]).toMatchObject({
       accountId: 'PN1',
       externalChatId: '998901234567',
@@ -167,6 +208,88 @@ describe('extractInboundInboxMessages', () => {
       ['m1', 'Hi'],
       ['m3', '[image]'],
     ])
+    expect(messages[1].attachments).toEqual([])
     expect(messages[0]).toMatchObject({ accountId: 'IG1', externalChatId: 'U1' })
+  })
+})
+
+describe('WhatsApp media and non-text messages', () => {
+  const deliver = (message: Record<string, unknown>) =>
+    extractInboundInboxMessages(
+      'whatsapp',
+      {
+        entry: [
+          {
+            changes: [
+              {
+                value: {
+                  metadata: { phone_number_id: 'PN1' },
+                  messages: [{ from: '998', id: 'w1', timestamp: '1', ...message }],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      null
+    )[0]
+
+  it('marks voice notes and keeps media ids and file names', () => {
+    expect(
+      deliver({ type: 'audio', audio: { id: 'MEDIA1', mime_type: 'audio/ogg', voice: true } })
+    ).toMatchObject({
+      text: '',
+      attachments: [{ kind: 'voice', fileId: 'MEDIA1', mimeType: 'audio/ogg' }],
+    })
+    expect(
+      deliver({
+        type: 'document',
+        document: { id: 'MEDIA2', filename: 'shartnoma.pdf', mime_type: 'application/pdf' },
+      }).attachments[0]
+    ).toMatchObject({ kind: 'document', fileId: 'MEDIA2', fileName: 'shartnoma.pdf' })
+  })
+
+  it('describes reactions and shared contacts in text', () => {
+    expect(deliver({ type: 'reaction', reaction: { emoji: '👍' } }).text).toBe('Reacted 👍')
+    expect(
+      deliver({
+        type: 'contacts',
+        contacts: [{ name: { formatted_name: 'Vali' }, phones: [{ phone: '+99890' }] }],
+      }).text
+    ).toBe('Contact: Vali, +99890')
+  })
+})
+
+describe('Instagram attachments', () => {
+  it('keeps attachment links by kind', () => {
+    const [message] = extractInboundInboxMessages(
+      'instagram',
+      {
+        entry: [
+          {
+            id: 'IG1',
+            messaging: [
+              {
+                sender: { id: 'U1' },
+                recipient: { id: 'IG1' },
+                message: {
+                  mid: 'm1',
+                  attachments: [
+                    { type: 'image', payload: { url: 'https://lookaside.fbsbx.com/a' } },
+                    { type: 'share', payload: { url: 'https://www.instagram.com/p/x' } },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+      null
+    )
+    expect(message.text).toBe('')
+    expect(message.attachments.map((item) => [item.kind, item.url])).toEqual([
+      ['image', 'https://lookaside.fbsbx.com/a'],
+      ['link', 'https://www.instagram.com/p/x'],
+    ])
   })
 })

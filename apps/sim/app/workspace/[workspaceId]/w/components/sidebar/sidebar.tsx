@@ -49,6 +49,7 @@ import { DOCS_URL, SLACK_COMMUNITY_URL } from '@/lib/help-links'
 import { captureEvent } from '@/lib/posthog/client'
 import { LOGO_ACCEPT_ATTRIBUTE } from '@/lib/uploads/client/logo-file'
 import { useSidebarChrome } from '@/app/workspace/[workspaceId]/components/workspace-chrome'
+import { useWorkspaceInboxRoom } from '@/app/workspace/[workspaceId]/inbox/hooks/use-workspace-inbox-room'
 import { CONNECT_MODE } from '@/app/workspace/[workspaceId]/integrations/connect-route'
 import { useRegisterGlobalCommands } from '@/app/workspace/[workspaceId]/providers/global-commands-provider'
 import { useWorkspaceHostContext } from '@/app/workspace/[workspaceId]/providers/workspace-host-provider'
@@ -117,6 +118,7 @@ import { useImportWorkflow } from '@/app/workspace/[workspaceId]/w/hooks'
 import { useBlockVisibilityVersion } from '@/blocks/visibility/version'
 import { useWorkspaceCredentials } from '@/hooks/queries/credentials'
 import { useFolderMap, useFolders } from '@/hooks/queries/folders'
+import { useInboxUnreadCount } from '@/hooks/queries/inbox'
 import { type LogFilters, useLogsList } from '@/hooks/queries/logs'
 import type { MothershipChatMetadata } from '@/hooks/queries/mothership-chats'
 import {
@@ -505,6 +507,10 @@ export const Sidebar = memo(function Sidebar() {
 
   useFolders(workspaceId)
   useWorkspaceWorkflowsRoom(workspaceId)
+  const inboxPollIntervalMs = useWorkspaceInboxRoom(workspaceId)
+  const { data: inboxUnread = 0 } = useInboxUnreadCount(workspaceId, {
+    pollIntervalMs: inboxPollIntervalMs,
+  })
   const { data: folderMap = EMPTY_FOLDER_MAP } = useFolderMap(workspaceId)
   const updateWorkflowMutation = useUpdateWorkflow()
 
@@ -750,6 +756,7 @@ export const Sidebar = memo(function Sidebar() {
           icon: MessageSquareText,
           href: `/workspace/${workspaceId}/inbox`,
           restricted: false,
+          badge: inboxUnread,
         },
         {
           id: 'tables',
@@ -785,6 +792,7 @@ export const Sidebar = memo(function Sidebar() {
       ].filter((item) => !item.hidden),
     [
       workspaceId,
+      inboxUnread,
       permissionConfig.hideFilesTab,
       permissionConfig.hideKnowledgeBaseTab,
       permissionConfig.hideTablesTab,

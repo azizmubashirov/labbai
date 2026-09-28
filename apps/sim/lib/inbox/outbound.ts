@@ -7,6 +7,7 @@ import { toRecord } from '@sim/utils/object'
 import { and, desc, eq } from 'drizzle-orm'
 import { type InboxChannel, telegramBotIdFromToken } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
+import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 
 const logger = createLogger('InboxOutbound')
 
@@ -105,7 +106,7 @@ export async function recordAgentOutboundMessage(
   if (!conversation) return
 
   const sentAt = new Date()
-  await db.transaction(async (tx) => {
+  const recorded = await db.transaction(async (tx) => {
     const inserted = await tx
       .insert(inboxMessage)
       .values({
@@ -120,12 +121,14 @@ export async function recordAgentOutboundMessage(
       })
       .onConflictDoNothing()
       .returning({ id: inboxMessage.id })
-    if (inserted.length === 0) return
+    if (inserted.length === 0) return false
     await tx
       .update(inboxConversation)
       .set({ lastMessageAt: sentAt, lastMessagePreview: inboxPreview(message.text) })
       .where(eq(inboxConversation.id, conversation.id))
+    return true
   })
+  if (recorded) await notifyWorkspaceInboxChanged(workspaceId)
 }
 
 /**

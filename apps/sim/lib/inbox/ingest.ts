@@ -3,6 +3,7 @@ import { inboxConversation, inboxMessage } from '@sim/db/schema'
 import { generateId } from '@sim/utils/id'
 import { truncateAtCodePoint } from '@sim/utils/string'
 import { eq, sql } from 'drizzle-orm'
+import { inboxMessageSummary } from '@/lib/inbox/attachments'
 import type { InboundInboxMessage } from '@/lib/inbox/channels'
 
 /** Longest message preview kept on a conversation row for the list view. */
@@ -22,6 +23,8 @@ interface RecordInboundParams {
 export interface RecordInboundResult {
   /** Conversation ids the delivery touched, in message order. */
   conversationIds: string[]
+  /** Messages stored for the first time; zero when the delivery was a provider retry. */
+  insertedCount: number
   /** True when every touched conversation has AI turned off, so the agent must not run. */
   allAiDisabled: boolean
 }
@@ -37,6 +40,7 @@ export async function recordInboundInboxMessages(
 ): Promise<RecordInboundResult> {
   const conversationIds: string[] = []
   const aiEnabledById = new Map<string, boolean>()
+  let insertedCount = 0
 
   for (const message of params.messages) {
     const result = await db.transaction(async (tx) => {
@@ -79,6 +83,7 @@ export async function recordInboundInboxMessages(
           workspaceId: params.workspaceId,
           author: 'customer',
           text: message.text,
+          attachments: message.attachments,
           externalMessageId: message.externalMessageId,
           status: 'received',
           createdAt: message.sentAt,
@@ -87,12 +92,15 @@ export async function recordInboundInboxMessages(
         .returning({ id: inboxMessage.id })
 
       if (inserted.length > 0) {
+        insertedCount += 1
         await tx
           .update(inboxConversation)
           .set({
             unreadCount: sql`${inboxConversation.unreadCount} + 1`,
             lastMessageAt: sql`greatest(${inboxConversation.lastMessageAt}, ${sql.param(message.sentAt, inboxConversation.lastMessageAt)})`,
-            lastMessagePreview: inboxPreview(message.text),
+            lastMessagePreview: inboxPreview(
+              inboxMessageSummary(message.text, message.attachments)
+            ),
           })
           .where(eq(inboxConversation.id, conversation.id))
       }
@@ -106,5 +114,5 @@ export async function recordInboundInboxMessages(
 
   const allAiDisabled =
     conversationIds.length > 0 && conversationIds.every((id) => aiEnabledById.get(id) === false)
-  return { conversationIds, allAiDisabled }
+  return { conversationIds, insertedCount, allAiDisabled }
 }

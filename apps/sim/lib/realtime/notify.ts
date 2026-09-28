@@ -79,6 +79,16 @@ export function notifyWorkspaceWorkflowsChanged(workspaceId: string): Promise<vo
   return postWorkspaceListChanged('workspace-workflows-changed', workspaceId)
 }
 
+/**
+ * Best-effort fan-out that a workspace's Inbox changed (a customer message arrived, an agent or
+ * operator replied, or a conversation's AI or read state changed), so every open Inbox and the
+ * sidebar unread badge refetch. See {@link postWorkspaceListChanged} for the shared
+ * lossy/never-throws contract.
+ */
+export function notifyWorkspaceInboxChanged(workspaceId: string): Promise<void> {
+  return postWorkspaceListChanged('workspace-inbox-changed', workspaceId)
+}
+
 /** Best-effort fan-out that invalidates open editors for one durably changed workflow. */
 export async function notifyWorkflowUpdated(workflowId: string): Promise<void> {
   try {

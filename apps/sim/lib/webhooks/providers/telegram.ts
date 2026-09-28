@@ -1,7 +1,10 @@
 import { db, webhook, workflowDeploymentVersion } from '@sim/db'
 import { createLogger } from '@sim/logger'
+import { safeCompare } from '@sim/security/compare'
 import { getErrorMessage } from '@sim/utils/errors'
+import { generateShortId } from '@sim/utils/id'
 import { and, eq, isNull, ne } from 'drizzle-orm'
+import { NextResponse } from 'next/server'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import type {
   AuthContext,
@@ -15,13 +18,32 @@ import type {
 
 const logger = createLogger('WebhookProvider:Telegram')
 
+/** Header Telegram echoes the `secret_token` from `setWebhook` in on every update. */
+export const TELEGRAM_SECRET_TOKEN_HEADER = 'x-telegram-bot-api-secret-token'
+
+/** Length of the generated `secret_token`; Telegram accepts 1-256 characters of `A-Za-z0-9_-`. */
+const TELEGRAM_SECRET_TOKEN_LENGTH = 48
+
 export const telegramHandler: WebhookProviderHandler = {
-  verifyAuth({ request, requestId }: AuthContext) {
+  /**
+   * Rejects updates that do not carry the secret registered with `setWebhook`, so only Telegram
+   * can deliver to the webhook URL. Webhooks deployed before the secret existed have none stored
+   * and keep working until their next deploy registers one.
+   */
+  verifyAuth({ request, requestId, providerConfig }: AuthContext) {
     const userAgent = request.headers.get('user-agent')
     if (!userAgent) {
       logger.warn(
         `[${requestId}] Telegram webhook request has empty User-Agent header. This may be blocked by middleware.`
       )
+    }
+
+    const expected = providerConfig.secretToken
+    if (typeof expected !== 'string' || !expected) return null
+    const received = request.headers.get(TELEGRAM_SECRET_TOKEN_HEADER)
+    if (!received || !safeCompare(received, expected)) {
+      logger.warn(`[${requestId}] Telegram webhook secret token is missing or does not match`)
+      return new NextResponse('Unauthorized - Invalid Telegram secret token', { status: 401 })
     }
     return null
   },
@@ -125,6 +147,7 @@ export const telegramHandler: WebhookProviderHandler = {
 
     const notificationUrl = getNotificationUrl(ctx.webhook)
     const telegramApiUrl = `https://api.telegram.org/bot${botToken}/setWebhook`
+    const secretToken = generateShortId(TELEGRAM_SECRET_TOKEN_LENGTH)
 
     try {
       const telegramResponse = await fetch(telegramApiUrl, {
@@ -133,7 +156,7 @@ export const telegramHandler: WebhookProviderHandler = {
           'Content-Type': 'application/json',
           'User-Agent': 'TelegramBot/1.0',
         },
-        body: JSON.stringify({ url: notificationUrl }),
+        body: JSON.stringify({ url: notificationUrl, secret_token: secretToken }),
       })
 
       const responseBody = await telegramResponse.json()
@@ -157,7 +180,7 @@ export const telegramHandler: WebhookProviderHandler = {
       logger.info(
         `[${ctx.requestId}] Successfully created Telegram webhook for webhook ${ctx.webhook.id}`
       )
-      return {}
+      return { providerConfigUpdates: { secretToken } }
     } catch (error: unknown) {
       if (
         error instanceof Error &&

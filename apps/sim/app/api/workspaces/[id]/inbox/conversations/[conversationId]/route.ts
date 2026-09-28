@@ -4,7 +4,6 @@ import {
 } from '@/lib/api/contracts/inbox'
 import {
   defineInternalJsonRoute,
-  internalJsonPresenters,
   internalOrchestrationErrorPolicy,
   internalRateLimits,
   internalSessionAuth,
@@ -14,6 +13,7 @@ import {
   updateInboxConversationOperation,
 } from '@/lib/inbox/application/conversations'
 import { inboxOperations } from '@/lib/inbox/application/operations'
+import { toInboxAttachmentViews } from '@/lib/inbox/attachments'
 
 export const GET = defineInternalJsonRoute({
   contract: getInboxConversationContract,
@@ -24,10 +24,18 @@ export const GET = defineInternalJsonRoute({
   mapInput: ({ params, query }) => ({
     workspaceId: params.id,
     conversationId: params.conversationId,
-    before: query.before,
+    beforeMessageId: query.before,
   }),
   useCase: getInboxConversationOperation,
-  present: internalJsonPresenters.withSuccess,
+  present: ({ conversation, messages, hasMore }) => ({
+    success: true as const,
+    conversation,
+    messages: messages.map((message) => ({
+      ...message,
+      attachments: toInboxAttachmentViews(message.attachments),
+    })),
+    hasMore,
+  }),
 })
 
 export const PATCH = defineInternalJsonRoute({

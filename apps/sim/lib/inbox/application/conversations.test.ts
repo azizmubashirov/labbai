@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   updateConversation: vi.fn(),
   insertOperatorMessage: vi.fn(),
   listMessages: vi.fn(),
+  getAttachments: vi.fn(),
+  countUnread: vi.fn(),
+  fetchAttachment: vi.fn(),
+  notifyInbox: vi.fn(),
   sendReply: vi.fn(),
 }))
 
@@ -39,13 +43,19 @@ vi.mock('@/lib/inbox/repository', () => ({
   insertOperatorMessage: mocks.insertOperatorMessage,
   listInboxMessages: mocks.listMessages,
   listInboxConversations: vi.fn(),
+  getInboxMessageAttachments: mocks.getAttachments,
+  countUnreadInboxConversations: mocks.countUnread,
 }))
 
 vi.mock('@/lib/inbox/send', () => ({ sendInboxReply: mocks.sendReply }))
+vi.mock('@/lib/inbox/media', () => ({ fetchInboxAttachment: mocks.fetchAttachment }))
+vi.mock('@/lib/realtime/notify', () => ({ notifyWorkspaceInboxChanged: mocks.notifyInbox }))
 
 import {
+  countUnreadInboxOperation,
   getInboxConversationOperation,
   INBOX_THREAD_PAGE_SIZE,
+  readInboxAttachmentOperation,
   replyToInboxConversationOperation,
   updateInboxConversationOperation,
 } from '@/lib/inbox/application/conversations'
@@ -117,6 +127,58 @@ describe('Inbox conversation use cases', () => {
     expect(result.messages[0]).toEqual({ id: 'm-1' })
   })
 
+  it('loads the page before a message id', async () => {
+    mocks.listMessages.mockResolvedValue([])
+    await getInboxConversationOperation.execute({
+      principal,
+      input: { workspaceId: 'ws-1', conversationId: 'conv-1', beforeMessageId: 'm-40' },
+    })
+    expect(mocks.listMessages).toHaveBeenCalledWith('conv-1', {
+      limit: INBOX_THREAD_PAGE_SIZE + 1,
+      beforeId: 'm-40',
+    })
+  })
+
+  it('streams an attachment of a message in the conversation', async () => {
+    const attachment = {
+      kind: 'image',
+      fileId: 'f1',
+      url: null,
+      mimeType: 'image/jpeg',
+      fileName: null,
+    }
+    mocks.getAttachments.mockResolvedValue([attachment])
+    mocks.fetchAttachment.mockResolvedValue({ contentType: 'image/jpeg' })
+    const result = await readInboxAttachmentOperation.execute({
+      principal,
+      input: { workspaceId: 'ws-1', conversationId: 'conv-1', messageId: 'm-1', index: 0 },
+    })
+    expect(mocks.getAttachments).toHaveBeenCalledWith('conv-1', 'm-1')
+    expect(mocks.fetchAttachment).toHaveBeenCalledWith(conversation, attachment)
+    expect(result).toEqual({ contentType: 'image/jpeg' })
+  })
+
+  it('reports an attachment index past the message media as not found', async () => {
+    mocks.getAttachments.mockResolvedValue([])
+    await expect(
+      readInboxAttachmentOperation.execute({
+        principal,
+        input: { workspaceId: 'ws-1', conversationId: 'conv-1', messageId: 'm-1', index: 3 },
+      })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(mocks.fetchAttachment).not.toHaveBeenCalled()
+  })
+
+  it('counts unread conversations for a reader', async () => {
+    mocks.resolvePermission.mockResolvedValue('read')
+    mocks.countUnread.mockResolvedValue(4)
+    const result = await countUnreadInboxOperation.execute({
+      principal,
+      input: { workspaceId: 'ws-1' },
+    })
+    expect(result).toEqual({ unreadConversations: 4 })
+  })
+
   it('sends a reply as the operator, stores it, and audits the delivery', async () => {
     mocks.sendReply.mockResolvedValue({ status: 'sent', externalMessageId: '900' })
     const result = await replyToInboxConversationOperation.execute({
@@ -136,6 +198,7 @@ describe('Inbox conversation use cases', () => {
       })
     )
     expect(result).toMatchObject({ delivered: true, error: null })
+    expect(mocks.notifyInbox).toHaveBeenCalledWith('ws-1')
     expect(mocks.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'INBOX_REPLY_SENT', resourceId: 'conv-1' })
     )

@@ -98,12 +98,42 @@ Owner: the section is called **Inbox** (not "Chat"). Sidebar → Inbox, route `/
   session-only, `capability: 'none'`; AI toggles and delivered replies are audited),
   routes under `app/api/workspaces/[id]/inbox/conversations/**`.
 - UI: `app/workspace/[workspaceId]/inbox/*` — list (search, channel, unread filters), thread,
-  AI on/off switch, reply box (Enter sends). Polls every 5 s (no realtime socket event yet).
-- Verified: unit tests (`lib/inbox/**`, Instagram handler), SQL against real Postgres, and the UI
-  in a browser (list, thread, AI toggle, mark-read, failed reply display).
-- Known limits: only text is sent (media shows as `[photo]` etc.); Instagram replies only within
-  Meta's 24-hour window; Telegram deliveries are not signature-checked (existing behaviour,
-  no `secret_token`); one Telegram bot / Meta app per workflow (last deploy wins).
+  AI on/off switch, reply box (Enter sends), "Load earlier messages" (100 per page, keyset on
+  `(created_at, id)` via `?before=<messageId>`), unread badge on the sidebar Inbox item
+  (`GET .../inbox/unread`).
+
+#### Inbox completion (2026-09-28)
+
+- Live updates: new realtime room `workspace-inbox` (`@sim/realtime-protocol/rooms`, read access,
+  workspace-scoped). `notifyWorkspaceInboxChanged` fires after inbound messages, agent sends,
+  operator replies and AI/read toggles; `useWorkspaceInboxRoom` (mounted in the sidebar and the
+  Inbox) invalidates lists, threads and the badge. Polling stays as fallback: 60 s while the
+  socket is connected, 5 s when it is not (e.g. no realtime server).
+- Media: `inbox_message.attachments` jsonb (migration `0382_labbai_inbox_attachments`, additive,
+  default `[]`). Channel parsers keep media ids/links only (Telegram photo/voice/audio/video/
+  document/sticker/location, WhatsApp image/audio+voice/video/document/sticker/location, Instagram
+  attachment URLs); contacts, polls and reactions become text. Bytes are never stored:
+  `GET .../messages/[messageId]/attachments/[index]` (`lib/inbox/media.ts`) streams from Telegram
+  `getFile`, WhatsApp Graph media (needs the trigger access token) or the Instagram CDN link.
+  Meta links are only followed to Meta media hosts (checked on every redirect); 50 MB cap;
+  non-media types are served as downloads with a sandbox CSP. The thread renders images, video,
+  audio/voice players, document chips and map links, with a fallback when the channel no longer
+  has the file.
+- Telegram webhooks now register a random `secret_token` on deploy (`providerConfig.secretToken`)
+  and reject updates without the matching `X-Telegram-Bot-Api-Secret-Token` (401). Webhooks
+  deployed before this have no stored secret and keep working until their next deploy.
+- Instagram contacts: on a customer's first message the name/username is looked up with the
+  trigger's Instagram account (`lib/inbox/instagram-profile.ts`, 3 s timeout, best effort).
+- Reply errors in plain words (`friendlyChannelError`): Instagram/WhatsApp 24-hour window,
+  blocked Telegram bot, deleted Telegram account, rejected credentials.
+- Verified: tsc (sim, realtime, platform-authz, realtime-protocol, db), Biome, affected vitest
+  suites (sim 197 files / 2403 tests, realtime 418), migration on real Postgres, SQL checks
+  (keyset paging across equal timestamps, attachment round trip, unread count, contact fill),
+  Telegram secret check through the real webhook route, and the UI in a browser (media, load
+  earlier keeping scroll position, sidebar badge).
+- Remaining limits: operators send text only (no media upload yet); WhatsApp free-form replies
+  and Instagram replies only inside Meta's 24-hour window; one Telegram bot / Meta app per
+  workflow (last deploy wins).
 - Pre-existing check failures not from this work (not in CI): `check:api-validation:strict`,
   `check:utils`, `check:react-query` flag local-copilot code; `check:mcp-operations` fails on the
   access-requests schema.
