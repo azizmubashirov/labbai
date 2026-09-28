@@ -406,6 +406,9 @@ export function SocketProvider({ children, user }: SocketProviderProps) {
 
         const socketInstance = io(socketUrl, {
           transports: ['websocket', 'polling'],
+          // Fall back to long-polling when the WebSocket can't be opened (browser
+          // extensions, proxies); otherwise the client never reaches the server.
+          tryAllTransports: true,
           withCredentials: true,
           reconnectionAttempts: Number.POSITIVE_INFINITY,
           reconnectionDelay: 1000,
