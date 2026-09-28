@@ -148,6 +148,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/sim/bootstrap.js ./apps/sim/
 
 # Copy isolated-vm native module (compiled for Node.js in deps stage)
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/isolated-vm ./node_modules/isolated-vm
+# isolated-vm 6 loads its binding through `node-gyp-build`. The standalone trace used to pick it up only
+# because `bufferutil` depended on it; without it the Function block's sandbox worker never starts.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-gyp-build ./node_modules/node-gyp-build
 
 # The collab-doc seed/merge/persist routes run the converter (markdown <-> Yjs) server-side. `yjs` is a
 # serverExternalPackage, and the Next standalone tracer copies it only partially — it misses ESM subpath
