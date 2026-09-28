@@ -179,6 +179,36 @@ test real sends per channel before relying on it.
   `check:utils`, `check:react-query` flag local-copilot code; `check:mcp-operations` fails on the
   access-requests schema.
 
+#### Inbox block — AI off/on from a workflow (2026-09-28)
+
+New block **Inbox** (`blocks/blocks/inbox.ts`, category `blocks` like Memory/Table — first-party,
+so no catalog BlockMeta/docs; it is not in the Agent tool picker) with one tool `inbox_set_ai`
+(`tools/inbox/`). The workflow equivalent of the operator's AI switch, e.g. an
+`escalate_to_human` workflow (called by an Agent as a workflow tool) notifies operators on
+Telegram, then turns AI off so the agent stops replying and the operator takes over.
+
+- Fields: Operation (`Turn AI off` = `turn_ai_off` default / `Turn AI on` = `turn_ai_on`),
+  Channel (`telegram` | `whatsapp` | `instagram`), Customer Chat ID (`chatId`, e.g.
+  `<telegram.message.chat.id>`; WhatsApp numbers normalized to digits), advanced Account ID
+  (`accountId`: bot id / phone number id / IG account id) when several accounts share the chat
+  (without it the most recently active thread wins). Outputs: `found`, `conversationId`,
+  `aiEnabled` (`found=false` and nulls when the chat has no conversation — not an error).
+- Execution: in-process operation (`lib/internal/inbox/execute-tool.ts`, registered in
+  `lib/internal/tool-operations/registry.server.ts`) → executor delegation principal (audience
+  `sim:inbox`) → application use case `setInboxAiForChatOperation`
+  (`lib/inbox/application/conversations.ts`, operation `inbox.conversations.ai.set`, write role,
+  `delegated`/`executor` only). Same repository write, `notifyWorkspaceInboxChanged` and audit
+  ("Turned off AI replies for …", only when the value changes) as the operator switch.
+- Authorization: the workspace is never taken from block input — it is the delegation's
+  workspace, bound from the executing workflow; the funnel rejects a mismatch and the lookup
+  (`findInboxConversationByChat`) filters by it. Manual runs need write on the workspace;
+  deployed (webhook/schedule) runs act for the workspace.
+- The reply the agent is already producing in that run is still sent; the next customer
+  messages are not queued while AI is off (existing `inbox-ai-off` gate).
+- `tools/generated/tool-{ids,metadata,outputs}.ts` were updated by hand with a script that
+  mirrors `scripts/sync-tool-metadata.ts` (pure insertion of `inbox_set_ai`); run
+  `bun run tool-metadata:check` when bun is available.
+
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 
 CI on every push to `main` (`.github/workflows/ci.yml`), all jobs in parallel:

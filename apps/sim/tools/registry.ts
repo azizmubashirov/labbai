@@ -356,6 +356,7 @@ import {
   hubspotUpdateTicketTool,
 } from '@/tools/hubspot'
 import { imageGenerateTool } from '@/tools/image'
+import { inboxSetAiTool } from '@/tools/inbox'
 import {
   instagramDeleteCommentTool,
   instagramDownloadMediaTool,
@@ -1052,6 +1053,7 @@ export const tools: Record<string, ExecutableToolConfig> = {
   memory_get: memoryGetTool,
   memory_get_all: memoryGetAllTool,
   memory_delete: memoryDeleteTool,
+  inbox_set_ai: inboxSetAiTool,
   knowledge_search: knowledgeSearchTool,
   knowledge_upload_chunk: knowledgeUploadChunkTool,
   knowledge_create_document: knowledgeCreateDocumentTool,

@@ -1,6 +1,7 @@
 /**
  * @vitest-environment node
  */
+import type { WorkflowExecutionDelegatedPrincipal } from '@sim/auth/principal'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -8,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   recordAudit: vi.fn(),
   resolveContext: vi.fn(),
   getConversation: vi.fn(),
+  findConversationByChat: vi.fn(),
   updateConversation: vi.fn(),
   insertOperatorMessage: vi.fn(),
   listMessages: vi.fn(),
@@ -42,6 +44,7 @@ vi.mock('@/lib/workspaces/application/workspace-context', () => ({
 
 vi.mock('@/lib/inbox/repository', () => ({
   getInboxConversation: mocks.getConversation,
+  findInboxConversationByChat: mocks.findConversationByChat,
   updateInboxConversation: mocks.updateConversation,
   insertOperatorMessage: mocks.insertOperatorMessage,
   listInboxMessages: mocks.listMessages,
@@ -51,6 +54,9 @@ vi.mock('@/lib/inbox/repository', () => ({
 }))
 
 vi.mock('@/lib/inbox/send', () => ({ sendInboxReply: mocks.sendReply }))
+vi.mock('@/lib/inbox/outbound', () => ({
+  normalizeWhatsAppNumber: (value: string) => value.replace(/\D/g, ''),
+}))
 vi.mock('@/lib/inbox/media', () => ({ fetchInboxAttachment: mocks.fetchAttachment }))
 vi.mock('@/lib/realtime/notify', () => ({ notifyWorkspaceInboxChanged: mocks.notifyInbox }))
 vi.mock('@/lib/inbox/operator-media', () => ({
@@ -65,6 +71,7 @@ import {
   INBOX_THREAD_PAGE_SIZE,
   readInboxAttachmentOperation,
   replyToInboxConversationOperation,
+  setInboxAiForChatOperation,
   updateInboxConversationOperation,
 } from '@/lib/inbox/application/conversations'
 
@@ -388,5 +395,201 @@ describe('Inbox conversation use cases', () => {
     expect(mocks.storeFile).not.toHaveBeenCalled()
     expect(mocks.sendReply).not.toHaveBeenCalled()
     expect(mocks.insertOperatorMessage).not.toHaveBeenCalled()
+  })
+})
+
+/** A webhook-triggered deployed run: the shape an escalation workflow runs under. */
+const WORKFLOW_PRINCIPAL: WorkflowExecutionDelegatedPrincipal = {
+  kind: 'delegated',
+  serviceId: 'executor',
+  workspaceId: 'ws-1',
+  delegationId: 'delegation-1',
+  audience: 'sim:inbox',
+  issuedAt: new Date(Date.now() - 1_000),
+  expiresAt: new Date(Date.now() + 60_000),
+  delegationContext: {
+    kind: 'workflow_execution',
+    workflowId: 'wf-escalate',
+    executionId: 'execution-1',
+    principal: {
+      kind: 'system',
+      serviceId: 'webhook',
+      workspaceId: 'ws-1',
+      workflowId: 'wf-escalate',
+      webhookId: 'wh-1',
+      provider: 'telegram',
+    },
+    currentWorkflow: {
+      workflowId: 'wf-escalate',
+      mode: 'deployment',
+      deploymentVersionId: 'deployment-1',
+    },
+  },
+}
+
+describe('Inbox AI switch from a workflow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.resolveContext.mockImplementation(async (workspaceId: string) => ({
+      workspaceId,
+      workspaceOrganizationId: null,
+      allowPersonalApiKeys: true,
+    }))
+    mocks.resolvePermission.mockResolvedValue('write')
+    mocks.findConversationByChat.mockResolvedValue(conversation)
+  })
+
+  it('turns AI off for the chat in the run workspace, notifies, and audits', async () => {
+    mocks.updateConversation.mockResolvedValue({ ...conversation, aiEnabled: false })
+    const result = await setInboxAiForChatOperation.execute({
+      principal: WORKFLOW_PRINCIPAL,
+      input: {
+        workspaceId: 'ws-1',
+        channel: 'telegram',
+        externalChatId: ' 555 ',
+        aiEnabled: false,
+      },
+    })
+
+    expect(mocks.findConversationByChat).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      channel: 'telegram',
+      externalChatId: '555',
+    })
+    expect(mocks.updateConversation).toHaveBeenCalledWith('conv-1', { aiEnabled: false })
+    expect(mocks.notifyInbox).toHaveBeenCalledWith('ws-1')
+    expect(result.conversation?.aiEnabled).toBe(false)
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'ws-1',
+        action: 'INBOX_CONVERSATION_UPDATED',
+        resourceId: 'conv-1',
+        description: 'Turned off AI replies for Aziz',
+      })
+    )
+  })
+
+  it('turns AI back on', async () => {
+    mocks.findConversationByChat.mockResolvedValue({ ...conversation, aiEnabled: false })
+    mocks.updateConversation.mockResolvedValue({ ...conversation, aiEnabled: true })
+    const result = await setInboxAiForChatOperation.execute({
+      principal: WORKFLOW_PRINCIPAL,
+      input: { workspaceId: 'ws-1', channel: 'telegram', externalChatId: '555', aiEnabled: true },
+    })
+
+    expect(mocks.updateConversation).toHaveBeenCalledWith('conv-1', { aiEnabled: true })
+    expect(result.conversation?.aiEnabled).toBe(true)
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ description: 'Turned on AI replies for Aziz' })
+    )
+  })
+
+  it('does not audit a switch that changes nothing', async () => {
+    mocks.updateConversation.mockResolvedValue(conversation)
+    await setInboxAiForChatOperation.execute({
+      principal: WORKFLOW_PRINCIPAL,
+      input: { workspaceId: 'ws-1', channel: 'telegram', externalChatId: '555', aiEnabled: true },
+    })
+    expect(mocks.notifyInbox).toHaveBeenCalledWith('ws-1')
+    expect(mocks.recordAudit).not.toHaveBeenCalled()
+  })
+
+  it('reports an unknown chat as not found without writing anything', async () => {
+    mocks.findConversationByChat.mockResolvedValue(null)
+    const result = await setInboxAiForChatOperation.execute({
+      principal: WORKFLOW_PRINCIPAL,
+      input: { workspaceId: 'ws-1', channel: 'telegram', externalChatId: '999', aiEnabled: false },
+    })
+
+    expect(result).toEqual({ conversation: null, previousAiEnabled: null })
+    expect(mocks.updateConversation).not.toHaveBeenCalled()
+    expect(mocks.notifyInbox).not.toHaveBeenCalled()
+    expect(mocks.recordAudit).not.toHaveBeenCalled()
+  })
+
+  it('matches WhatsApp numbers as digits and narrows to the given account', async () => {
+    mocks.updateConversation.mockResolvedValue({ ...conversation, aiEnabled: false })
+    await setInboxAiForChatOperation.execute({
+      principal: WORKFLOW_PRINCIPAL,
+      input: {
+        workspaceId: 'ws-1',
+        channel: 'whatsapp',
+        externalChatId: '+998 90 123-45-67',
+        accountId: ' 10987 ',
+        aiEnabled: false,
+      },
+    })
+    expect(mocks.findConversationByChat).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      channel: 'whatsapp',
+      externalChatId: '998901234567',
+      accountId: '10987',
+    })
+  })
+
+  it('refuses a conversation lookup in another workspace than the run', async () => {
+    await expect(
+      setInboxAiForChatOperation.execute({
+        principal: WORKFLOW_PRINCIPAL,
+        input: {
+          workspaceId: 'ws-2',
+          channel: 'telegram',
+          externalChatId: '555',
+          aiEnabled: false,
+        },
+      })
+    ).rejects.toThrow()
+    expect(mocks.findConversationByChat).not.toHaveBeenCalled()
+    expect(mocks.updateConversation).not.toHaveBeenCalled()
+  })
+
+  it('refuses a delegation minted for another audience', async () => {
+    await expect(
+      setInboxAiForChatOperation.execute({
+        principal: { ...WORKFLOW_PRINCIPAL, audience: 'sim:memory' },
+        input: {
+          workspaceId: 'ws-1',
+          channel: 'telegram',
+          externalChatId: '555',
+          aiEnabled: false,
+        },
+      })
+    ).rejects.toThrow()
+    expect(mocks.findConversationByChat).not.toHaveBeenCalled()
+  })
+
+  it('refuses a manual run by a member who cannot write', async () => {
+    mocks.resolvePermission.mockResolvedValue('read')
+    await expect(
+      setInboxAiForChatOperation.execute({
+        principal: {
+          ...WORKFLOW_PRINCIPAL,
+          subjectUserId: 'member-1',
+          delegationContext: { kind: 'workflow_execution', workflowId: 'wf-escalate' },
+        },
+        input: {
+          workspaceId: 'ws-1',
+          channel: 'telegram',
+          externalChatId: '555',
+          aiEnabled: false,
+        },
+      })
+    ).rejects.toThrow()
+    expect(mocks.updateConversation).not.toHaveBeenCalled()
+  })
+
+  it('is not reachable with an operator session', async () => {
+    await expect(
+      setInboxAiForChatOperation.execute({
+        principal: principal as never,
+        input: {
+          workspaceId: 'ws-1',
+          channel: 'telegram',
+          externalChatId: '555',
+          aiEnabled: false,
+        },
+      })
+    ).rejects.toThrow()
+    expect(mocks.findConversationByChat).not.toHaveBeenCalled()
   })
 })

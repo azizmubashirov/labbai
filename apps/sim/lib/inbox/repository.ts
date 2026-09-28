@@ -75,6 +75,33 @@ export async function getInboxConversation(
 }
 
 /**
+ * The conversation a customer chat belongs to in a workspace, or null when there is none. With
+ * `accountId` only that bot / phone number / Instagram account's thread matches; without it the
+ * most recently active thread of that chat wins (one chat can reach several accounts).
+ */
+export async function findInboxConversationByChat(params: {
+  workspaceId: string
+  channel: InboxChannel
+  externalChatId: string
+  accountId?: string
+}): Promise<InboxConversationRecord | null> {
+  const filters: SQL[] = [
+    eq(inboxConversation.workspaceId, params.workspaceId),
+    eq(inboxConversation.channel, params.channel),
+    eq(inboxConversation.externalChatId, params.externalChatId),
+  ]
+  if (params.accountId) filters.push(eq(inboxConversation.accountId, params.accountId))
+
+  const [row] = await db
+    .select()
+    .from(inboxConversation)
+    .where(and(...filters))
+    .orderBy(desc(inboxConversation.lastMessageAt), desc(inboxConversation.id))
+    .limit(1)
+  return row ?? null
+}
+
+/**
  * The most recent `limit` messages of a conversation in chronological order. With `beforeId`,
  * only messages older than that message (by time, then id, so messages sharing a timestamp are
  * never skipped) are returned, for loading earlier history.

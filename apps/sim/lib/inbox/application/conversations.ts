@@ -2,8 +2,12 @@ import { AuditAction, AuditResourceType } from '@sim/audit'
 import { createLogger } from '@sim/logger'
 import { getErrorMessage } from '@sim/utils/errors'
 import { generateId } from '@sim/utils/id'
-import { defineAuthorizedWorkspaceUseCase } from '@/lib/core/application'
+import {
+  defineAuthorizedWorkspaceUseCase,
+  type WorkspaceUseCaseAuditEntry,
+} from '@/lib/core/application'
 import { OrchestrationError } from '@/lib/core/orchestration/types'
+import { inboxDelegationPolicy } from '@/lib/inbox/application/authorization'
 import { inboxOperations } from '@/lib/inbox/application/operations'
 import {
   INBOX_ATTACHMENT_LABELS,
@@ -19,8 +23,10 @@ import {
   publicInboxOperatorFileUrl,
   storeInboxOperatorFile,
 } from '@/lib/inbox/operator-media'
+import { normalizeWhatsAppNumber } from '@/lib/inbox/outbound'
 import {
   countUnreadInboxConversations,
+  findInboxConversationByChat,
   getInboxConversation,
   getInboxMessageAttachments,
   type InboxConversationRecord,
@@ -82,6 +88,17 @@ export interface InboxReplyAttachmentInput {
   voice?: boolean
 }
 
+/** A workflow's AI switch for one customer chat, addressed the way its channel trigger sees it. */
+export interface SetInboxAiForChatInput {
+  workspaceId: string
+  channel: InboxChannel
+  /** Customer address on the channel: Telegram chat id, WhatsApp number, Instagram IGSID. */
+  externalChatId: string
+  /** Bot id / phone number id / Instagram account id, when several accounts share the chat. */
+  accountId?: string
+  aiEnabled: boolean
+}
+
 export interface ReplyToInboxConversationInput {
   workspaceId: string
   conversationId: string
@@ -104,6 +121,24 @@ async function requireConversation(
 
 function describeConversation(conversation: InboxConversationRecord): string {
   return conversation.contactName ?? conversation.contactHandle ?? conversation.externalChatId
+}
+
+/** An AI switch is audited only when it changes the conversation; a repeated switch is not. */
+function aiToggleAudit(
+  conversation: InboxConversationRecord,
+  aiEnabled: boolean | undefined,
+  previousAiEnabled: boolean
+): WorkspaceUseCaseAuditEntry[] {
+  if (aiEnabled === undefined || aiEnabled === previousAiEnabled) return []
+  return [
+    {
+      action: AuditAction.INBOX_CONVERSATION_UPDATED,
+      resourceType: AuditResourceType.INBOX_CONVERSATION,
+      resourceId: conversation.id,
+      resourceName: describeConversation(conversation),
+      description: `${aiEnabled ? 'Turned on' : 'Turned off'} AI replies for ${describeConversation(conversation)}`,
+    },
+  ]
 }
 
 /**
@@ -223,14 +258,47 @@ export const updateInboxConversationOperation = defineAuthorizedWorkspaceUseCase
   },
   /** Only an AI toggle is a semantic change worth auditing; marking read is not. */
   projectAudit({ input, result }) {
-    if (input.aiEnabled === undefined || input.aiEnabled === result.previousAiEnabled) return []
-    return {
-      action: AuditAction.INBOX_CONVERSATION_UPDATED,
-      resourceType: AuditResourceType.INBOX_CONVERSATION,
-      resourceId: result.conversation.id,
-      resourceName: describeConversation(result.conversation),
-      description: `${input.aiEnabled ? 'Turned on' : 'Turned off'} AI replies for ${describeConversation(result.conversation)}`,
-    }
+    return aiToggleAudit(result.conversation, input.aiEnabled, result.previousAiEnabled)
+  },
+})
+
+/**
+ * The workflow equivalent of the operator's AI switch (the Inbox block): finds the customer's
+ * conversation in the run's own workspace by channel chat id and turns AI replies on or off,
+ * with the same write, realtime notify and audit as the switch. A chat with no conversation is
+ * not an error — the result says so and the workflow carries on.
+ */
+export const setInboxAiForChatOperation = defineAuthorizedWorkspaceUseCase({
+  operation: inboxOperations.setAiForChat,
+  resolveContext: (args: { input: SetInboxAiForChatInput }) => resolveInboxContext(args),
+  authorizationOptions: { delegation: inboxDelegationPolicy },
+  async execute({ input, context }): Promise<{
+    conversation: InboxConversationRecord | null
+    previousAiEnabled: boolean | null
+  }> {
+    const externalChatId =
+      input.channel === 'whatsapp'
+        ? normalizeWhatsAppNumber(input.externalChatId)
+        : input.externalChatId.trim()
+    const accountId = input.accountId?.trim()
+    if (!externalChatId) return { conversation: null, previousAiEnabled: null }
+
+    const existing = await findInboxConversationByChat({
+      workspaceId: context.workspaceId,
+      channel: input.channel,
+      externalChatId,
+      ...(accountId ? { accountId } : {}),
+    })
+    if (!existing) return { conversation: null, previousAiEnabled: null }
+
+    const conversation = await updateInboxConversation(existing.id, { aiEnabled: input.aiEnabled })
+    if (!conversation) return { conversation: null, previousAiEnabled: null }
+    await notifyWorkspaceInboxChanged(conversation.workspaceId)
+    return { conversation, previousAiEnabled: existing.aiEnabled }
+  },
+  projectAudit({ input, result }) {
+    if (!result.conversation || result.previousAiEnabled === null) return []
+    return aiToggleAudit(result.conversation, input.aiEnabled, result.previousAiEnabled)
   },
 })
 

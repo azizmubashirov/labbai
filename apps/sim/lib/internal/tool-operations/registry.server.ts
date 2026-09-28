@@ -200,6 +200,8 @@ const PIPEDRIVE_TOOL_IDS = ['pipedrive_get_files'] as const
 
 const MEMORY_TOOL_IDS = ['memory_add', 'memory_delete', 'memory_get', 'memory_get_all'] as const
 
+const INBOX_TOOL_IDS = ['inbox_set_ai'] as const
+
 const LOG_TOOL_IDS = [
   'logs_get_execution',
   'logs_get',
@@ -306,6 +308,9 @@ registerFamily(handlerLoaders, PIPEDRIVE_TOOL_IDS, async () => {
 })
 registerFamily(handlerLoaders, MEMORY_TOOL_IDS, async () => {
   return (await import('@/lib/internal/memory/execute-tool')).executeMemoryTool
+})
+registerFamily(handlerLoaders, INBOX_TOOL_IDS, async () => {
+  return (await import('@/lib/internal/inbox/execute-tool')).executeInboxTool
 })
 registerFamily(handlerLoaders, LOG_TOOL_IDS, async () => {
   return (await import('@/lib/internal/logs/execute-tool')).executeLogsTool

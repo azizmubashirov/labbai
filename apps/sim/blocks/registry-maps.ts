@@ -39,6 +39,7 @@ import { HubSpotBlock, HubSpotBlockMeta } from '@/blocks/blocks/hubspot'
 import { HumanInTheLoopBlock, HumanInTheLoopV2Block } from '@/blocks/blocks/human_in_the_loop'
 import { ImageGeneratorBlock, ImageGeneratorV2Block } from '@/blocks/blocks/image_generator'
 import { ImapBlock, ImapBlockMeta } from '@/blocks/blocks/imap'
+import { InboxBlock } from '@/blocks/blocks/inbox'
 import { InputTriggerBlock } from '@/blocks/blocks/input_trigger'
 import { InstagramBlock, InstagramBlockMeta } from '@/blocks/blocks/instagram'
 import { KnowledgeBlock } from '@/blocks/blocks/knowledge'
@@ -131,6 +132,7 @@ export const BLOCK_REGISTRY: Record<string, BlockConfig> = {
   image_generator: ImageGeneratorBlock,
   image_generator_v2: ImageGeneratorV2Block,
   imap: ImapBlock,
+  inbox: InboxBlock,
   input_trigger: InputTriggerBlock,
   instagram: InstagramBlock,
   knowledge: KnowledgeBlock,
