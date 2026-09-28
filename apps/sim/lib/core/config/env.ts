@@ -199,6 +199,10 @@ export const env = createEnv({
     GMAIL_SENDER:                          z.string().min(1).optional(),           // Google Workspace user the Gmail service account impersonates when sending (e.g., noreply@yourdomain.com)
 
     // SMS & Messaging
+    NOTIFICATION_BOT_TOKEN:                z.string().min(1).optional(),           // Labbai: platform Telegram bot that sends operator alerts for every workspace; notifications are off when unset
+    NOTIFICATION_BOT_USERNAME:             z.string().min(1).optional(),           // Labbai: that bot's @username (without @), used for the t.me connect links
+    NOTIFICATION_BOT_WEBHOOK_SECRET:       z.string().min(1).optional(),           // Labbai: secret in the bot webhook URL and Telegram's secret_token header (A-Z a-z 0-9 _ -)
+    NOTIFICATION_MODEL:                    z.string().min(1).optional(),           // Labbai: OpenAI model that judges notification triggers (default gpt-4.1-mini)
 
     // AI/LLM Provider API Keys
     OPENAI_API_KEY:                        z.string().min(1).optional(),           // Primary OpenAI API key (Labbai: the platform key for every LLM call)

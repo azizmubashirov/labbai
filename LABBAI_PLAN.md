@@ -83,6 +83,12 @@ Gemini / Workers AI.
   and voice messages from the reply box (7 MB per file; WhatsApp photos 5 MB; captions 1024;
   voice converted to OGG/Opus for Telegram/WhatsApp and M4A for Instagram; Instagram files need
   cloud storage so Meta can fetch a public link).
+- **Notifications** (phase 1 done 2026-09-28; see HANDOFF.md) — one platform Telegram bot
+  (`NOTIFICATION_BOT_*` env) alerts operators: recipients connect with a `t.me` link, triggers are
+  the operator's own words judged by an LLM on each Inbox customer / agent message, or workflow
+  events from the new Notify block; a trigger can pause AI (for a while or until an operator turns
+  it on) and send the customer a notice. Later: inline buttons on alerts (resume AI, snooze,
+  approve), alert history, condition drafting / dry run.
 - **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
   provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,

@@ -202,6 +202,8 @@ const MEMORY_TOOL_IDS = ['memory_add', 'memory_delete', 'memory_get', 'memory_ge
 
 const INBOX_TOOL_IDS = ['inbox_set_ai'] as const
 
+const NOTIFY_TOOL_IDS = ['notify_send'] as const
+
 const LOG_TOOL_IDS = [
   'logs_get_execution',
   'logs_get',
@@ -311,6 +313,9 @@ registerFamily(handlerLoaders, MEMORY_TOOL_IDS, async () => {
 })
 registerFamily(handlerLoaders, INBOX_TOOL_IDS, async () => {
   return (await import('@/lib/internal/inbox/execute-tool')).executeInboxTool
+})
+registerFamily(handlerLoaders, NOTIFY_TOOL_IDS, async () => {
+  return (await import('@/lib/internal/notifications/execute-tool')).executeNotifyTool
 })
 registerFamily(handlerLoaders, LOG_TOOL_IDS, async () => {
   return (await import('@/lib/internal/logs/execute-tool')).executeLogsTool

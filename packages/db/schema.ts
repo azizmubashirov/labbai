@@ -7919,6 +7919,12 @@ export const inboxConversation = pgTable(
     workflowId: text('workflow_id').references(() => workflow.id, { onDelete: 'set null' }),
     webhookId: text('webhook_id').references(() => webhook.id, { onDelete: 'set null' }),
     aiEnabled: boolean('ai_enabled').notNull().default(true),
+    /**
+     * Set with `aiEnabled` false by a temporary pause (a notification trigger): AI replies come
+     * back on by themselves once this time passes. Null while AI is on or was switched off by a
+     * person, which only a person undoes.
+     */
+    aiPausedUntil: timestamp('ai_paused_until'),
     unreadCount: integer('unread_count').notNull().default(0),
     lastMessagePreview: text('last_message_preview'),
     lastMessageAt: timestamp('last_message_at').notNull().defaultNow(),
@@ -7986,5 +7992,149 @@ export const inboxMessage = pgTable(
     externalMessageUnique: uniqueIndex('inbox_message_external_unique')
       .on(table.conversationId, table.author, table.externalMessageId)
       .where(sql`${table.externalMessageId} IS NOT NULL`),
+  })
+)
+
+/** Which messages a notification trigger judges: the customer's, the agent's, or a workflow event. */
+export const notificationTriggerDirectionEnum = pgEnum('notification_trigger_direction', [
+  'inbound',
+  'outbound',
+  'event',
+])
+
+/** What a fired trigger does to the AI of the conversation it fired in. */
+export const notificationPauseModeEnum = pgEnum('notification_pause_mode', [
+  'none',
+  'temporary',
+  'hard',
+])
+
+/** Delivery state of one fired notification. */
+export const notificationEventStatusEnum = pgEnum('notification_event_status', [
+  'pending',
+  'sent',
+  'failed',
+])
+
+/**
+ * A Telegram chat (a person or a group) that receives a workspace's alerts from the platform
+ * notification bot. Created unconnected; `/start notify_<connectToken>` in the bot fills
+ * `chatId` and marks it verified.
+ */
+export const notificationRecipient = pgTable(
+  'notification_recipient',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    /** Only this workflow's conversations alert this chat; null = every workflow of the workspace. */
+    workflowId: text('workflow_id').references(() => workflow.id, { onDelete: 'cascade' }),
+    title: text('title').notNull().default(''),
+    /** Telegram chat id, filled when the chat opens the connect link. */
+    chatId: text('chat_id'),
+    /** Secret part of the `t.me/<bot>?start=notify_<token>` connect link. */
+    connectToken: text('connect_token').notNull(),
+    isVerified: boolean('is_verified').notNull().default(false),
+    isActive: boolean('is_active').notNull().default(true),
+    connectedAt: timestamp('connected_at'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    connectTokenUnique: uniqueIndex('notification_recipient_connect_token_unique').on(
+      table.connectToken
+    ),
+    workspaceActiveIdx: index('notification_recipient_workspace_active_idx').on(
+      table.workspaceId,
+      table.isActive
+    ),
+    chatIdx: index('notification_recipient_chat_idx').on(table.chatId),
+  })
+)
+
+/**
+ * One operator-written alert rule. `inbound`/`outbound` triggers are judged by an LLM against
+ * each customer / agent message in the Inbox; `event` triggers fire when a workflow's Notify
+ * block reports `eventKey`.
+ */
+export const notificationTrigger = pgTable(
+  'notification_trigger',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    /** Only conversations of this workflow; null = every workflow of the workspace. */
+    workflowId: text('workflow_id').references(() => workflow.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    direction: notificationTriggerDirectionEnum('direction').notNull().default('inbound'),
+    /** The rule in the operator's own words; empty for `event` triggers. */
+    condition: text('condition').notNull().default(''),
+    eventKey: text('event_key'),
+    /** Details the judge should pull out of the conversation when the rule fires. */
+    extractSpec: text('extract_spec').notNull().default(''),
+    pauseMode: notificationPauseModeEnum('pause_mode').notNull().default('none'),
+    pauseMinutes: integer('pause_minutes').notNull().default(15),
+    autoResume: boolean('auto_resume').notNull().default(true),
+    /** Sent to the customer when the trigger pauses the AI; empty = nothing is sent. */
+    pauseNotice: text('pause_notice').notNull().default(''),
+    /** No repeat alert from this trigger in the same conversation within this window. */
+    cooldownMinutes: integer('cooldown_minutes').notNull().default(60),
+    oncePerConversation: boolean('once_per_conversation').notNull().default(false),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    workspaceActiveDirectionIdx: index('notification_trigger_workspace_active_direction_idx').on(
+      table.workspaceId,
+      table.isActive,
+      table.direction
+    ),
+  })
+)
+
+/**
+ * One fired notification: the audit trail, and what cooldown and once-per-conversation are
+ * checked against. The row is written before delivery, so a failed send still counts.
+ */
+export const notificationEvent = pgTable(
+  'notification_event',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    /** Null for a free-form message from a workflow's Notify block. */
+    triggerId: text('trigger_id').references(() => notificationTrigger.id, {
+      onDelete: 'cascade',
+    }),
+    conversationId: text('conversation_id').references(() => inboxConversation.id, {
+      onDelete: 'cascade',
+    }),
+    messageId: text('message_id').references(() => inboxMessage.id, { onDelete: 'set null' }),
+    eventKey: text('event_key'),
+    reason: text('reason').notNull().default(''),
+    /** Details extracted by the judge or passed by the workflow, as flat key/value pairs. */
+    payload: jsonb('payload').$type<Record<string, string>>().notNull().default({}),
+    status: notificationEventStatusEnum('status').notNull().default('pending'),
+    recipientCount: integer('recipient_count').notNull().default(0),
+    deliveredCount: integer('delivered_count').notNull().default(0),
+    error: text('error'),
+    firedAt: timestamp('fired_at').notNull().defaultNow(),
+    deliveredAt: timestamp('delivered_at'),
+  },
+  (table) => ({
+    triggerConversationFiredIdx: index('notification_event_trigger_conversation_fired_idx').on(
+      table.triggerId,
+      table.conversationId,
+      table.firedAt
+    ),
+    workspaceFiredIdx: index('notification_event_workspace_fired_idx').on(
+      table.workspaceId,
+      table.firedAt
+    ),
   })
 )

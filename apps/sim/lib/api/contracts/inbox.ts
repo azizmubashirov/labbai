@@ -46,6 +46,8 @@ export const inboxConversationSchema = z.object({
   contactHandle: z.string().nullable(),
   workflowId: z.string().nullable(),
   aiEnabled: z.boolean(),
+  /** Set while a notification trigger has paused AI; it comes back on by itself at this time. */
+  aiPausedUntil: z.coerce.date().nullable().optional(),
   unreadCount: z.number().int(),
   lastMessagePreview: z.string().nullable(),
   lastMessageAt: z.coerce.date(),

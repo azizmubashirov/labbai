@@ -29,6 +29,7 @@ export interface EnvFlagsMockState {
   isOrganizationsEnabled: boolean
   isScimEnabled: boolean
   isAuditLogsEnabled: boolean
+  isNotificationBotConfigured: boolean
   isRemoteSandboxEnabled: boolean
   isMothershipSandboxEnabled: boolean
   isDocSandboxEnabled: boolean
@@ -67,6 +68,7 @@ const defaultEnvFlagsState: EnvFlagsMockState = {
   isOrganizationsEnabled: true,
   isScimEnabled: true,
   isAuditLogsEnabled: true,
+  isNotificationBotConfigured: false,
   isRemoteSandboxEnabled: false,
   isMothershipSandboxEnabled: false,
   isDocSandboxEnabled: false,

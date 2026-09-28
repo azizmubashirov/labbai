@@ -135,6 +135,12 @@ export function SettingsSidebar({
       if (item.requiresSelfHosted && hosted) {
         return false
       }
+      if (
+        item.requiresDeploymentFeature &&
+        deployment.features[item.requiresDeploymentFeature] !== true
+      ) {
+        return false
+      }
 
       if (item.hideForEnterprise && isEnterprisePlan) {
         return false

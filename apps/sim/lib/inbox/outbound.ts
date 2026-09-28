@@ -7,6 +7,7 @@ import { toRecord } from '@sim/utils/object'
 import { and, desc, eq } from 'drizzle-orm'
 import { type InboxChannel, telegramBotIdFromToken } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
+import { scheduleInboxNotificationChecks } from '@/lib/notifications/hooks'
 import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 
 const logger = createLogger('InboxOutbound')
@@ -83,11 +84,12 @@ export function parseOutboundToolMessage(
 /**
  * Appends a message the AI agent sent to the matching Inbox conversation. Only threads a customer
  * started are tracked, so a message to an unknown chat is ignored rather than opening a thread.
+ * Returns the stored message, or null when nothing was stored (unknown chat or a repeat).
  */
 export async function recordAgentOutboundMessage(
   workspaceId: string,
   message: OutboundInboxMessage
-): Promise<void> {
+): Promise<{ conversationId: string; messageId: string } | null> {
   const candidates = await db
     .select({ id: inboxConversation.id, accountId: inboxConversation.accountId })
     .from(inboxConversation)
@@ -103,14 +105,15 @@ export async function recordAgentOutboundMessage(
 
   const conversation =
     candidates.find((candidate) => candidate.accountId === message.accountId) ?? candidates[0]
-  if (!conversation) return
+  if (!conversation) return null
 
   const sentAt = new Date()
+  const messageId = generateId()
   const recorded = await db.transaction(async (tx) => {
     const inserted = await tx
       .insert(inboxMessage)
       .values({
-        id: generateId(),
+        id: messageId,
         conversationId: conversation.id,
         workspaceId,
         author: 'agent',
@@ -128,7 +131,9 @@ export async function recordAgentOutboundMessage(
       .where(eq(inboxConversation.id, conversation.id))
     return true
   })
-  if (recorded) await notifyWorkspaceInboxChanged(workspaceId)
+  if (!recorded) return null
+  await notifyWorkspaceInboxChanged(workspaceId)
+  return { conversationId: conversation.id, messageId }
 }
 
 /**
@@ -145,7 +150,19 @@ export async function captureAgentToolSend(params: {
   if (!params.workspaceId || !params.executionId) return
   try {
     const message = parseOutboundToolMessage(params.toolId, params.toolParams, params.output)
-    if (message) await recordAgentOutboundMessage(params.workspaceId, message)
+    if (!message) return
+    const stored = await recordAgentOutboundMessage(params.workspaceId, message)
+    if (stored) {
+      scheduleInboxNotificationChecks([
+        {
+          workspaceId: params.workspaceId,
+          conversationId: stored.conversationId,
+          messageId: stored.messageId,
+          text: message.text,
+          direction: 'outbound',
+        },
+      ])
+    }
   } catch (error) {
     logger.error('Failed to record agent message in Inbox', { toolId: params.toolId, error })
   }

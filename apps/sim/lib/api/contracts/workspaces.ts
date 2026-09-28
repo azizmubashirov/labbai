@@ -238,6 +238,11 @@ export const deploymentFeaturesSchema = z.object({
   accessControl: z.boolean(),
   auditLogs: z.boolean(),
   scim: z.boolean(),
+  /**
+   * Labbai operator notifications (the platform Telegram bot is configured). Optional for
+   * rolling compatibility with app versions that predate the flag; absent reads as off.
+   */
+  notifications: z.boolean().optional(),
 })
 
 export type DeploymentFeatures = z.output<typeof deploymentFeaturesSchema>

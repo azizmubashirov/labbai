@@ -30,6 +30,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | Branding, part 1: name, text logo, favicons, email header, copy, agent identity | done (see below) |
 | Branding, part 2: UZ/RU interface (i18n) + real logo | todo — owner: at the very end |
 | Inbox (customer conversations from Telegram / WhatsApp / Instagram) | done (see below) |
+| Notifications (operator alerts via one platform Telegram bot) | phase 1 done (see below); alert buttons later |
 
 LICENSE RULE (critical): `apps/sim/ee` was under the Sim Enterprise License. Never read,
 copy or restore `ee` source from git history. Requirements come only from Apache code.
@@ -208,6 +209,77 @@ Telegram, then turns AI off so the agent stops replying and the operator takes o
 - `tools/generated/tool-{ids,metadata,outputs}.ts` were updated by hand with a script that
   mirrors `scripts/sync-tool-metadata.ts` (pure insertion of `inbox_set_ai`); run
   `bun run tool-metadata:check` when bun is available.
+
+### Notifications — operator alerts on Telegram (2026-09-28, phase 1)
+
+Port of Mehmon's notifications module as a platform feature. One platform Telegram bot sends
+alerts for every workspace; workspace owners never see its token. Written without local builds:
+verify with CI (tsc + vitest) and a real bot before relying on it. Inline buttons on alerts
+(resume / snooze / approve) are **phase 2, not built**.
+
+- Env (server only, `lib/core/config/env.ts`, `.env.example`): `NOTIFICATION_BOT_TOKEN`,
+  `NOTIFICATION_BOT_USERNAME` (without @), `NOTIFICATION_BOT_WEBHOOK_SECRET` (A-Z a-z 0-9 _ -,
+  e.g. `openssl rand -hex 24`), optional `NOTIFICATION_MODEL` (default `gpt-4.1-mini`, judged on
+  the platform `OPENAI_API_KEY` / `OPENAI_BASE_URL`). Token + username unset → the feature is off:
+  the settings section is hidden (deployment feature `notifications`), every hook returns before
+  touching the DB or the model, the Notify block fails with a clear error.
+- Register the webhook once per deployment (and whenever the URL or secret changes), from
+  `apps/sim` with the deployment's env: `bun run scripts/set-notification-webhook.ts`
+  (`--check` only diagnoses: token owner vs username, registered URL, Telegram's last delivery
+  error; `--url https://studio.labbai.uz` overrides `NEXT_PUBLIC_APP_URL`). Without bun:
+  `curl -X POST https://api.telegram.org/bot$NOTIFICATION_BOT_TOKEN/setWebhook -d url=https://studio.labbai.uz/api/notifications/telegram/$NOTIFICATION_BOT_WEBHOOK_SECRET -d secret_token=$NOTIFICATION_BOT_WEBHOOK_SECRET`.
+  The URL must be public https (the prod tunnel already routes `studio.labbai.uz`).
+- Bot (`lib/notifications/bot.ts`, route `app/api/notifications/telegram/[secret]`): the path
+  secret must match (else 404) and Telegram's `X-Telegram-Bot-Api-Secret-Token`, when sent, too
+  (else 403). `/start notify_<token>` connects that chat (private or group, `/start@bot` works) to
+  the recipient row; bare `/start` → welcome; `/stop` → deactivates that chat's recipients.
+  Replies are Uzbek and say "Labbai". It never runs an agent or touches a conversation.
+- Data (migration `0383_labbai_notifications`, additive): `notification_recipient` (workspace,
+  optional workflow, title, chat_id, connect_token, verified/active, connected_at),
+  `notification_trigger` (name, direction inbound|outbound|event, condition, event_key,
+  extract_spec, pause_mode none|temporary|hard, pause_minutes, auto_resume, pause_notice,
+  cooldown_minutes, once_per_conversation, is_active, optional workflow), `notification_event`
+  (audit + dedup source of truth; written before delivery so a failed send still counts), and
+  `inbox_conversation.ai_paused_until`.
+- Evaluation (`lib/notifications/{hooks,service,evaluator}.ts`): after each customer message
+  recorded by `lib/inbox/webhook.ts` (inbound) and each agent send recorded by
+  `lib/inbox/outbound.ts` (outbound), the workspace's active triggers of that direction (and of the
+  conversation's workflow or all workflows) are judged in the background — fire-and-forget, errors
+  logged, never blocking or failing delivery. Triggers already spent (once-per-conversation or
+  inside the cooldown) are dropped before the model call; one JSON call (Mehmon's prompt, English)
+  judges all remaining triggers and extracts the requested details; malformed output = no alert.
+  The judge's cost goes to the usage ledger (source `workflow`, the conversation's workflow owner).
+- On fire: an HTML alert (title, customer, channel, reason, details, pause line, "Chatni ochish"
+  link to the Inbox thread) to every verified active recipient of the workspace (workflow-scoped
+  recipients only for their workflow). Pause: `hard` (or `temporary` without auto-resume) = AI off
+  until an operator turns it on; `temporary` = `ai_enabled=false` + `ai_paused_until`, AI answers
+  again by itself after it (checked by the inbound AI-off gate; reads settle an expired pause, the
+  thread header shows "AI paused until HH:mm"; any operator toggle clears it; never shortens a
+  longer pause, never puts a clock on AI a person switched off). The first pausing trigger also
+  sends its `pause_notice` to the customer through the Inbox reply path (as the workflow owner)
+  and stores it as an agent message.
+- Limit of fire-and-forget: the pause lands a moment after the message, so the agent run already
+  queued for that same message still answers; the next messages are gated (like the Inbox block).
+  The pause notice can therefore follow the agent's reply. Two messages judged at the same moment
+  can both fire before either event row exists (no lock, as in Mehmon).
+- Notify block (`blocks/blocks/notify.ts`, tool `notify_send`, `tools/notify/*`,
+  `lib/internal/notifications/execute-tool.ts`, use case `notifications.workflow.notify`,
+  delegation audience `sim:notifications`): Operation `Fire event` (Event: operator_handoff |
+  booking_link_sent | payment_receipt; Message = optional reason) or `Send message` (Message
+  required); Channel, Customer Chat ID (required for events, optional for messages), advanced
+  Account ID. The conversation is resolved like the Inbox block, only inside the run's workspace.
+  Outputs `found`, `conversationId`, `fired`, `delivered`, `paused`. An event only alerts when an
+  event trigger watches it (no trigger → `fired = 0`). Generated tool files updated by hand (pure
+  insertion of `notify_send`); run `bun run tool-metadata:check` when bun is available.
+- UI: Settings → Notifications (workspace group; admin-only, reads included, since a connect link
+  lets whoever opens it receive alerts): "Connect Telegram" creates a recipient and shows the
+  `t.me/<bot>?start=notify_<token>` link plus the group command; rows show Connected / Pending /
+  Stopped, with copy link, send test message and remove; triggers list with create / edit /
+  turn on-off / delete. API: `lib/api/contracts/notifications.ts`, routes under
+  `app/api/workspaces/[id]/notifications/**`. Workflow scoping exists in the API/DB but has no UI.
+- Limits: 10 triggers and 20 recipients per workspace; only Telegram as alert channel; no alert
+  history page yet (rows are in `notification_event`); no condition drafting / dry run (Mehmon
+  phase 3) and no starter templates; alerts are not audited in the activity log.
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

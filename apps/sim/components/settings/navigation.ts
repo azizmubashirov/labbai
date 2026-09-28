@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import {
+  Bell,
   ClipboardList,
   GridOffset,
   Key,
@@ -38,6 +39,7 @@ export type WorkspaceSettingsSection =
   | 'mcp'
   | 'workflow-mcp-servers'
   | 'api-keys'
+  | 'notifications'
   | 'recently-deleted'
 
 export type SettingsSection =
@@ -69,6 +71,7 @@ export type UnifiedSettingsSection =
   | 'workflow-mcp-servers'
   | 'admin'
   | 'security'
+  | 'notifications'
   | 'recently-deleted'
 
 export type UnifiedNavigationSection = 'account' | 'workspace' | 'organization' | 'platform'
@@ -91,6 +94,11 @@ export interface UnifiedSettingsNavigationItem {
   requiresSelfHosted?: boolean
   /** See {@link SelfHostedOverride}; resolved against the deployment shape at filter time. */
   selfHostedOverride?: SelfHostedOverride
+  /**
+   * The section exists only while the deployment offers this feature (hosted or not), e.g.
+   * Notifications need the platform notification bot configured on the server.
+   */
+  requiresDeploymentFeature?: keyof DeploymentFeatures
   requiresSuperUser?: boolean
   requiresAdminRole?: boolean
   allowNonOrgAdmin?: boolean
@@ -162,7 +170,7 @@ export function isSelfHostedOverrideEnabled(
   deployment: DeploymentShape
 ): boolean {
   if (override === undefined || deployment.hosted) return false
-  return override === 'always' || deployment.features[override]
+  return override === 'always' || deployment.features[override] === true
 }
 
 type SettingsHrefSearchParams = Pick<URLSearchParams, 'toString'>
@@ -414,6 +422,20 @@ export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRegistryEntry[] 
     },
     planes: {
       workspace: { id: 'workflow-mcp-servers', group: 'tools', order: 6 },
+    },
+  },
+  {
+    label: 'Notifications',
+    icon: Bell,
+    unified: {
+      id: 'notifications',
+      description: 'Get Telegram alerts when a conversation needs you.',
+      group: 'workspace',
+      order: 9,
+      requiresDeploymentFeature: 'notifications',
+    },
+    planes: {
+      workspace: { id: 'notifications', group: 'workspace', order: 2 },
     },
   },
   {
@@ -679,6 +701,12 @@ function isWorkspaceSectionOfferedByDeployment(
 ): boolean {
   const unified = WORKSPACE_UNIFIED_PROJECTIONS[section]
   if (!unified) return true
+  if (
+    unified.requiresDeploymentFeature &&
+    deployment.features[unified.requiresDeploymentFeature] !== true
+  ) {
+    return false
+  }
   if (unified.requiresSelfHosted && deployment.hosted) return false
   if (unified.requiresHosted && !deployment.hosted) {
     return isSelfHostedOverrideEnabled(unified.selfHostedOverride, deployment)
@@ -700,6 +728,7 @@ const WORKSPACE_MUTATION_PERMISSION: Record<WorkspaceSettingsSection, Permission
   mcp: 'write',
   'workflow-mcp-servers': 'write',
   'api-keys': 'admin',
+  notifications: 'admin',
   'recently-deleted': 'write',
 }
 

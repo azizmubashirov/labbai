@@ -223,6 +223,16 @@ export const isAuditLogsEnabled = true as boolean
 /** SCIM 2.0 directory provisioning. */
 export const isScimEnabled = true as boolean
 
+/**
+ * Labbai operator notifications: on when the platform notification bot is configured
+ * (`NOTIFICATION_BOT_TOKEN` + `NOTIFICATION_BOT_USERNAME`). Server-only variables, so this is
+ * always false in the browser; workspace surfaces read it from the server-resolved deployment
+ * shape instead.
+ */
+export const isNotificationBotConfigured = Boolean(
+  env.NOTIFICATION_BOT_TOKEN?.trim() && env.NOTIFICATION_BOT_USERNAME?.trim()
+)
+
 /** Organizations (members + roles) are part of the product. */
 export const isOrganizationsEnabled = true as boolean
 

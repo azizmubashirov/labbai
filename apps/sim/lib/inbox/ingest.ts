@@ -3,6 +3,7 @@ import { inboxConversation, inboxMessage } from '@sim/db/schema'
 import { generateId } from '@sim/utils/id'
 import { truncateAtCodePoint } from '@sim/utils/string'
 import { eq, sql } from 'drizzle-orm'
+import { isInboxAiActive } from '@/lib/inbox/ai-pause'
 import { inboxMessageSummary } from '@/lib/inbox/attachments'
 import type { InboundInboxMessage } from '@/lib/inbox/channels'
 
@@ -20,9 +21,18 @@ interface RecordInboundParams {
   messages: InboundInboxMessage[]
 }
 
+/** A customer message stored for the first time by a delivery. */
+export interface InsertedInboundMessage {
+  conversationId: string
+  messageId: string
+  text: string
+}
+
 export interface RecordInboundResult {
   /** Conversation ids the delivery touched, in message order. */
   conversationIds: string[]
+  /** The messages stored for the first time, in order; provider retries add none. */
+  inserted: InsertedInboundMessage[]
   /** Messages stored for the first time; zero when the delivery was a provider retry. */
   insertedCount: number
   /** True when every touched conversation has AI turned off, so the agent must not run. */
@@ -40,6 +50,7 @@ export async function recordInboundInboxMessages(
 ): Promise<RecordInboundResult> {
   const conversationIds: string[] = []
   const aiEnabledById = new Map<string, boolean>()
+  const insertedMessages: InsertedInboundMessage[] = []
   let insertedCount = 0
 
   for (const message of params.messages) {
@@ -73,7 +84,11 @@ export async function recordInboundInboxMessages(
             updatedAt: new Date(),
           },
         })
-        .returning({ id: inboxConversation.id, aiEnabled: inboxConversation.aiEnabled })
+        .returning({
+          id: inboxConversation.id,
+          aiEnabled: inboxConversation.aiEnabled,
+          aiPausedUntil: inboxConversation.aiPausedUntil,
+        })
 
       const inserted = await tx
         .insert(inboxMessage)
@@ -93,6 +108,11 @@ export async function recordInboundInboxMessages(
 
       if (inserted.length > 0) {
         insertedCount += 1
+        insertedMessages.push({
+          conversationId: conversation.id,
+          messageId: inserted[0].id,
+          text: message.text,
+        })
         await tx
           .update(inboxConversation)
           .set({
@@ -109,10 +129,10 @@ export async function recordInboundInboxMessages(
     })
 
     if (!aiEnabledById.has(result.id)) conversationIds.push(result.id)
-    aiEnabledById.set(result.id, result.aiEnabled)
+    aiEnabledById.set(result.id, isInboxAiActive(result))
   }
 
   const allAiDisabled =
     conversationIds.length > 0 && conversationIds.every((id) => aiEnabledById.get(id) === false)
-  return { conversationIds, insertedCount, allAiDisabled }
+  return { conversationIds, inserted: insertedMessages, insertedCount, allAiDisabled }
 }

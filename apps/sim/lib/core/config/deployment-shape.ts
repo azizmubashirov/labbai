@@ -8,6 +8,7 @@ import {
   isChatEnabled,
   isCohereConfigured,
   isHosted,
+  isNotificationBotConfigured,
   isScimEnabled,
 } from '@/lib/core/config/env-flags'
 
@@ -80,6 +81,7 @@ export function resolveDeploymentShape(): DeploymentShape {
       accessControl: isAccessControlEnabled,
       auditLogs: isAuditLogsEnabled,
       scim: isScimEnabled,
+      notifications: isNotificationBotConfigured,
     },
   }
 }

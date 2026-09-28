@@ -1,6 +1,20 @@
 import { db } from '@sim/db'
 import { inboxConversation, inboxMessage, user, webhook, workflow } from '@sim/db/schema'
-import { and, count, desc, eq, gt, ilike, inArray, isNull, or, type SQL, sql } from 'drizzle-orm'
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm'
+import { settleInboxAiPause } from '@/lib/inbox/ai-pause'
 import { type InboxAttachment, inboxMessageSummary } from '@/lib/inbox/attachments'
 import type { InboxChannel } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
@@ -51,12 +65,14 @@ export async function listInboxConversations(
     if (match) filters.push(match)
   }
 
-  return db
+  const rows = await db
     .select()
     .from(inboxConversation)
     .where(and(...filters))
     .orderBy(desc(inboxConversation.lastMessageAt), desc(inboxConversation.id))
     .limit(params.limit)
+  const now = new Date()
+  return rows.map((row) => settleInboxAiPause(row, now))
 }
 
 /** A conversation scoped to its workspace, or null when it does not exist there. */
@@ -71,7 +87,7 @@ export async function getInboxConversation(
       and(eq(inboxConversation.id, conversationId), eq(inboxConversation.workspaceId, workspaceId))
     )
     .limit(1)
-  return row ?? null
+  return row ? settleInboxAiPause(row) : null
 }
 
 /**
@@ -98,7 +114,7 @@ export async function findInboxConversationByChat(params: {
     .where(and(...filters))
     .orderBy(desc(inboxConversation.lastMessageAt), desc(inboxConversation.id))
     .limit(1)
-  return row ?? null
+  return row ? settleInboxAiPause(row) : null
 }
 
 /**
@@ -199,20 +215,115 @@ export async function setInboxContact(
     .where(eq(inboxConversation.id, conversationId))
 }
 
-/** Applies an AI toggle and/or clears the unread counter; returns the updated row. */
+/**
+ * Applies an AI toggle and/or clears the unread counter; returns the updated row. A person's
+ * toggle ends any temporary pause: their choice stands until they change it.
+ */
 export async function updateInboxConversation(
   conversationId: string,
   changes: { aiEnabled?: boolean; markRead?: boolean }
 ): Promise<InboxConversationRecord | null> {
   const set: Partial<typeof inboxConversation.$inferInsert> = { updatedAt: new Date() }
-  if (changes.aiEnabled !== undefined) set.aiEnabled = changes.aiEnabled
+  if (changes.aiEnabled !== undefined) {
+    set.aiEnabled = changes.aiEnabled
+    set.aiPausedUntil = null
+  }
   if (changes.markRead) set.unreadCount = 0
   const [row] = await db
     .update(inboxConversation)
     .set(set)
     .where(eq(inboxConversation.id, conversationId))
     .returning()
+  return row ? settleInboxAiPause(row) : null
+}
+
+/** How a notification trigger stops the agent in one conversation. */
+export type InboxAiPause = { kind: 'hard' } | { kind: 'temporary'; until: Date }
+
+/**
+ * Stops AI replies in a conversation for a notification trigger. `hard` turns AI off until a
+ * person turns it back on. `temporary` turns it off until `until`, never shortening a longer
+ * pause, and never touches a conversation a person switched off (that stays off without a
+ * clock). Returns the updated row, or null when nothing changed.
+ */
+export async function pauseInboxConversationAi(
+  conversationId: string,
+  pause: InboxAiPause
+): Promise<InboxConversationRecord | null> {
+  const now = new Date()
+  if (pause.kind === 'hard') {
+    const [row] = await db
+      .update(inboxConversation)
+      .set({ aiEnabled: false, aiPausedUntil: null, updatedAt: now })
+      .where(eq(inboxConversation.id, conversationId))
+      .returning()
+    return row ?? null
+  }
+
+  const until = sql.param(pause.until, inboxConversation.aiPausedUntil)
+  const [row] = await db
+    .update(inboxConversation)
+    .set({
+      aiEnabled: false,
+      aiPausedUntil: sql`case when ${inboxConversation.aiPausedUntil} > ${sql.param(now, inboxConversation.aiPausedUntil)} then greatest(${inboxConversation.aiPausedUntil}, ${until}) else ${until} end`,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(inboxConversation.id, conversationId),
+        or(eq(inboxConversation.aiEnabled, true), isNotNull(inboxConversation.aiPausedUntil))
+      )
+    )
+    .returning()
   return row ?? null
+}
+
+/**
+ * Stores a message the platform sent to the customer on the agent's behalf (a notification
+ * trigger's pause notice) with its delivery outcome, and refreshes the conversation preview.
+ */
+export async function insertAutomatedAgentMessage(params: {
+  id: string
+  conversationId: string
+  workspaceId: string
+  text: string
+  status: 'sent' | 'failed'
+  externalMessageId: string | null
+  error: string | null
+}): Promise<void> {
+  const sentAt = new Date()
+  await db.transaction(async (tx) => {
+    await tx.insert(inboxMessage).values({
+      id: params.id,
+      conversationId: params.conversationId,
+      workspaceId: params.workspaceId,
+      author: 'agent',
+      text: params.text,
+      status: params.status,
+      externalMessageId: params.externalMessageId,
+      error: params.error,
+      createdAt: sentAt,
+    })
+    if (params.status === 'sent') {
+      await tx
+        .update(inboxConversation)
+        .set({ lastMessageAt: sentAt, lastMessagePreview: inboxPreview(params.text) })
+        .where(eq(inboxConversation.id, params.conversationId))
+    }
+  })
+}
+
+/** The latest messages of a conversation, newest first, for a notification judge's context. */
+export async function listRecentInboxMessageTexts(
+  conversationId: string,
+  limit: number
+): Promise<Array<{ id: string; author: 'customer' | 'agent' | 'operator'; text: string }>> {
+  return db
+    .select({ id: inboxMessage.id, author: inboxMessage.author, text: inboxMessage.text })
+    .from(inboxMessage)
+    .where(eq(inboxMessage.conversationId, conversationId))
+    .orderBy(desc(inboxMessage.createdAt), desc(inboxMessage.id))
+    .limit(limit)
 }
 
 /** The webhook and workflow owner a conversation's replies are sent through. */

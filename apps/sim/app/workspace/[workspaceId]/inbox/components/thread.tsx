@@ -95,7 +95,15 @@ interface ThreadHeaderProps {
 }
 
 function ThreadHeader({ conversation, canEdit, isUpdating, onToggleAi }: ThreadHeaderProps) {
-  const subtitle = [INBOX_CHANNEL_LABELS[conversation.channel], conversation.contactHandle]
+  const pausedUntil =
+    !conversation.aiEnabled && conversation.aiPausedUntil
+      ? `AI paused until ${format(conversation.aiPausedUntil, 'HH:mm')}`
+      : null
+  const subtitle = [
+    INBOX_CHANNEL_LABELS[conversation.channel],
+    conversation.contactHandle,
+    pausedUntil,
+  ]
     .filter(Boolean)
     .join(' · ')
 

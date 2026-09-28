@@ -417,6 +417,7 @@ import {
   mysqlQueryTool,
   mysqlUpdateTool,
 } from '@/tools/mysql'
+import { notifySendTool } from '@/tools/notify'
 import {
   notionAddDatabaseRowTool,
   notionAddDatabaseRowV2Tool,
@@ -1054,6 +1055,7 @@ export const tools: Record<string, ExecutableToolConfig> = {
   memory_get_all: memoryGetAllTool,
   memory_delete: memoryDeleteTool,
   inbox_set_ai: inboxSetAiTool,
+  notify_send: notifySendTool,
   knowledge_search: knowledgeSearchTool,
   knowledge_upload_chunk: knowledgeUploadChunkTool,
   knowledge_create_document: knowledgeCreateDocumentTool,

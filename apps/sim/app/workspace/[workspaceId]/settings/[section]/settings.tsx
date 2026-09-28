@@ -39,6 +39,11 @@ const CustomTools = dynamic(() =>
 const MCP = dynamic(() =>
   import('@/app/workspace/[workspaceId]/settings/components/mcp/mcp').then((m) => m.MCP)
 )
+const Notifications = dynamic(() =>
+  import('@/app/workspace/[workspaceId]/settings/components/notifications/notifications').then(
+    (m) => m.Notifications
+  )
+)
 const RecentlyDeleted = dynamic(() =>
   import(
     '@/app/workspace/[workspaceId]/settings/components/recently-deleted/recently-deleted'
@@ -143,6 +148,7 @@ function SettingsPageContent({ section }: SettingsPageProps) {
       {effectiveSection === 'mcp' && <MCP />}
       {effectiveSection === 'custom-tools' && <CustomTools />}
       {effectiveSection === 'workflow-mcp-servers' && <WorkflowMcpServers />}
+      {effectiveSection === 'notifications' && <Notifications />}
       {effectiveSection === 'recently-deleted' && <RecentlyDeleted />}
       {effectiveSection === 'admin' && <Admin />}
     </SettingsSectionProvider>

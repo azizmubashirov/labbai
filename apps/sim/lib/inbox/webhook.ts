@@ -8,6 +8,7 @@ import {
 } from '@/lib/inbox/channels'
 import { type RecordInboundResult, recordInboundInboxMessages } from '@/lib/inbox/ingest'
 import { fillInstagramContactNames } from '@/lib/inbox/instagram-profile'
+import { scheduleInboxNotificationChecks } from '@/lib/notifications/hooks'
 import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 import { resolveEnvVarReferences } from '@/executor/utils/reference-validation'
 
@@ -63,6 +64,15 @@ export async function recordInboxWebhookDelivery(
         })
       }
       await notifyWorkspaceInboxChanged(workspaceId)
+      scheduleInboxNotificationChecks(
+        result.inserted.map((message) => ({
+          workspaceId,
+          conversationId: message.conversationId,
+          messageId: message.messageId,
+          text: message.text,
+          direction: 'inbound' as const,
+        }))
+      )
     }
     return result
   } catch (error) {
