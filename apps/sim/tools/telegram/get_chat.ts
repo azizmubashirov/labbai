@@ -4,7 +4,7 @@ import type {
   TelegramGetChatParams,
   TelegramGetChatResponse,
 } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramGetChatTool: ToolConfig<TelegramGetChatParams, TelegramGetChatResponse> = {
@@ -32,6 +32,7 @@ export const telegramGetChatTool: ToolConfig<TelegramGetChatParams, TelegramGetC
   request: {
     url: (params) => telegramApiUrl(params.botToken, 'getChat'),
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

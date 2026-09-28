@@ -4,7 +4,7 @@ import type {
   TelegramSendAudioParams,
   TelegramSendAudioResponse,
 } from '@/tools/telegram/types'
-import { convertMarkdownToHTML } from '@/tools/telegram/utils'
+import { convertMarkdownToHTML, TELEGRAM_REQUEST_RETRY } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendAudioTool: ToolConfig<TelegramSendAudioParams, TelegramSendAudioResponse> =
@@ -46,6 +46,7 @@ export const telegramSendAudioTool: ToolConfig<TelegramSendAudioParams, Telegram
       url: (params: TelegramSendAudioParams) =>
         `https://api.telegram.org/bot${params.botToken}/sendAudio`,
       method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
       headers: () => ({
         'Content-Type': 'application/json',
       }),

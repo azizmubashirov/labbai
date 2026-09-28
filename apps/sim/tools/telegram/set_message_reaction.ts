@@ -3,7 +3,7 @@ import type {
   TelegramBooleanResponse,
   TelegramSetMessageReactionParams,
 } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSetMessageReactionTool: ToolConfig<
@@ -53,6 +53,7 @@ export const telegramSetMessageReactionTool: ToolConfig<
   request: {
     url: (params) => telegramApiUrl(params.botToken, 'setMessageReaction'),
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

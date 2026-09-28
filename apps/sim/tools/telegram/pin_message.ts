@@ -1,6 +1,6 @@
 import { ErrorExtractorId } from '@/tools/error-extractors'
 import type { TelegramBooleanResponse, TelegramPinMessageParams } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramPinMessageTool: ToolConfig<TelegramPinMessageParams, TelegramBooleanResponse> =
@@ -41,6 +41,7 @@ export const telegramPinMessageTool: ToolConfig<TelegramPinMessageParams, Telegr
     request: {
       url: (params) => telegramApiUrl(params.botToken, 'pinChatMessage'),
       method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
       headers: () => ({
         'Content-Type': 'application/json',
       }),

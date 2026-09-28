@@ -3,6 +3,7 @@ import type {
   TelegramDeleteMessageParams,
   TelegramDeleteMessageResponse,
 } from '@/tools/telegram/types'
+import { TELEGRAM_REQUEST_RETRY } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramDeleteMessageTool: ToolConfig<
@@ -41,6 +42,7 @@ export const telegramDeleteMessageTool: ToolConfig<
     url: (params: TelegramDeleteMessageParams) =>
       `https://api.telegram.org/bot${params.botToken}/deleteMessage`,
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

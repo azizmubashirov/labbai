@@ -4,7 +4,7 @@ import type {
   TelegramSendMessageParams,
   TelegramSendMessageResponse,
 } from '@/tools/telegram/types'
-import { convertMarkdownToHTML } from '@/tools/telegram/utils'
+import { convertMarkdownToHTML, TELEGRAM_REQUEST_RETRY } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramMessageTool: ToolConfig<
@@ -43,6 +43,7 @@ export const telegramMessageTool: ToolConfig<
     url: (params: TelegramSendMessageParams) =>
       `https://api.telegram.org/bot${params.botToken}/sendMessage`,
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

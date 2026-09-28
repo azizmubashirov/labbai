@@ -4,7 +4,7 @@ import type {
   TelegramSendMediaResponse,
   TelegramSendVideoParams,
 } from '@/tools/telegram/types'
-import { convertMarkdownToHTML } from '@/tools/telegram/utils'
+import { convertMarkdownToHTML, TELEGRAM_REQUEST_RETRY } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendVideoTool: ToolConfig<TelegramSendVideoParams, TelegramSendMediaResponse> =
@@ -46,6 +46,7 @@ export const telegramSendVideoTool: ToolConfig<TelegramSendVideoParams, Telegram
       url: (params: TelegramSendVideoParams) =>
         `https://api.telegram.org/bot${params.botToken}/sendVideo`,
       method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
       headers: () => ({
         'Content-Type': 'application/json',
       }),

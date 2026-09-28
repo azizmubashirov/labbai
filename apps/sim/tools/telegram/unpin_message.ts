@@ -1,6 +1,6 @@
 import { ErrorExtractorId } from '@/tools/error-extractors'
 import type { TelegramBooleanResponse, TelegramUnpinMessageParams } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramUnpinMessageTool: ToolConfig<
@@ -38,6 +38,7 @@ export const telegramUnpinMessageTool: ToolConfig<
   request: {
     url: (params) => telegramApiUrl(params.botToken, 'unpinChatMessage'),
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

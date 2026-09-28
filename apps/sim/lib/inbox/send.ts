@@ -152,6 +152,32 @@ export interface InboxOutgoingMedia {
 /** Bounds one media send, including the upload of the file to the channel. */
 const MEDIA_SEND_TIMEOUT_MS = 60_000
 
+const CONNECTION_RESET_CODES: ReadonlySet<string> = new Set(['ECONNRESET', 'ETIMEDOUT', 'EPIPE'])
+const CONNECTION_RESET_ATTEMPTS = 3
+
+function isConnectionReset(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  return typeof code === 'string' && CONNECTION_RESET_CODES.has(code)
+}
+
+/**
+ * Connections to api.telegram.org are occasionally reset before a response arrives on some
+ * networks; retry those a couple of times instead of failing the operator's send.
+ */
+async function fetchRetryingConnectionResets(
+  url: string,
+  buildInit: () => RequestInit
+): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, buildInit())
+    } catch (error) {
+      if (attempt >= CONNECTION_RESET_ATTEMPTS || !isConnectionReset(error)) throw error
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt))
+    }
+  }
+}
+
 const FALLBACK_ERROR = 'The channel rejected the message.'
 
 function sent(externalMessageId: unknown): InboxSendOutcome {
@@ -200,11 +226,10 @@ async function sendTelegramMedia(
   form.append(field, fileBlob(media), media.fileName)
   if (caption) form.append('caption', caption)
 
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
-    method: 'POST',
-    body: form,
-    signal: AbortSignal.timeout(MEDIA_SEND_TIMEOUT_MS),
-  })
+  const response = await fetchRetryingConnectionResets(
+    `https://api.telegram.org/bot${botToken}/${method}`,
+    () => ({ method: 'POST', body: form, signal: AbortSignal.timeout(MEDIA_SEND_TIMEOUT_MS) })
+  )
   const data = await readJsonRecord(response)
   if (!response.ok || data.ok !== true) {
     return failed(

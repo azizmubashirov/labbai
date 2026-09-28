@@ -4,7 +4,7 @@ import type {
   TelegramMessage,
   TelegramSendMessageResponse,
 } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramForwardMessageTool: ToolConfig<
@@ -47,6 +47,7 @@ export const telegramForwardMessageTool: ToolConfig<
   request: {
     url: (params) => telegramApiUrl(params.botToken, 'forwardMessage'),
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

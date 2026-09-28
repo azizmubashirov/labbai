@@ -1,3 +1,16 @@
+import type { ToolRetryConfig } from '@/tools/types'
+
+/**
+ * Connections to api.telegram.org are occasionally reset mid-handshake on some networks;
+ * retry those (and 429 / 5xx) a couple of times instead of failing the send.
+ */
+export const TELEGRAM_REQUEST_RETRY: ToolRetryConfig = {
+  enabled: true,
+  maxRetries: 2,
+  initialDelayMs: 300,
+  maxDelayMs: 2000,
+}
+
 /**
  * Build a Telegram Bot API method URL for the given bot token.
  */

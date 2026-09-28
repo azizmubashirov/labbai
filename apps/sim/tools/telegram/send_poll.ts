@@ -4,7 +4,7 @@ import type {
   TelegramSendMessageResponse,
   TelegramSendPollParams,
 } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 /**
@@ -78,6 +78,7 @@ export const telegramSendPollTool: ToolConfig<TelegramSendPollParams, TelegramSe
     request: {
       url: (params) => telegramApiUrl(params.botToken, 'sendPoll'),
       method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
       headers: () => ({
         'Content-Type': 'application/json',
       }),

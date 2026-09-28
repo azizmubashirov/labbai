@@ -4,7 +4,7 @@ import type {
   TelegramSendLocationParams,
   TelegramSendMessageResponse,
 } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendLocationTool: ToolConfig<
@@ -47,6 +47,7 @@ export const telegramSendLocationTool: ToolConfig<
   request: {
     url: (params) => telegramApiUrl(params.botToken, 'sendLocation'),
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

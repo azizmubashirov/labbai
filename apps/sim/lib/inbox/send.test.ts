@@ -171,6 +171,23 @@ describe('sendInboxReply with a file', () => {
     expect(mocks.executeTool).not.toHaveBeenCalled()
   })
 
+  it('retries a Telegram file send when the connection is reset', async () => {
+    mocks.resolveConfig.mockResolvedValue({ ok: true, providerConfig: { botToken: '1:tok' } })
+    fetchMock
+      .mockRejectedValueOnce(Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' }))
+      .mockResolvedValueOnce(Response.json({ ok: true, result: { message_id: 43 } }))
+
+    const outcome = await sendInboxReply({
+      conversation: telegramConversation,
+      text: '',
+      operatorUserId: 'op-1',
+      media: media(),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(outcome).toEqual({ status: 'sent', externalMessageId: '43' })
+  })
+
   it('sends an OGG recording as a Telegram voice note and other formats as a file', async () => {
     mocks.resolveConfig.mockResolvedValue({ ok: true, providerConfig: { botToken: '1:tok' } })
     fetchMock.mockImplementation(async () => Response.json({ ok: true, result: { message_id: 1 } }))

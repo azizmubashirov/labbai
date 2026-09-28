@@ -1,6 +1,6 @@
 import { ErrorExtractorId } from '@/tools/error-extractors'
 import type { TelegramCopyMessageParams, TelegramCopyMessageResponse } from '@/tools/telegram/types'
-import { telegramApiUrl } from '@/tools/telegram/utils'
+import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramCopyMessageTool: ToolConfig<
@@ -50,6 +50,7 @@ export const telegramCopyMessageTool: ToolConfig<
   request: {
     url: (params) => telegramApiUrl(params.botToken, 'copyMessage'),
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

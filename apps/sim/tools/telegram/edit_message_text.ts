@@ -4,7 +4,11 @@ import type {
   TelegramMessage,
   TelegramSendMessageResponse,
 } from '@/tools/telegram/types'
-import { convertMarkdownToHTML, telegramApiUrl } from '@/tools/telegram/utils'
+import {
+  convertMarkdownToHTML,
+  TELEGRAM_REQUEST_RETRY,
+  telegramApiUrl,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramEditMessageTextTool: ToolConfig<
@@ -48,6 +52,7 @@ export const telegramEditMessageTextTool: ToolConfig<
   request: {
     url: (params) => telegramApiUrl(params.botToken, 'editMessageText'),
     method: 'POST',
+    retry: TELEGRAM_REQUEST_RETRY,
     headers: () => ({
       'Content-Type': 'application/json',
     }),

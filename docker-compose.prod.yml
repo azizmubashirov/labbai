@@ -57,6 +57,7 @@ services:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/simstudio
       - BETTER_AUTH_URL=${NEXT_PUBLIC_APP_URL}
       - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=WARN
     depends_on:
       db: {condition: service_healthy}
       redis: {condition: service_healthy}
