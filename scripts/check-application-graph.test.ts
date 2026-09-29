@@ -45,9 +45,9 @@ describe('runtimeSpecifiers', () => {
 })
 
 describe('resolveSpecifier', () => {
-  it('resolves an @/ specifier against apps/sim', () => {
+  it('resolves an @/ specifier against apps/labbai', () => {
     expect(resolveSpecifier('@/lib/permission-groups/capabilities', __filename)).toMatch(
-      /apps\/sim\/lib\/permission-groups\/capabilities\.ts$/
+      /apps\/labbai\/lib\/permission-groups\/capabilities\.ts$/
     )
   })
 

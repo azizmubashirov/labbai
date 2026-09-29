@@ -25,7 +25,7 @@ describe('slugify', () => {
   })
 
   it('collapses each run of non-alphanumerics into a single hyphen', () => {
-    expect(slugify('Sim.ai <> RVTech')).toBe('sim-ai-rvtech')
+    expect(slugify('Labbai.uz <> RVTech')).toBe('labbai-uz-rvtech')
   })
 
   it('drops leading and trailing separators', () => {

@@ -1,7 +1,7 @@
 import * as ipaddr from 'ipaddr.js'
 import { unwrapIpv6Brackets } from './hostnames'
 
-// Re-export the pure host helpers so existing `@sim/security/ssrf` consumers
+// Re-export the pure host helpers so existing `@labbai/security/ssrf` consumers
 // keep one import site; client code that must avoid ipaddr imports `./hostnames`.
 export { isLoopbackHostname, unwrapIpv6Brackets } from './hostnames'
 

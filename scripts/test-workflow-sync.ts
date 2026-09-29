@@ -1,8 +1,8 @@
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
-import { createLogger } from '@sim/logger'
-import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@sim/utils/id'
+import { createLogger } from '@labbai/logger'
+import { sleep } from '@labbai/utils/helpers'
+import { generateId } from '@labbai/utils/id'
 
 /** Runs workflow tests against a disposable PostgreSQL 17 container, never an application DSN. */
 const logger = createLogger('WorkflowSyncIntegration')
@@ -96,7 +96,7 @@ try {
   run(
     'bun',
     ['--no-env-file', 'x', 'vitest', 'run', '--config', 'vitest.workflows-integration.config.ts'],
-    resolve(root, 'apps/sim')
+    resolve(root, 'apps/labbai')
   )
 } finally {
   if (started) {

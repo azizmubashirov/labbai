@@ -4,7 +4,7 @@ import {
   WORKFLOW_TARGET_HANDLE_ID,
   type WorkflowCardSide,
   type WorkflowConnectionSide,
-} from '@sim/workflow-types/workflow'
+} from '@labbai/workflow-types/workflow'
 import { BLOCK_DIMENSIONS } from '../dimensions'
 
 /**

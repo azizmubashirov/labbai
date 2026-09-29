@@ -15,7 +15,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { permissionGroupScopeMock, permissionGroupScopeMockFns } from '@sim/testing'
+ * import { permissionGroupScopeMock, permissionGroupScopeMockFns } from '@labbai/testing'
  *
  * vi.mock('@/lib/permission-groups/config-scope.server', () => permissionGroupScopeMock)
  *

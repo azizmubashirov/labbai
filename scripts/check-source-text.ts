@@ -6,7 +6,7 @@
  * single stray `U+0000` written as a literal turns the whole file into
  * `Bin 0 -> 4102 bytes` in every diff — a reviewer sees not one line of it, and
  * `git grep`, formatters, and editors treat it as opaque or silently normalize
- * the byte away. `apps/sim/lib/api/server/nul-byte-boundary.test.ts` shipped
+ * the byte away. `apps/labbai/lib/api/server/nul-byte-boundary.test.ts` shipped
  * exactly that way, and two older files had done the same unnoticed.
  *
  * The escape `'\u0000'` produces an identical string at runtime, so this costs

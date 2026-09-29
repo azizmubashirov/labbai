@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { formatChartDate, formatChartTimestamp } from '@sim/emcn'
+import { formatChartDate, formatChartTimestamp } from '@labbai/emcn'
 
 interface ChartDataTableProps {
   label: string

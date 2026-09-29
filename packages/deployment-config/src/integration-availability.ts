@@ -1,7 +1,7 @@
 import {
   INTEGRATION_METADATA,
   type IntegrationMetadata,
-} from '@sim/deployment-config/integration-metadata'
+} from '@labbai/deployment-config/integration-metadata'
 import type { EnvCapabilityValues } from './env-capabilities'
 import { inspectOAuthClientCapability, resolveOAuthClientCapabilityId } from './env-capabilities'
 import { getServiceAccountMetadata } from './service-account-metadata'

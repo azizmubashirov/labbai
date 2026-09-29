@@ -14,16 +14,16 @@ export type EnvMockValue = string | boolean | number | undefined
 export const defaultMockEnv = {
   // Core
   DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-  BETTER_AUTH_URL: 'https://test.sim.ai',
+  BETTER_AUTH_URL: 'https://test.labbai.example.com',
   BETTER_AUTH_SECRET: 'test-secret-that-is-at-least-32-chars-long',
   ENCRYPTION_KEY: 'test-encryption-key-32-chars-long!',
   INTERNAL_API_SECRET: 'test-internal-api-secret-32-chars!',
 
   // Email
   RESEND_API_KEY: 'test-resend-key',
-  FROM_EMAIL_ADDRESS: 'Sim <noreply@test.sim.ai>',
-  EMAIL_DOMAIN: 'test.sim.ai',
-  PERSONAL_EMAIL_FROM: 'Test <test@test.sim.ai>',
+  FROM_EMAIL_ADDRESS: 'Labbai <noreply@test.labbai.example.com>',
+  EMAIL_DOMAIN: 'test.labbai.example.com',
+  PERSONAL_EMAIL_FROM: 'Test <test@test.labbai.example.com>',
 
   // Cache
   REDIS_URL: undefined,
@@ -32,7 +32,7 @@ export const defaultMockEnv = {
   STORAGE_PROVIDER: 'local',
 
   // URLs
-  NEXT_PUBLIC_APP_URL: 'https://test.sim.ai',
+  NEXT_PUBLIC_APP_URL: 'https://test.labbai.example.com',
 }
 
 /**
@@ -184,7 +184,7 @@ export function createEnvMock(overrides: Record<string, string | undefined> = {}
 
 /**
  * Complete, stateful mock module for `@/lib/core/config/env`, installed
- * globally in `apps/sim/vitest.setup.ts`. Every export of the real module is
+ * globally in `apps/labbai/vitest.setup.ts`. Every export of the real module is
  * present. Reads through `env` and `getEnv` are live: override via
  * {@link setEnv} (or direct property assignment on `envMock.env`) and restore
  * with {@link resetEnvMock}.
@@ -202,7 +202,7 @@ export const envMock = {
   envBoolean: envBooleanImpl,
   envNumber: envNumberImpl,
   /**
-   * Mirrors `PUBLIC_ENV_ATTRIBUTE` in `apps/sim/lib/core/config/env.ts`. The
+   * Mirrors `PUBLIC_ENV_ATTRIBUTE` in `apps/labbai/lib/core/config/env.ts`. The
    * literal is repeated rather than imported because packages never import from
    * `apps/*`; keep the two in step if the attribute is ever renamed.
    */

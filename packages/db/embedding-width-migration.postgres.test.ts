@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { backfillEmbeddingSearch } from '@sim/db/script-migrations/0015_backfill_embedding_search'
-import { generateId } from '@sim/utils/id'
+import { backfillEmbeddingSearch } from '@labbai/db/script-migrations/0015_backfill_embedding_search'
+import { generateId } from '@labbai/utils/id'
 import postgres, { type Sql } from 'postgres'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 

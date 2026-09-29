@@ -2,9 +2,9 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createLogger } from '@sim/logger'
-import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@sim/utils/id'
+import { createLogger } from '@labbai/logger'
+import { sleep } from '@labbai/utils/helpers'
+import { generateId } from '@labbai/utils/id'
 
 /**
  * Run with `bun scripts/test-knowledge-acls.ts` from the repository root.
@@ -182,7 +182,7 @@ try {
       ...(scale ? ['lib/knowledge/__integration__/scale.integration.ts'] : testFilters),
     ],
     {
-      cwd: path.join(root, 'apps/sim'),
+      cwd: path.join(root, 'apps/labbai'),
       env: environment,
     }
   )
@@ -197,7 +197,7 @@ try {
         'lib/knowledge/connectors/external-directory.postgres.test.ts',
       ],
       {
-        cwd: path.join(root, 'apps/sim'),
+        cwd: path.join(root, 'apps/labbai'),
         env: environment,
       }
     )

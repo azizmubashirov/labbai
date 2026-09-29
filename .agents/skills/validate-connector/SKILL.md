@@ -6,14 +6,14 @@ argument-hint: <service-name> [api-docs-url]
 
 # Validate Connector Skill
 
-You are an expert auditor for Sim knowledge base connectors. Your job is to thoroughly validate that an existing connector is correct, complete, and follows all conventions.
+You are an expert auditor for Labbai knowledge base connectors. Your job is to thoroughly validate that an existing connector is correct, complete, and follows all conventions.
 
 ## Your Task
 
 When the user asks you to validate a connector:
 1. Read the service's API documentation (via Context7 or WebFetch)
 2. Read the connector implementation, OAuth config, and registry entries
-3. Cross-reference everything against the API docs and Sim conventions
+3. Cross-reference everything against the API docs and Labbai conventions
 4. Report all issues found, grouped by severity (critical, warning, suggestion)
 5. Fix all issues after reporting them
 
@@ -22,26 +22,26 @@ When the user asks you to validate a connector:
 Read **every** file for the connector — do not skip any:
 
 ```
-apps/sim/connectors/{service}/meta.ts        # ConnectorMeta — client-safe metadata (icon, name, auth, configFields, tagDefinitions)
-apps/sim/connectors/{service}/{service}.ts   # Connector implementation — spreads the meta + runtime functions
-apps/sim/connectors/{service}/index.ts       # Barrel export
-apps/sim/connectors/registry.server.ts       # Server-only full registry entry (CONNECTOR_REGISTRY; full connector)
-apps/sim/connectors/registry.ts              # Client-safe meta registry entry (CONNECTOR_META_REGISTRY)
-apps/sim/connectors/types.ts                 # ConnectorMeta / ConnectorConfig interfaces, ExternalDocument, etc.
-apps/sim/connectors/utils.ts                 # Shared utilities (computeContentHash, htmlToPlainText, etc.)
-apps/sim/lib/oauth/oauth.ts                  # OAUTH_PROVIDERS — single source of truth for scopes
-apps/sim/lib/oauth/utils.ts                  # getCanonicalScopesForProvider, getScopesForService, SCOPE_DESCRIPTIONS
-apps/sim/lib/oauth/types.ts                  # OAuthService union type
-apps/sim/components/icons.tsx                 # Icon definition for the service
+apps/labbai/connectors/{service}/meta.ts        # ConnectorMeta — client-safe metadata (icon, name, auth, configFields, tagDefinitions)
+apps/labbai/connectors/{service}/{service}.ts   # Connector implementation — spreads the meta + runtime functions
+apps/labbai/connectors/{service}/index.ts       # Barrel export
+apps/labbai/connectors/registry.server.ts       # Server-only full registry entry (CONNECTOR_REGISTRY; full connector)
+apps/labbai/connectors/registry.ts              # Client-safe meta registry entry (CONNECTOR_META_REGISTRY)
+apps/labbai/connectors/types.ts                 # ConnectorMeta / ConnectorConfig interfaces, ExternalDocument, etc.
+apps/labbai/connectors/utils.ts                 # Shared utilities (computeContentHash, htmlToPlainText, etc.)
+apps/labbai/lib/oauth/oauth.ts                  # OAUTH_PROVIDERS — single source of truth for scopes
+apps/labbai/lib/oauth/utils.ts                  # getCanonicalScopesForProvider, getScopesForService, SCOPE_DESCRIPTIONS
+apps/labbai/lib/oauth/types.ts                  # OAuthService union type
+apps/labbai/components/icons.tsx                 # Icon definition for the service
 ```
 
 If the connector uses selectors, also read:
 ```
-apps/sim/lib/selectors/manifest.ts            # Browser-safe exhaustive metadata
-apps/sim/lib/selectors/types.ts               # Selector context and option types
-apps/sim/lib/selectors/context.ts             # Active canonical context projection
-apps/sim/lib/selectors/server/registry.ts     # Exhaustive server attachments
-apps/sim/lib/selectors/server/providers/*     # Matching provider attachment
+apps/labbai/lib/selectors/manifest.ts            # Browser-safe exhaustive metadata
+apps/labbai/lib/selectors/types.ts               # Selector context and option types
+apps/labbai/lib/selectors/context.ts             # Active canonical context projection
+apps/labbai/lib/selectors/server/registry.ts     # Exhaustive server attachments
+apps/labbai/lib/selectors/server/providers/*     # Matching provider attachment
 ```
 
 Apply the `validate-selector` skill to the matching key and provider primitive. There is no client
@@ -282,7 +282,7 @@ Connectors where the list API already returns content inline (e.g., Slack messag
 - [ ] No unbounded `Promise.all` over large arrays
 
 ### Logging
-- [ ] Uses `createLogger` from `@sim/logger` (not `console.log`)
+- [ ] Uses `createLogger` from `@labbai/logger` (not `console.log`)
 - [ ] Logs sync progress at `info` level
 - [ ] Logs errors at `warn` or `error` level with context
 

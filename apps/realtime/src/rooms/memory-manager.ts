@@ -1,10 +1,10 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@labbai/logger'
 import {
   presenceEventName,
   type RoomRef,
   type RoomType,
   roomName,
-} from '@sim/realtime-protocol/rooms'
+} from '@labbai/realtime-protocol/rooms'
 import type { Server } from 'socket.io'
 import { filterVisiblePresence } from '@/rooms/presence-visibility'
 import type { IRoomManager, RoomState, UserPresence, UserSession } from '@/rooms/types'

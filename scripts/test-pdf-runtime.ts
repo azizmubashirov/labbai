@@ -10,7 +10,7 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
  * Requires Docker; uses only a generated PDF and no service credentials.
  */
 const repositoryRoot = path.resolve(import.meta.dirname, '..')
-const appRoot = path.join(repositoryRoot, 'apps/sim')
+const appRoot = path.join(repositoryRoot, 'apps/labbai')
 const appPackage: { dependencies: Record<string, string> } = JSON.parse(
   await readFile(path.join(appRoot, 'package.json'), 'utf8')
 )

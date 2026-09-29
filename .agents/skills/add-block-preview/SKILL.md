@@ -6,11 +6,11 @@ argument-hint: <block-type>
 
 # Add Block Preview Skill
 
-You manage **block visibility gating** in Sim — hiding blocks from every discovery surface (toolbar, cmd+K search, copilot @-mentions, agent tool picker, mothership VFS/metadata/tools, Access Control list, public docs/catalog) while **never** gating execution of already-placed instances.
+You manage **block visibility gating** in Labbai — hiding blocks from every discovery surface (toolbar, cmd+K search, copilot @-mentions, agent tool picker, mothership VFS/metadata/tools, Access Control list, public docs/catalog) while **never** gating execution of already-placed instances.
 
 ## The model
 
-Three levers, evaluated in `apps/sim/lib/core/config/block-visibility.ts` and folded into the registry accessors (`apps/sim/blocks/registry.ts`):
+Three levers, evaluated in `apps/labbai/lib/core/config/block-visibility.ts` and folded into the registry accessors (`apps/labbai/blocks/registry.ts`):
 
 1. **`preview: true`** on the `BlockConfig` (static, in code) — the block is default-hidden EVERYWHERE (hosted, self-hosted, dev, SSR) until revealed. Fail-closed.
 2. **The hosted `block-visibility` AppConfig document** — per-block rule keyed by the existing block type:
@@ -52,10 +52,10 @@ To pull an already-GA block from discovery surfaces on hosted (incident, depreca
 - **Execution is never gated.** The executor, serializer, drop-naming, and `isBlockTypeAccessControlExempt` resolve via pure `getBlock`. Do not add visibility checks to execution paths.
 - **Clone-not-remove:** gated blocks stay in `getAllBlocks()` output as clones with `hideFromToolbar: true` — `.find`-by-type consumers rely on this. Never filter them out.
 - **Keys are registry block types.** Never `custom_block_*` (parse drops them — custom blocks have their own enabled/disabled lifecycle).
-- **The shared hidden-predicate is `isHiddenUnder`** (`apps/sim/blocks/visibility/context.ts`). Never restate the preview/disabled rule inline at a new consumer.
+- **The shared hidden-predicate is `isHiddenUnder`** (`apps/labbai/blocks/visibility/context.ts`). Never restate the preview/disabled rule inline at a new consumer.
 - **Process-global caches stay ungated.** `getStaticComponentFiles` (VFS) and `getExposedIntegrationTools` build the ungated universe; per-viewer filtering happens at stamp/consumer time. Never move gating into a shared builder.
 - Gating is **surface hiding, not secrecy** — the full config ships in the client JS bundle. Anything truly secret cannot be a registered block.
 
 ## Tests
 
-Evaluation semantics: `apps/sim/lib/core/config/block-visibility.test.ts`. Registry projection: `apps/sim/blocks/visibility/visibility.test.ts`. When gating behavior changes, extend those — mock `isPlatformAdmin` for the admin clause; use the local `withAppConfig` harness.
+Evaluation semantics: `apps/labbai/lib/core/config/block-visibility.test.ts`. Registry projection: `apps/labbai/blocks/visibility/visibility.test.ts`. When gating behavior changes, extend those — mock `isPlatformAdmin` for the admin clause; use the local `withAppConfig` harness.

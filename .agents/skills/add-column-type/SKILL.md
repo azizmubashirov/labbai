@@ -1,12 +1,12 @@
 ---
 name: add-column-type
-description: Add a new table column type to Sim — registry entry, icon, storage shape, coercion, and the behavioral hooks the grid and API read. Use when adding a value kind under `apps/sim/lib/table/column-types/`.
+description: Add a new table column type to Labbai — registry entry, icon, storage shape, coercion, and the behavioral hooks the grid and API read. Use when adding a value kind under `apps/labbai/lib/table/column-types/`.
 argument-hint: <type-name>
 ---
 
 # Adding a Table Column Type
 
-A column type is **one file** in `apps/sim/lib/table/column-types/` plus a registry entry. Everything that varies per type — label, icon, storage cast, coercion, validation, conversion compatibility, formatting, editor, filter operators — lives on that one object, so no consumer needs editing.
+A column type is **one file** in `apps/labbai/lib/table/column-types/` plus a registry entry. Everything that varies per type — label, icon, storage cast, coercion, validation, conversion compatibility, formatting, editor, filter operators — lives on that one object, so no consumer needs editing.
 
 A `case 'yourtype':` outside `column-types/` fails **silently** when missed (a wrong `jsonbCast` breaks every filter on the column). The registry exists to make that impossible, so the rule is absolute with one documented exception (`import.ts`'s `coerceValue`, see "Traps" below): **if you find yourself adding a `case 'yourtype':` anywhere else outside `column-types/`, the registry is missing a field. Add the field instead.**
 
@@ -15,7 +15,7 @@ A `case 'yourtype':` outside `column-types/` fails **silently** when missed (a w
 Do **not** hunt for places to edit. Add your type to the `ColumnType` union first and let `tsc` produce the list:
 
 ```bash
-cd apps/sim && bun run type-check
+cd apps/labbai && bun run type-check
 ```
 
 You will get two errors, naming `column-types/registry.ts` and `column-types/registry.server.ts`. Register in both.
@@ -27,7 +27,7 @@ Any error beyond those four is a site reading a hardcoded type list that should 
 ## Directory Structure
 
 ```
-apps/sim/lib/table/column-types/
+apps/labbai/lib/table/column-types/
 ├── types.ts             # ColumnTypeDefinition — the contract you implement
 ├── types.server.ts      # ColumnTypeServerDefinition — cell migrations only
 ├── registry.ts          # Record<ColumnType, …>  ← client-safe, the gate
@@ -86,7 +86,7 @@ export function Type{Pascal}(props: SVGProps<SVGSVGElement>) {
 
 ## Step 3: Write the type file
 
-`apps/sim/lib/table/column-types/{name}.ts`. Copy the closest existing type and change what differs. Every field is required by the interface, so the compiler enumerates them for you — read the TSDoc in `types.ts` rather than guessing.
+`apps/labbai/lib/table/column-types/{name}.ts`. Copy the closest existing type and change what differs. Every field is required by the interface, so the compiler enumerates them for you — read the TSDoc in `types.ts` rather than guessing.
 
 The three that are easy to get wrong:
 
@@ -117,8 +117,8 @@ Prefer set-based SQL. When the transform genuinely needs JS (`currency`'s separa
 ## Watch out
 
 - **Import cycles.** `column-types/select.ts` imports `lib/table/select-values.ts`, so `select-values.ts` must **not** import the registry — that closes a cycle and fails at module init. Inside a type's own helper module the string literal is the implementation, not a config leak.
-- **The client-safe boundary.** `registry.ts` and everything it imports must stay free of `@sim/db`, `drizzle-orm`, and `next/server` — the tables grid imports it directly. A React icon is fine (it's a component *reference*, never called server-side). Only `registry.server.ts` may touch drizzle.
-- **Don't re-export the registry from `@/lib/table`.** Dozens of server modules import that barrel; routing this through it pulls `@sim/emcn/icons` into all of them. Deep-import `@/lib/table/column-types`.
+- **The client-safe boundary.** `registry.ts` and everything it imports must stay free of `@labbai/db`, `drizzle-orm`, and `next/server` — the tables grid imports it directly. A React icon is fine (it's a component *reference*, never called server-side). Only `registry.server.ts` may touch drizzle.
+- **Don't re-export the registry from `@/lib/table`.** Dozens of server modules import that barrel; routing this through it pulls `@labbai/emcn/icons` into all of them. Deep-import `@/lib/table/column-types`.
 - **`import.ts`'s `coerceValue` is a SECOND write path and is not opt-in.** Importing into a column of your type always hits it, and its `default` arm silently `String(value)`s — so a missing `case` stores text in a column whose `jsonbCast` is numeric, and then every filter and sort on that column errors in Postgres. Add a `case`, even though the switch compiles without one. (It is deliberately separate from the registry's `coerce`: an import wants an unparseable value to survive as its raw string so the row error can name it.)
 - **CSV inference** is an ordered heuristic in `import.ts`, deliberately not registry-driven. A new type is not inferred from a CSV unless you extend `inferColumnType` — usually you should not, since inference cannot supply configuration (an option set, a currency code).
 
@@ -153,8 +153,8 @@ Registering the *type* is compiler-enforced. Registering its *metadata* is not, 
 
 ## Final Validation (Required)
 
-1. **`cd apps/sim && bun run type-check`** — must be clean. If any file *outside* `column-types/` errors, that file has a hardcoded type list; fix it to read the registry.
-2. **Grep for leaks** — `grep -rnE "(===|!==) '{id}'|case '{id}':" apps/sim --include='*.ts' --include='*.tsx' | grep -v column-types/`. (All three forms: a plain `!==` and a `case` are how half of `currency`'s real branches are written.) Hits are expected; judge each. A hit is fine when it mounts a specific React component or encodes a genuinely one-off behavior (`json`'s mono textarea, `date`'s timezone-aware parsing). A hit is a **leak** when it restates something the registry could answer — an icon, a label, a colour, an operator set, a cast, a coercion. Leaks get a registry field, not a new branch.
+1. **`cd apps/labbai && bun run type-check`** — must be clean. If any file *outside* `column-types/` errors, that file has a hardcoded type list; fix it to read the registry.
+2. **Grep for leaks** — `grep -rnE "(===|!==) '{id}'|case '{id}':" apps/labbai --include='*.ts' --include='*.tsx' | grep -v column-types/`. (All three forms: a plain `!==` and a `case` are how half of `currency`'s real branches are written.) Hits are expected; judge each. A hit is fine when it mounts a specific React component or encodes a genuinely one-off behavior (`json`'s mono textarea, `date`'s timezone-aware parsing). A hit is a **leak** when it restates something the registry could answer — an icon, a label, a colour, an operator set, a cast, a coercion. Leaks get a registry field, not a new branch.
 3. **Run the suite** — `bunx vitest run lib/table 'app/workspace/[workspaceId]/tables' lib/api app/api/table app/api/v1 lib/copilot/tools/server/table`. Existing tests must pass **unchanged**; needing to edit one means you changed behavior for the other types.
 4. **`bun run lint:check`, `bun run check:api-validation`, `bun run check:client-boundary`** from the repo root.
 5. **Exercise it in the running app** on a table with one column of every type: create, edit inline / in the expanded popover / in the row modal, paste from a spreadsheet, filter, sort, convert to and from other types, export CSV, undo a column delete.

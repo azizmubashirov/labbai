@@ -1,5 +1,5 @@
-import { createLogger } from '@sim/logger'
-import { ROOM_TYPES, type RoomRef, roomName } from '@sim/realtime-protocol/rooms'
+import { createLogger } from '@labbai/logger'
+import { ROOM_TYPES, type RoomRef, roomName } from '@labbai/realtime-protocol/rooms'
 import type { IRoomManager } from '@/rooms/types'
 
 const logger = createLogger('WorkflowRoomService')

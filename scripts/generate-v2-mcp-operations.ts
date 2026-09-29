@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Generates the Sim MCP server's operation table: every public v2 operation an
+ * Generates the Labbai MCP server's operation table: every public v2 operation an
  * MCP tool call can reach, paired with the route handler that serves it.
  *
  * The MCP server is a second transport for the v2 API, not a second API. A tool
@@ -36,7 +36,7 @@ import {
 import { localBin } from './local-bin'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const APP_ROOT = path.join(ROOT, 'apps/sim')
+const APP_ROOT = path.join(ROOT, 'apps/labbai')
 const OUTPUT = path.join(APP_ROOT, 'lib/api/mcp/generated/v2-operations.ts')
 
 /** Route builders whose handlers answer a JSON request with a JSON response. */
@@ -85,14 +85,14 @@ export function classifyOperation(
   const modulePath = routeModulePath(operation.contract.path)
   const source = readRoute(modulePath)
   if (source === null) {
-    throw new Error(`${operation.name}: no route module at apps/sim/${modulePath}`)
+    throw new Error(`${operation.name}: no route module at apps/labbai/${modulePath}`)
   }
   const builder = routeBuilder(source, operation.contract.method)
   if (builder && JSON_BUILDERS.has(builder)) return 'json'
   if (builder === 'withRouteHandler' && REVIEWED_RAW_JSON_ROUTES.has(operation.name)) return 'json'
   if (builder && NON_JSON_BUILDERS.has(builder)) return 'excluded'
   throw new Error(
-    `${operation.name}: apps/sim/${modulePath} exports ${operation.contract.method} through ${
+    `${operation.name}: apps/labbai/${modulePath} exports ${operation.contract.method} through ${
       builder ?? 'an unrecognized form'
     }; classify it in scripts/generate-v2-mcp-operations.ts`
   )
@@ -110,7 +110,7 @@ export function render(operations: readonly McpOperation[]): string {
     '/**',
     ' * GENERATED FILE — DO NOT EDIT.',
     ' *',
-    ' * Emitted from the Zod route contracts in `apps/sim/lib/api/contracts/v2/**`',
+    ' * Emitted from the Zod route contracts in `apps/labbai/lib/api/contracts/v2/**`',
     ' * by `scripts/generate-v2-mcp-operations.ts`. Regenerate with',
     ' * `bun run generate:mcp-operations`; CI fails when this file is stale.',
     ' */',

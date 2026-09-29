@@ -1,5 +1,5 @@
-import { BlockTileView } from '@sim/workflow-renderer'
-import { getWorkflowTypeAccent } from '@sim/workflow-renderer/workflow-type'
+import { BlockTileView } from '@labbai/workflow-renderer'
+import { getWorkflowTypeAccent } from '@labbai/workflow-renderer/workflow-type'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 

@@ -1,11 +1,11 @@
-import type { RoomRef, RoomType } from '@sim/realtime-protocol/rooms'
-import type { TableCellSelection } from '@sim/realtime-protocol/table-presence'
+import type { RoomRef, RoomType } from '@labbai/realtime-protocol/rooms'
+import type { TableCellSelection } from '@labbai/realtime-protocol/table-presence'
 import type { Server } from 'socket.io'
 
 /**
  * User presence data stored in room state.
  *
- * `room` is the generic room address (see `@sim/realtime-protocol/rooms`). A
+ * `room` is the generic room address (see `@labbai/realtime-protocol/rooms`). A
  * socket may hold presence in more than one room, but only one room per type.
  */
 export interface UserPresence {

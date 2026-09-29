@@ -27,17 +27,17 @@ import { fileURLToPath } from 'node:url'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const SCAN_ROOTS = ['apps/sim/lib', 'apps/sim/app']
+const SCAN_ROOTS = ['apps/labbai/lib', 'apps/labbai/app']
 const REQUIRE_CALL = 'requirePrincipalSubjectUserId('
 const ANNOTATION = 'actorless-unsupported:'
 const MAX_ANNOTATION_LOOKBACK = 3
 
 /**
- * `apps/sim/lib/internal/**` is the in-process tool surface: every handler under it
+ * `apps/labbai/lib/internal/**` is the in-process tool surface: every handler under it
  * mints an executor delegation, so its modules are executor-reachable whether or
  * not they bind a named operation.
  */
-const EXECUTOR_SURFACE_PREFIX = 'apps/sim/lib/internal/'
+const EXECUTOR_SURFACE_PREFIX = 'apps/labbai/lib/internal/'
 
 export interface ActorlessFinding {
   file: string

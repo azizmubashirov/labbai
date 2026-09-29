@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, createRef } from 'react'
-import { DetailsPanel, type DetailsPanelProps } from '@sim/emcn'
+import { DetailsPanel, type DetailsPanelProps } from '@labbai/emcn'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 

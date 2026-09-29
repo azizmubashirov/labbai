@@ -6,7 +6,7 @@ This file is the operational state for whoever continues the work.
 ## What Labbai is
 
 Fork of Sim v0.8.59 (simstudioai/sim, Apache-2.0) + Arena's local AI copilot
-(`apps/sim/local-copilot`), rebranded later as Labbai. We do NOT sync with upstream Sim.
+(`apps/labbai/local-copilot`), rebranded later as Labbai. We do NOT sync with upstream Sim.
 Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 
 ## Branches
@@ -23,7 +23,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | 2 Integrations trimmed to ~10% (list in LABBAI_PLAN.md) | done |
 | 3 Stripe and all payments removed; entitlements permissive; cost ledger kept | done |
 | 4 LLM: OpenAI only (gpt-5.5, gpt-5-mini default, gpt-4.1, gpt-4.1-mini, text-embedding-3-small); `OPENAI_BASE_URL` / `OPENAI_EXTRA_HEADERS` for a later Cloudflare switch | done |
-| 6 Remove `apps/sim/ee`; access control, audit logs, credential groups, access requests, SCIM re-implemented clean-room (`lib/labbai/**`), always on | done |
+| 6 Remove `apps/labbai/ee`; access control, audit logs, credential groups, access requests, SCIM re-implemented clean-room (`lib/labbai/**`), always on | done |
 | 7 Organization UI layer (`/o/**`), Sim Search, org Search MCP, org Assistant removed; kept org-backed features live in workspace settings; DB tables kept | done |
 | + Sim cloud copilot path (Go mothership client, BYOK/API-key routes) and Local/Cloud switch removed — local copilot only | done |
 | + Telemetry only to our own `TELEMETRY_ENDPOINT`; off when unset | done |
@@ -33,7 +33,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | Notifications (operator alerts via one platform Telegram bot) | phase 1 done (see below); alert buttons later |
 | Telegram Business (agent answers in the owner's own Telegram account) | coded 2026-09-29 (see below); verify in CI and with a real Premium account |
 
-LICENSE RULE (critical): `apps/sim/ee` was under the Sim Enterprise License. Never read,
+LICENSE RULE (critical): `apps/labbai/ee` was under the Sim Enterprise License. Never read,
 copy or restore `ee` source from git history. Requirements come only from Apache code.
 
 ### Known leftovers (harmless, optional follow-ups)
@@ -59,22 +59,36 @@ UZ/RU translation later as its own step.
   links come from `NEXT_PUBLIC_TERMS_URL` / `NEXT_PUBLIC_PRIVACY_URL` and are hidden while
   unset (auth pages, email footer). `security.txt` returns 404 until a support email exists.
 - Logo: "Labbai" wordmark outlined from Inter SemiBold (SIL OFL) in
-  `packages/emcn/src/components/sim-wordmark/paths.ts`; app mark (green square with a white
-  "L") in `packages/emcn/src/icons/sim.tsx`; favicons, `icon.svg`, email `wordmark.png`,
-  `public/logo/wordmark.svg`. Component names (`SimWordmark`, `Sim`) are unchanged. To swap in a
+  `packages/emcn/src/components/labbai-wordmark/paths.ts`; app mark (green square with a white
+  "L") in `packages/emcn/src/icons/labbai.tsx`; favicons, `icon.svg`, email `wordmark.png`,
+  `public/logo/wordmark.svg`. Components: `LabbaiWordmark`, `Labbai` (icon). To swap in a
   real logo later: replace those files and `EMAIL_WORDMARK_*` in `lib/branding/wordmark.ts`.
 - Copy: product name in UI, emails, API/OpenAPI descriptions, MCP server, tool/trigger help
-  text, agent identity ("Labbai" instead of "Arena Copilot"/"Sim"). Code identifiers,
-  `@sim/*` packages and block/tool ids are unchanged.
+  text, agent identity ("Labbai" instead of "Arena Copilot"/"Sim").
 - Removed: Sim social links/address in the email footer and their `/x`, `/github`, … redirects;
   Sim status-page notice; old Sim logo files. Logo links on chat and shared-file pages now open
   the app instead of sim.ai. `README.md` rewritten; `NOTICE` keeps the Sim attribution.
-- Left as is: `docs.sim.ai` links on blocks and empty states (Labbai has no docs yet);
-  `isHosted` / sim.ai host checks (always false on our domain).
 - Fonts: `public/brand/fonts` holds Season Sans and Söhne from Sim — commercial fonts,
   check the license before production use (Inter is the free alternative).
 - Pre-existing, not from branding: `bun run check:mcp-operations` fails on `main` (the
   access-requests discovery schema lacks a description).
+
+### Sim name removed from the code (2026-09-29)
+
+- `apps/sim` → `apps/labbai`; workspace packages `@sim/*` → `@labbai/*` (root package
+  `simstudio` → `labbai`); GHCR images `labbai-sim-{simstudio,…}` → `labbai-{app,realtime,migrations,cron}`;
+  prod compose service `simstudio` → `app` (network aliases `labbai-app` / `labbai-realtime` unchanged).
+- Sim-named identifiers/files renamed (`SimWordmark` → `LabbaiWordmark`, `lib/sim-search` →
+  `lib/labbai-search`, `sim-auth-adapter` → `labbai-auth-adapter`, `SIM_*` constants → `LABBAI_*`, …),
+  product word "Sim" → "Labbai" in comments, strings, prompts and docs; `docs.sim.ai` links and
+  "view docs" affordances dropped; sim.ai hosted-mode checks neutralised (always false on our domain).
+- Kept on purpose (persisted or on the wire): DB name `simstudio`, tables/columns/enums, migrations,
+  `SIM_*` env var names, `NEXT_PUBLIC_*`, `X-Sim-*` HTTP headers, `SimApiKey` auth scheme,
+  protocol values `'sim'` (copilot executor/route, trigger provider, `sim:` link scheme, `sim`
+  sandbox global), block/trigger ids (`sim_workspace_event`, `triggers/sim`), `sk-sim-` API key
+  prefix, `x-sim-*` MIME/drag types, generated mothership contracts (`lib/copilot/generated/*`).
+- Server: copy the new `docker-compose.prod.yml` + `deploy.sh`; the next deploy pulls the new
+  image names and `--remove-orphans` drops the old `labbai-simstudio-1` container.
 
 ### Inbox (2026-09-27)
 
@@ -106,7 +120,7 @@ Owner: the section is called **Inbox** (not "Chat"). Sidebar → Inbox, route `/
 
 #### Inbox completion (2026-09-28)
 
-- Live updates: new realtime room `workspace-inbox` (`@sim/realtime-protocol/rooms`, read access,
+- Live updates: new realtime room `workspace-inbox` (`@labbai/realtime-protocol/rooms`, read access,
   workspace-scoped). `notifyWorkspaceInboxChanged` fires after inbound messages, agent sends,
   operator replies and AI/read toggles; `useWorkspaceInboxRoom` (mounted in the sidebar and the
   Inbox) invalidates lists, threads and the badge. Polling stays as fallback: 60 s while the
@@ -231,7 +245,7 @@ nobody; a conversation with no workflow alerts nobody.
   the Notifications block shows a "not set up on this server" help text, every hook returns before
   touching the DB or the model, the Notify block fails with a clear error.
 - Register the webhook once per deployment (and whenever the URL or secret changes), from
-  `apps/sim` with the deployment's env: `bun run scripts/set-notification-webhook.ts`
+  `apps/labbai` with the deployment's env: `bun run scripts/set-notification-webhook.ts`
   (`--check` only diagnoses: token owner vs username, registered URL, Telegram's last delivery
   error; `--url https://studio.labbai.uz` overrides `NEXT_PUBLIC_APP_URL`). Without bun:
   `curl -X POST https://api.telegram.org/bot$NOTIFICATION_BOT_TOKEN/setWebhook -d url=https://studio.labbai.uz/api/notifications/telegram/$NOTIFICATION_BOT_WEBHOOK_SECRET -d secret_token=$NOTIFICATION_BOT_WEBHOOK_SECRET`.
@@ -254,7 +268,7 @@ nobody; a conversation with no workflow alerts nobody.
 - **Notifications block** (`blocks/blocks/notifications.ts`, type `notifications`, category
   `blocks`, `singleInstance`, no tools / inputs / outputs). A configuration block like the Note:
   it has no ports, edges to or from it are dropped (`isWorkflowAnnotationOnlyBlockType` in
-  `@sim/workflow-types`, `isAnnotationOnlyBlock` in `executor/constants.ts`), it is in
+  `@labbai/workflow-types`, `isAnnotationOnlyBlock` in `executor/constants.ts`), it is in
   `METADATA_ONLY_BLOCK_TYPES` so the DAG builder skips it, lint does not call it an orphan, and
   "run from block" is off for it. Both fields are `type: 'modal'` sub-blocks (the existing
   custom-component slot, `sub-block/components/modal-registry.ts`), `hideFromCopilot` +
@@ -408,14 +422,14 @@ Behaviour:
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 
 CI on every push to `main` (`.github/workflows/ci.yml`), all jobs in parallel:
-1. `tsc` — `bun install` (cached) → `tsc --noEmit` (apps/sim) → local copilot tests.
-2. `tests` — the whole apps/sim vitest suite in 3 shards (`--shard=N/3`).
+1. `tsc` — `bun install` (cached) → `tsc --noEmit` (apps/labbai) → local copilot tests.
+2. `tests` — the whole apps/labbai vitest suite in 3 shards (`--shard=N/3`).
 3. `next-build` — the app's `next build` outside Docker (its output is published).
-4. `images` — builds the 4 images and pushes `ghcr.io/azizmubashirov/labbai-sim-{simstudio,realtime,migrations,cron}:<sha>`.
+4. `images` — builds the 4 images and pushes `ghcr.io/azizmubashirov/labbai-{app,realtime,migrations,cron}:<sha>`.
 5. `promote` — only when 1–4 all passed: retags `:<sha>` → `:latest` (deploys pull `:latest`).
 6. `report` — publishes `ci-reports` (`{status,typecheck,tests,full-tests,full-tests-failed,install}.txt`;
    `status.txt` has sha, tsc, tests, full_tests, next_build, images, latest) and `ci-build-report`
-   (`status.txt`, `build.txt`): `https://raw.githubusercontent.com/azizmubashirov/labbai-sim/ci-reports/status.txt`.
+   (`status.txt`, `build.txt`): `https://raw.githubusercontent.com/azizmubashirov/labbai/ci-reports/status.txt`.
 
 Job logs need repo-admin auth; the report branches exist so results are readable publicly.
 To test a WIP branch in CI, merge it to `main` only when it type-checks, or temporarily

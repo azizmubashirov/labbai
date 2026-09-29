@@ -171,7 +171,7 @@ describe('attributeUndeclaredClient', () => {
     }
   })
 
-  it("attributes Sim's own service credentials to internal traffic", () => {
+  it("attributes Labbai's own service credentials to internal traffic", () => {
     for (const kind of ['internal_jwt', 'delegated', 'organization_delegated', 'system']) {
       expect(attributeUndeclaredClient(undeclared, kind).surface).toBe('internal')
     }

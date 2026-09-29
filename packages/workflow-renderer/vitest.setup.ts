@@ -9,7 +9,7 @@ declare global {
 /**
  * jest-dom only registers DOM matchers (`toHaveStyle`, `toHaveClass`, …), so it is
  * dead weight outside a DOM environment. This package's mount tests opt into jsdom
- * per file, so load it only when one is actually running — mirroring `apps/sim`.
+ * per file, so load it only when one is actually running — mirroring `apps/labbai`.
  */
 if (typeof document !== 'undefined') {
   await import('@testing-library/jest-dom/vitest')

@@ -1,8 +1,8 @@
-import { db } from '@sim/db'
-import { workflow } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
-import { authorizeRoom, type PermissionType } from '@sim/platform-authz/rooms'
-import { authorizeWorkflowByWorkspacePermission } from '@sim/platform-authz/workflow'
+import { db } from '@labbai/db'
+import { workflow } from '@labbai/db/schema'
+import { createLogger } from '@labbai/logger'
+import { authorizeRoom, type PermissionType } from '@labbai/platform-authz/rooms'
+import { authorizeWorkflowByWorkspacePermission } from '@labbai/platform-authz/workflow'
 import {
   BLOCK_OPERATIONS,
   BLOCKS_OPERATIONS,
@@ -12,8 +12,8 @@ import {
   SUBFLOW_OPERATIONS,
   VARIABLE_OPERATIONS,
   WORKFLOW_OPERATIONS,
-} from '@sim/realtime-protocol/constants'
-import { ROOM_TYPES, type RoomRef, roomName } from '@sim/realtime-protocol/rooms'
+} from '@labbai/realtime-protocol/constants'
+import { ROOM_TYPES, type RoomRef, roomName } from '@labbai/realtime-protocol/rooms'
 import { and, eq, isNull } from 'drizzle-orm'
 
 const logger = createLogger('SocketPermissions')

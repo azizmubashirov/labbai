@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { readFile } from 'node:fs/promises'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@labbai/utils/id'
 import postgres from 'postgres'
 import { describe, expect, it } from 'vitest'
 
@@ -123,7 +123,7 @@ async function createMigrationFixture() {
       INSERT INTO workspace VALUES ('workspace-a'), ('workspace-b');
       INSERT INTO credential (id, workspace_id, type) VALUES ('legacy', 'workspace-a', 'oauth');
       INSERT INTO knowledge_base (id, workspace_id, name)
-      VALUES ('search-index', 'workspace-a', 'Sim Search'), ('ordinary-kb', 'workspace-b', 'Guides');
+      VALUES ('search-index', 'workspace-a', 'Labbai Search'), ('ordinary-kb', 'workspace-b', 'Guides');
       INSERT INTO knowledge_connector (id, access_mode, sync_interval_minutes, status, next_sync_at)
       VALUES ('automatic', 'admin', 60, 'active', now() + interval '1 day'),
         ('manual', 'admin', 0, 'active', now() + interval '1 day');

@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineRouteContract } from '../../apps/sim/lib/api/contracts/types'
+import { defineRouteContract } from '../../apps/labbai/lib/api/contracts/types'
 import {
   V2_ERROR_STATUS_BY_CODE,
   type V2ErrorCode,
-} from '../../apps/sim/lib/api/contracts/v2/error-codes'
-import { billingOpenApiDocument } from '../../apps/sim/lib/api/contracts/v2/openapi/billing'
-import { filesAuditOpenApiDocument } from '../../apps/sim/lib/api/contracts/v2/openapi/files-audit'
-import { workflowsOpenApiDocument } from '../../apps/sim/lib/api/contracts/v2/openapi/workflows'
+} from '../../apps/labbai/lib/api/contracts/v2/error-codes'
+import { billingOpenApiDocument } from '../../apps/labbai/lib/api/contracts/v2/openapi/billing'
+import { filesAuditOpenApiDocument } from '../../apps/labbai/lib/api/contracts/v2/openapi/files-audit'
+import { workflowsOpenApiDocument } from '../../apps/labbai/lib/api/contracts/v2/openapi/workflows'
 import {
   defineOpenApiDocument,
   defineOpenApiRoute,
   type OpenApiOperationMetadata,
   type OpenApiRouteDefinition,
-} from '../../apps/sim/lib/api/openapi/types'
+} from '../../apps/labbai/lib/api/openapi/types'
 import {
   contractPathToOpenApi,
   generateOpenApiDocument,

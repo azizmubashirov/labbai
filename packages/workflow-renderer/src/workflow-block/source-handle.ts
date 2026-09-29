@@ -2,7 +2,7 @@ import {
   WORKFLOW_SOURCE_HANDLE_ID,
   type WorkflowCardSide,
   type WorkflowConnectionSide,
-} from '@sim/workflow-types/workflow'
+} from '@labbai/workflow-types/workflow'
 import { Position } from '@xyflow/react'
 
 export const CURSOR_SOURCE_HANDLE_ID = 'source-cursor'

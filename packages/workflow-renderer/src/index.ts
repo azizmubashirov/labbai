@@ -9,7 +9,7 @@ export {
   type WorkflowTypeRole,
   WorkflowTypeTag,
   type WorkflowTypeTagProps,
-} from '@sim/workflow-renderer/workflow-type'
+} from '@labbai/workflow-renderer/workflow-type'
 export {
   BLOCK_Z_BASE,
   CANVAS_Z_INDEX_MODE,

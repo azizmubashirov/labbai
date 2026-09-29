@@ -1,5 +1,5 @@
-import { createLogger } from '@sim/logger'
-import { getPostgresErrorCode, getTransientDatabaseFailure } from '@sim/utils/errors'
+import { createLogger } from '@labbai/logger'
+import { getPostgresErrorCode, getTransientDatabaseFailure } from '@labbai/utils/errors'
 import type { Sql, TransactionSql } from 'postgres'
 
 const logger = createLogger('KnowledgeProjection')

@@ -6,15 +6,15 @@
 #   studio.labbai.uz path socket.io -> http://labbai-realtime:3002  (listed first)
 #   studio.labbai.uz                -> http://labbai-app:3000
 # NEXT_PUBLIC_SOCKET_URL is the app origin, so the socket is same-origin.
-# Images are built by .github/workflows/build-images.yml and pulled from GHCR.
+# Images are built by .github/workflows/ci.yml and pulled from GHCR.
 name: labbai
 services:
-  simstudio:
-    image: ghcr.io/azizmubashirov/labbai-sim-simstudio:${LABBAI_TAG:-latest}
+  app:
+    image: ghcr.io/azizmubashirov/labbai-app:${LABBAI_TAG:-latest}
     env_file: .env
     restart: unless-stopped
     # Local file storage (no S3 configured); host dir must be owned by uid 1001.
-    volumes: ['/home/ubuntu/labbai/uploads:/app/apps/sim/uploads']
+    volumes: ['/home/ubuntu/labbai/uploads:/app/apps/labbai/uploads']
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/simstudio
@@ -40,17 +40,17 @@ services:
 
   # Scheduled workflows, polling triggers, resume polling, outbox, KB connector sync.
   cron:
-    image: ghcr.io/azizmubashirov/labbai-sim-cron:${LABBAI_TAG:-latest}
+    image: ghcr.io/azizmubashirov/labbai-cron:${LABBAI_TAG:-latest}
     restart: on-failure
     environment:
-      - SIM_URL=http://simstudio:3000
+      - SIM_URL=http://app:3000
       - CRON_SECRET=${CRON_SECRET}
       - TZ=Asia/Tashkent
     depends_on:
-      simstudio: {condition: service_started}
+      app: {condition: service_started}
 
   realtime:
-    image: ghcr.io/azizmubashirov/labbai-sim-realtime:${LABBAI_TAG:-latest}
+    image: ghcr.io/azizmubashirov/labbai-realtime:${LABBAI_TAG:-latest}
     env_file: .env
     restart: unless-stopped
     environment:
@@ -69,7 +69,7 @@ services:
     deploy: {resources: {limits: {memory: 384M}}}
 
   migrations:
-    image: ghcr.io/azizmubashirov/labbai-sim-migrations:${LABBAI_TAG:-latest}
+    image: ghcr.io/azizmubashirov/labbai-migrations:${LABBAI_TAG:-latest}
     environment:
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/simstudio
     depends_on:

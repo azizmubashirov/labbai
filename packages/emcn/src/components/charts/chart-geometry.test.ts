@@ -11,7 +11,7 @@ import {
   resolveChartPadding,
   resolveSpanMs,
   resolveTimeTickIndices,
-} from '@sim/emcn'
+} from '@labbai/emcn'
 import { describe, expect, it } from 'vitest'
 
 describe('resolveTimeTickIndices', () => {

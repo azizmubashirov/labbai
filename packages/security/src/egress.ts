@@ -457,7 +457,7 @@ function isLoopbackDestination(host: string): boolean {
  * destination, so it carries their judgement about what is safe there, down to
  * the port. `loopback` is a carve-out this policy grants on its own to any
  * self-hosted deployment, which is why it stops short of exposing the service
- * ports Sim's own datastores listen on.
+ * ports Labbai's own datastores listen on.
  */
 type Vouch = 'allowlist' | 'loopback' | null
 
@@ -501,7 +501,7 @@ function checkSchemeAndPort(url: URL, vouch: Vouch, policy: EgressPolicy): Egres
 
   // Only an operator naming the destination lifts the port denylist. The
   // loopback carve-out deliberately does not: it is granted without anyone
-  // asking for it, and loopback is exactly where Sim's own Postgres and Redis
+  // asking for it, and loopback is exactly where Labbai's own Postgres and Redis
   // listen, so lifting it there would hand every workflow author a route in.
   if (vouch !== 'allowlist' && url.port) {
     const port = Number.parseInt(url.port, 10)
@@ -556,7 +556,7 @@ export function evaluateUrl(url: URL, policy: EgressPolicy): EgressDecision {
   // A name that says it is loopback needs no lookup to be refused. Deciding it
   // here rather than after DNS is what keeps the synchronous validator — the one
   // that checks a value as it is saved — from accepting `https://localhost/x` on
-  // a deployment where loopback is Sim's own process.
+  // a deployment where loopback is Labbai's own process.
   if (vouch === null && isLoopbackDestination(host)) {
     return deny('address-loopback', host)
   }

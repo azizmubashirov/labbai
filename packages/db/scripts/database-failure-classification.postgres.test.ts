@@ -1,5 +1,5 @@
-import { migrationTestDatabaseUrl } from '@sim/db/scripts/migration-fixture'
-import { classifyDatabaseFailure } from '@sim/utils/errors'
+import { migrationTestDatabaseUrl } from '@labbai/db/scripts/migration-fixture'
+import { classifyDatabaseFailure } from '@labbai/utils/errors'
 import { sql as statement } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'

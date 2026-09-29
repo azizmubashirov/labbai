@@ -1,0 +1,52 @@
+import { db } from '@labbai/db'
+import { copilotChats } from '@labbai/db/schema'
+import { createLogger } from '@labbai/logger'
+import { and, eq, isNull, lt, or, sql } from 'drizzle-orm'
+import { type NextRequest, NextResponse } from 'next/server'
+import { markMothershipChatReadContract } from '@/lib/api/contracts/mothership-chats'
+import { parseRequest } from '@/lib/api/server'
+import { getAccessibleCopilotChatAuth } from '@/lib/copilot/chat/lifecycle'
+import { publishChatStatusChanged } from '@/lib/copilot/chat-status'
+import {
+  authenticateCopilotRequestSessionOnly,
+  createInternalServerErrorResponse,
+  createUnauthorizedResponse,
+} from '@/lib/copilot/request/http'
+import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+
+const logger = createLogger('MarkTaskReadAPI')
+
+export const POST = withRouteHandler(async (request: NextRequest) => {
+  try {
+    const { userId, isAuthenticated } = await authenticateCopilotRequestSessionOnly()
+    if (!isAuthenticated || !userId) {
+      return createUnauthorizedResponse()
+    }
+
+    const parsed = await parseRequest(markMothershipChatReadContract, request, {})
+    if (!parsed.success) return parsed.response
+    const { chatId } = parsed.data.body
+    const chat = await getAccessibleCopilotChatAuth(chatId, userId)
+    if (!chat) return NextResponse.json({ success: true })
+
+    const [updatedChat] = await db
+      .update(copilotChats)
+      .set({ lastSeenAt: sql`GREATEST(${copilotChats.updatedAt}, NOW())` })
+      .where(
+        and(
+          eq(copilotChats.id, chatId),
+          eq(copilotChats.userId, userId),
+          or(isNull(copilotChats.lastSeenAt), lt(copilotChats.lastSeenAt, copilotChats.updatedAt))
+        )
+      )
+      .returning({ id: copilotChats.id })
+    if (updatedChat && chat.type === 'mothership') {
+      publishChatStatusChanged(chat, { chatId, type: 'updated' })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    logger.error('Error marking task as read:', error)
+    return createInternalServerErrorResponse('Failed to mark task as read')
+  }
+})

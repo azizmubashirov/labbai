@@ -3,7 +3,7 @@
  * prose (summary / description) each one carries in the OpenAPI documents.
  *
  * Shared by `generate-v2-mcp-operations.ts`. The summaries are read from the
- * OpenAPI document definitions in `apps/sim/lib/api/contracts/v2/openapi/`,
+ * OpenAPI document definitions in `apps/labbai/lib/api/contracts/v2/openapi/`,
  * rendered in memory by `openapi/generator.ts` (the published JSON specs lived
  * in the removed docs app).
  */
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import type { z } from 'zod'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const CONTRACTS_DIR = path.join(ROOT, 'apps/sim/lib/api/contracts/v2')
+const CONTRACTS_DIR = path.join(ROOT, 'apps/labbai/lib/api/contracts/v2')
 const OPENAPI_DIR = path.join(CONTRACTS_DIR, 'openapi')
 
 /** What the OpenAPI specs say about one operation, beyond its request shape. */
@@ -35,7 +35,7 @@ export interface OperationDoc {
 /**
  * The description sentences that mark an operation as personal-key-only.
  *
- * Read out of `apps/sim/lib/api/contracts/v2/openapi/shared.ts` at generation
+ * Read out of `apps/labbai/lib/api/contracts/v2/openapi/shared.ts` at generation
  * time rather than restated here, so rewording the sentence there cannot leave
  * the marker silently unemitted. The import is lazy because that module
  * resolves through the `@/` alias, which exists under `bun` but not under the
@@ -43,7 +43,7 @@ export interface OperationDoc {
  */
 export async function loadWorkspaceKeyDenialMarkers(): Promise<readonly string[]> {
   const shared: Record<string, unknown> = await import(
-    path.join(ROOT, 'apps/sim/lib/api/contracts/v2/openapi/shared.ts')
+    path.join(ROOT, 'apps/labbai/lib/api/contracts/v2/openapi/shared.ts')
   )
   const markers = [shared.WORKSPACE_API_KEY_DENIED, shared.WORKSPACE_API_KEY_DENIED_AS_NOT_FOUND]
   for (const marker of markers) {

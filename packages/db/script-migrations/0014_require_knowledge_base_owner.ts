@@ -1,9 +1,9 @@
 import {
   backfillLegacyKnowledgeBaseWorkspaces,
   createPostgresLegacyKnowledgeBaseWorkspaceStore,
-} from '@sim/db/script-migrations/0013_backfill_legacy_knowledge_base_workspaces'
-import type { ScriptMigration } from '@sim/db/script-migrations/types'
-import { createLogger } from '@sim/logger'
+} from '@labbai/db/script-migrations/0013_backfill_legacy_knowledge_base_workspaces'
+import type { ScriptMigration } from '@labbai/db/script-migrations/types'
+import { createLogger } from '@labbai/logger'
 
 const logger = createLogger('KnowledgeBaseOwnership')
 

@@ -46,10 +46,10 @@ COPY --chown=nextjs:nodejs packages/db/drizzle.config.ts ./packages/db/drizzle.c
 # Copy tsconfig package (needed for workspace symlink resolution)
 COPY --chown=nextjs:nodejs packages/tsconfig ./packages/tsconfig
 
-# Copy utils package (needed by db scripts that import @sim/utils)
+# Copy utils package (needed by db scripts that import @labbai/utils)
 COPY --chown=nextjs:nodejs packages/utils ./packages/utils
 
-# Copy logger package (needed by @sim/db's tx-tripwire at import time)
+# Copy logger package (needed by @labbai/db's tx-tripwire at import time)
 COPY --chown=nextjs:nodejs packages/logger ./packages/logger
 
 # Copy database package source code (changes most frequently - placed last)

@@ -290,7 +290,7 @@ function isSchemaModule(source: unknown): boolean {
       : isSyntaxNode(source) && typeof source.value === 'string'
         ? source.value
         : null
-  return value !== null && (/@sim\/db(\/|$)/.test(value) || /(^|\/)schema(\.ts)?$/.test(value))
+  return value !== null && (/@labbai\/db(\/|$)/.test(value) || /(^|\/)schema(\.ts)?$/.test(value))
 }
 
 /**
@@ -556,7 +556,7 @@ export function mayReferencePendingTable(source: string, tableNames: ReadonlySet
     if (
       (token === ts.SyntaxKind.StringLiteral ||
         token === ts.SyntaxKind.NoSubstitutionTemplateLiteral) &&
-      (/@sim\/db(\/|$)/.test(value) || /(^|\/)schema(\.ts)?$/.test(value))
+      (/@labbai\/db(\/|$)/.test(value) || /(^|\/)schema(\.ts)?$/.test(value))
     ) {
       hasSchemaModule = true
     }

@@ -1,19 +1,19 @@
 ---
 name: validate-model
-description: Validate a model entry (or every model in a provider) in apps/sim/providers/models.ts against the provider's live API docs (no hallucination — reports what cannot be verified)
+description: Validate a model entry (or every model in a provider) in apps/labbai/providers/models.ts against the provider's live API docs (no hallucination — reports what cannot be verified)
 argument-hint: <provider> [model-id]
 ---
 
 # Validate Model Skill
 
-You audit one or more model entries in `apps/sim/providers/models.ts` against the provider's official live API docs. **Hallucinated pricing and capabilities are the #1 failure mode in this file.** Every numeric and capability claim must be re-derived from a live web fetch in this session — not from memory, not from training data, not from the user's marketing email.
+You audit one or more model entries in `apps/labbai/providers/models.ts` against the provider's official live API docs. **Hallucinated pricing and capabilities are the #1 failure mode in this file.** Every numeric and capability claim must be re-derived from a live web fetch in this session — not from memory, not from training data, not from the user's marketing email.
 
 ## Hard rules (do not skip)
 
 1. **Live-fetch or report unverified.** Each field must be backed by a live WebFetch in this session. If you cannot reach an authoritative URL for a field, mark it **UNVERIFIED** in the report — do not silently confirm it from memory.
 2. **Cite every fact.** Every value in the report must show the source URL it was checked against. No URL → mark UNVERIFIED.
 3. **Two-source rule for pricing.** Cross-check input/output/cached against at least one secondary source (OpenRouter, Artificial Analysis, CloudPrice). If sources disagree, the provider's own docs win — flag the disagreement.
-4. **Inspect provider implementation before flagging capability mismatches.** A capability flag in `models.ts` is dead unless the provider's code under `apps/sim/providers/{provider}/` consumes it (see Consumption Matrix below). Setting a flag the provider ignores is a warning, not a critical.
+4. **Inspect provider implementation before flagging capability mismatches.** A capability flag in `models.ts` is dead unless the provider's code under `apps/labbai/providers/{provider}/` consumes it (see Consumption Matrix below). Setting a flag the provider ignores is a warning, not a critical.
 5. **Never auto-fix without printing the diff.** Show the user the proposed diff before applying. Get confirmation.
 
 ## Your Task
@@ -69,7 +69,7 @@ For each model, evaluate every row. Statuses: ✓ matches docs, ✗ disagrees, �
 - [ ] `reasoningEffort.values` — list matches docs; **omitted** for always-reasoning models that reject the parameter (e.g., grok-4.3, where xAI docs explicitly state `reasoning_effort` is not supported). Verify per model — some always-reasoning models (e.g., OpenAI's o-series) DO accept `reasoning_effort` and should keep the flag.
 - [ ] `verbosity.values` — only on OpenAI gpt-5.x family; values match docs
 - [ ] `thinking.levels` + `thinking.default` — only on Anthropic/Gemini; values match docs
-- [ ] `thinking.streamed` — REQUIRED on Anthropic-family thinking models (`'full'` for generations returning full thinking deltas, `'summary'` for omitted-display generations like Opus 4.7+/Sonnet 5/Fable 5 where Sim requests `display: 'summarized'`); verify against the provider's thinking-display docs. After any change, run `bun run agent-stream-docs:generate` so the Agent block docs table stays in sync (CI diffs it)
+- [ ] `thinking.streamed` — REQUIRED on Anthropic-family thinking models (`'full'` for generations returning full thinking deltas, `'summary'` for omitted-display generations like Opus 4.7+/Sonnet 5/Fable 5 where Labbai requests `display: 'summarized'`); verify against the provider's thinking-display docs. After any change, run `bun run agent-stream-docs:generate` so the Agent block docs table stays in sync (CI diffs it)
 - [ ] `nativeStructuredOutputs` — only on providers whose code consumes it (see the Consumption Matrix); provider must document Structured Outputs / JSON-mode for this model
 - [ ] `toolUsageControl` — provider supports `tool_choice` semantics
 - [ ] `computerUse` — provider implements computer-use loop AND model is a computer-use SKU
@@ -81,7 +81,7 @@ For each model, evaluate every row. Statuses: ✓ matches docs, ✗ disagrees, �
 - [ ] `speedOptimized: true` — only on smallest/fastest tier (nano / flash-lite / haiku class)
 
 ### Hosting / billing
-- [ ] If `getHostedModels()` includes the model ID (`providers/models.ts` expands whole providers — more than openai/anthropic/google — plus the static Fireworks catalog), the model is served with Sim's rotating key and billed via `shouldBillModelUsage()`. Confirm that is the intent (a BYOK-only model parked under a hosted provider is a billing bug — warning).
+- [ ] If `getHostedModels()` includes the model ID (`providers/models.ts` expands whole providers — more than openai/anthropic/google — plus the static Fireworks catalog), the model is served with Labbai's rotating key and billed via `shouldBillModelUsage()`. Confirm that is the intent (a BYOK-only model parked under a hosted provider is a billing bug — warning).
 - [ ] If the model is hosted, the deployment is expected to have its `{PREFIX}_COUNT` / `{PREFIX}_1..N` env vars set (ops concern; note if it looks unset for a model claiming hosted support).
 
 ## Step 5: Report (mandatory format)

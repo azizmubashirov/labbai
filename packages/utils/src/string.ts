@@ -214,7 +214,7 @@ export function formatQuotedNameList(names: string[], maxListed: number): string
  *
  * Lives here rather than beside the workflow search index because the Note card
  * on the canvas has to fold identically to find the same occurrences, and it
- * renders from `@sim/workflow-renderer` — a package, which cannot import from
+ * renders from `@labbai/workflow-renderer` — a package, which cannot import from
  * `apps/*`. Two copies of this rule silently disagreeing is precisely the bug
  * that made a match count in the panel and highlight nowhere on the card.
  */

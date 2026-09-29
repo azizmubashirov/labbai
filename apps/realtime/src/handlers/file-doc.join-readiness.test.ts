@@ -14,7 +14,7 @@ import {
   FILE_DOC_MESSAGE_TYPE,
   FILE_DOC_SCHEMA_VERSION,
   FILE_DOC_SEED,
-} from '@sim/realtime-protocol/file-doc'
+} from '@labbai/realtime-protocol/file-doc'
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,7 +27,7 @@ const { mockAuthorizeRoom, mockFetchFileDocSeed } = vi.hoisted(() => ({
   mockFetchFileDocSeed: vi.fn(),
 }))
 
-vi.mock('@sim/platform-authz/rooms', () => ({ authorizeRoom: mockAuthorizeRoom }))
+vi.mock('@labbai/platform-authz/rooms', () => ({ authorizeRoom: mockAuthorizeRoom }))
 
 vi.mock('@/handlers/file-doc-app', () => ({
   fetchFileDocSeed: mockFetchFileDocSeed,

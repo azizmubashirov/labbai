@@ -1,5 +1,5 @@
 {
-  "name": "@sim/realtime-protocol",
+  "name": "@labbai/realtime-protocol",
   "version": "0.1.0",
   "private": true,
   "sideEffects": false,
@@ -48,7 +48,7 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "typescript": "^7.0.2",
     "vitest": "^4.1.0"
   }

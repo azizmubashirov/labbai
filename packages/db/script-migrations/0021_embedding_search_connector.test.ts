@@ -4,7 +4,7 @@
 import {
   backfillProjectionSourceAcl,
   PROJECTION_SOURCE_ACL_PAGE_RETRIES,
-} from '@sim/db/script-migrations/0021_embedding_search_connector'
+} from '@labbai/db/script-migrations/0021_embedding_search_connector'
 import type { Sql } from 'postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 

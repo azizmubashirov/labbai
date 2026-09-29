@@ -1,4 +1,4 @@
-import { forEachSearchOccurrence, projectEscapedMarkdownForSearch } from '@sim/utils/string'
+import { forEachSearchOccurrence, projectEscapedMarkdownForSearch } from '@labbai/utils/string'
 import type { Element, Root, Text } from 'hast'
 
 /**

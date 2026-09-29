@@ -1,11 +1,11 @@
 /**
- * @sim/logger
+ * @labbai/logger
  *
- * Framework-agnostic logging utilities for the Sim platform.
+ * Framework-agnostic logging utilities for the Labbai platform.
  * Provides standardized console logging with environment-aware configuration.
  */
 import { logs, SeverityNumber } from '@opentelemetry/api-logs'
-import { filterUndefined, isRecordLike } from '@sim/utils/object'
+import { filterUndefined, isRecordLike } from '@labbai/utils/object'
 import chalk from 'chalk'
 import { getRequestContext, type RequestContext } from './request-context'
 
@@ -189,7 +189,7 @@ const formatObject = (obj: unknown, isDev: boolean): string => {
  * field worth reading to an empty object. Errors nested in an object argument
  * are therefore unwrapped like a bare `Error` argument. `error` stays a plain
  * message string so log queries can group on it; richer diagnostics are opt-in
- * via `describeError` from `@sim/utils/errors`.
+ * via `describeError` from `@labbai/utils/errors`.
  */
 const mergeArgs = (entry: Record<string, unknown>, args: unknown[]): Record<string, unknown> => {
   for (const arg of args) {
@@ -526,7 +526,7 @@ export class Logger {
  *
  * @example
  * ```typescript
- * import { createLogger } from '@sim/logger'
+ * import { createLogger } from '@labbai/logger'
  *
  * const logger = createLogger('MyComponent')
  *
@@ -563,7 +563,7 @@ const OTEL_LOG_ARG_MAX_CHARS = 2000
 
 /**
  * Fans every accepted log line out through the OTel Logs API. Until an
- * application installs a global LoggerProvider (apps/sim does in
+ * application installs a global LoggerProvider (apps/labbai does in
  * instrumentation-node.ts), the api-logs global is a no-op delegate, so this
  * costs nothing in browsers, tests, and services that do not export logs.
  * The active trace context is attached by the SDK, which is what enables

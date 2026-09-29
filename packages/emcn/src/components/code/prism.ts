@@ -13,7 +13,7 @@ import 'prismjs/components/prism-toml'
  * imports them as having side effects and therefore non-tree-shakeable. Keeping
  * them here — rather than in `code.tsx` — ensures Prism only enters bundles that
  * actually import these utilities, instead of every consumer of the shared
- * `@sim/emcn` barrel (which re-exports `Code`).
+ * `@labbai/emcn` barrel (which re-exports `Code`).
  *
  * `code.tsx` itself never imports this module statically; it loads it lazily via
  * dynamic `import()` on first highlight.

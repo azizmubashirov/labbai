@@ -6,7 +6,7 @@ const ROOT = path.resolve(import.meta.dir, '..')
 const PACKAGES_DIR = path.join(ROOT, 'packages')
 
 const FORBIDDEN_PATTERNS: Array<{ pattern: RegExp; description: string }> = [
-  { pattern: /from\s+['"]@\/(?!\*)/g, description: "'@/' path alias (apps/sim-only)" },
+  { pattern: /from\s+['"]@\/(?!\*)/g, description: "'@/' path alias (apps/labbai-only)" },
   { pattern: /from\s+['"]\.\.\/\.\.\/apps\//g, description: 'relative import into apps/' },
   { pattern: /from\s+['"]apps\//g, description: "bare 'apps/' import" },
 ]

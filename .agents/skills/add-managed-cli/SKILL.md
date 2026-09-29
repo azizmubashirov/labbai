@@ -1,6 +1,6 @@
 ---
 name: add-managed-cli
-description: Add or upgrade a curated, immutable managed CLI for Sim Function sandboxes, including client-safe catalog metadata, a pinned server-only installation recipe, checksum and executable verification, provider compatibility, PATH propagation, content-addressed image identity, and tests. Use when adding a CLI to the Sandbox managed-CLI selector or changing an existing managed CLI version or recipe.
+description: Add or upgrade a curated, immutable managed CLI for Labbai Function sandboxes, including client-safe catalog metadata, a pinned server-only installation recipe, checksum and executable verification, provider compatibility, PATH propagation, content-addressed image identity, and tests. Use when adding a CLI to the Sandbox managed-CLI selector or changing an existing managed CLI version or recipe.
 ---
 
 # Add a Managed CLI
@@ -11,11 +11,11 @@ Add CLIs through the curated registry. Never turn this surface into arbitrary co
 
 Read these live sources before editing; do not copy their current entries into this skill:
 
-1. `apps/sim/lib/execution/remote-sandbox/cli-tools.ts` — persisted IDs and client-safe metadata.
-2. `apps/sim/lib/execution/remote-sandbox/cli-tools.server.ts` — server-only recipes and recipe helpers.
-3. `apps/sim/lib/execution/remote-sandbox/cli-tools.test.ts` — catalog and supply-chain invariants.
-4. `apps/sim/lib/execution/remote-sandbox/cli-tools-boundary.test.ts` — client/server import boundary.
-5. `apps/sim/lib/execution/remote-sandbox/sandbox-spec.ts` — content-addressed hash inputs.
+1. `apps/labbai/lib/execution/remote-sandbox/cli-tools.ts` — persisted IDs and client-safe metadata.
+2. `apps/labbai/lib/execution/remote-sandbox/cli-tools.server.ts` — server-only recipes and recipe helpers.
+3. `apps/labbai/lib/execution/remote-sandbox/cli-tools.test.ts` — catalog and supply-chain invariants.
+4. `apps/labbai/lib/execution/remote-sandbox/cli-tools-boundary.test.ts` — client/server import boundary.
+5. `apps/labbai/lib/execution/remote-sandbox/sandbox-spec.ts` — content-addressed hash inputs.
 
 Read `resolve.ts` and `e2b.ts` only when changing provisioning mechanics. A normal catalog addition should not require UI, API, database, resolver, or provider edits; those paths derive from the registries.
 
@@ -110,7 +110,7 @@ Never commit downloaded artifacts or credentials.
 
 ## Required Validation
 
-From `apps/sim`:
+From `apps/labbai`:
 
 ```bash
 bunx vitest run \
@@ -129,9 +129,9 @@ From the repository root:
 bun run type-check
 bun run check:api-validation
 bunx biome check \
-  apps/sim/lib/execution/remote-sandbox/cli-tools.ts \
-  apps/sim/lib/execution/remote-sandbox/cli-tools.server.ts \
-  apps/sim/lib/execution/remote-sandbox/cli-tools.test.ts
+  apps/labbai/lib/execution/remote-sandbox/cli-tools.ts \
+  apps/labbai/lib/execution/remote-sandbox/cli-tools.server.ts \
+  apps/labbai/lib/execution/remote-sandbox/cli-tools.test.ts
 git diff --check
 ```
 

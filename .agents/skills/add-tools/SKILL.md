@@ -1,12 +1,12 @@
 ---
 name: add-tools
-description: Create tool configurations for a Sim integration by reading API docs
+description: Create tool configurations for a Labbai integration by reading API docs
 argument-hint: <service-name> [api-docs-url]
 ---
 
 # Add Tools Skill
 
-You are an expert at creating tool configurations for Sim integrations. Your job is to read API documentation and create properly structured tool files.
+You are an expert at creating tool configurations for Labbai integrations. Your job is to read API documentation and create properly structured tool files.
 
 ## Your Task
 
@@ -32,7 +32,7 @@ If the response shape is unknown, do one of these instead:
 
 ## Directory Structure
 
-Create files in `apps/sim/tools/{service}/`:
+Create files in `apps/labbai/tools/{service}/`:
 ```
 tools/{service}/
 ├── index.ts      # Barrel export
@@ -47,19 +47,19 @@ tools/{service}/
 Every tool must use exactly one of these configurations:
 
 - **In-process operation (preferred):** use `InternalToolConfig` when the executor and the
-  implementation run in the same Sim process/trust/runtime plane. Materialize typed
-  `operation.input`, implement the handler under `apps/sim/lib/internal/{service}/execute-tool.ts`,
-  and register every tool ID in `apps/sim/lib/internal/tool-operations/registry.server.ts`.
+  implementation run in the same Labbai process/trust/runtime plane. Materialize typed
+  `operation.input`, implement the handler under `apps/labbai/lib/internal/{service}/execute-tool.ts`,
+  and register every tool ID in `apps/labbai/lib/internal/tool-operations/registry.server.ts`.
 - **External provider request:** use `ToolConfig.request` only when the URL is an absolute external
   HTTP(S) provider endpoint.
 
-Never set a tool URL to `/api/...`, construct an absolute URL back to Sim, declare
+Never set a tool URL to `/api/...`, construct an absolute URL back to Labbai, declare
 `request.internal`, add a `directExecution` property (it fails `bun run check:tool-request-boundary`), import a route module, or create an API route merely to normalize files,
 authorize access, or reuse server code. A real browser/API route may remain as a thin adapter, but
 the route and the tool must call the same operation directly. A true cross-process/capability
 boundary uses an explicit server client and is not disguised as a tool self-hop.
 
-For protected Sim resources, the internal handler calls the domain's authorized application use
+For protected Labbai resources, the internal handler calls the domain's authorized application use
 case with trusted execution context; use the `migrate-application-operation` skill.
 
 ### External provider request
@@ -215,7 +215,7 @@ and leave the field unannotated.
 - **Text or structured content consumed by an AI model:** declare `request.modelInput` for an
   external provider request or `operation.modelInput` for an in-process operation, with
   `mode: 'project'` and select only the exact model-visible fields. The shared executor replaces
-  activated Sim secrets with canonical `{{NAME}}` labels before request formatting. For nested or
+  activated Labbai secrets with canonical `{{NAME}}` labels before request formatting. For nested or
   JSON-string fields, use a small shared selector plus `applyProjected`; verify that selecting the
   rebuilt params reproduces the projected selection.
 - **Serialized model content sent directly to an external provider:** include the serialized
@@ -225,12 +225,12 @@ and leave the field unannotated.
 - **Opaque model input owned by an in-process operation** such as inline audio, image, video, or
   document bytes: add `privateInputPaths` to the `mode: 'project'` operation model-input
   declaration, or use `mode: 'private-provenance'` with `inputPaths` when there is no textual
-  projection (see the `modelInput` union in `apps/sim/tools/types.ts`). Do not select storage keys,
+  projection (see the `modelInput` union in `apps/labbai/tools/types.ts`). Do not select storage keys,
   paths, signed URLs, or ordinary remote URLs as byte provenance; the owning operation must
   authorize stored bytes independently at model egress. The operation must call
   `validateOpaqueModelInputProvenance` before downloading or sending content to the model and must
   apply the workspace-file provenance guard before reading a persisted workspace file.
-- **Sim-owned durable storage or internal execution handoff** that can later enter a workflow/model
+- **Labbai-owned durable storage or internal execution handoff** that can later enter a workflow/model
   (table cells, Agent memory, knowledge documents/chunks, workspace-file contents, or child-workflow
   input): transport encrypted field-scoped provenance with `operation.secretProvenance`. The
   operation validates the exact selection and trusted scope, then persists, imports, or propagates
@@ -247,13 +247,13 @@ Hard rules:
   semantics. Use a registered in-process operation when encrypted provenance must cross the
   boundary.
 - Never sanitize arbitrary third-party tool results. Projection applies only to secrets activated
-  by Sim's resolved-secret provenance for that execution/tool call.
+  by Labbai's resolved-secret provenance for that execution/tool call.
 - Do not add provenance merely because a value is persisted, returned by a tool, or appears in a
-  filename. Require a concrete Sim `{{...}}` resolution path and a later model/log boundary. If an
+  filename. Require a concrete Labbai `{{...}}` resolution path and a later model/log boundary. If an
   unsupported field can resolve a secret but does not justify durable tracking (for example a
   `file_write` path), reject it at that exact ingress.
 - At diagnostic boundaries, project only values carrying execution-scoped provenance. Ordinary
-  provider responses, filenames, URLs, and errors remain unchanged when Sim did not resolve a
+  provider responses, filenames, URLs, and errors remain unchanged when Labbai did not resolve a
   secret into them.
 
 Add focused tests covering named projection, ordinary identical text without provenance, nested and
@@ -432,7 +432,7 @@ export * from './types'
 ## Registering Tools
 
 After creating tools:
-1. Import tools in `apps/sim/tools/registry.ts`
+1. Import tools in `apps/labbai/tools/registry.ts`
 2. Add to the `tools` object with snake_case keys (alphabetically):
 ```typescript
 import { serviceActionTool } from '@/tools/{service}'
@@ -456,7 +456,7 @@ these are regenerated — and CI fails on stale artifacts. Commit the result. Se
 
 ## Wiring Tools into the Block (Required)
 
-After registering in `tools/registry.ts`, you MUST also update the block definition at `apps/sim/blocks/blocks/{service}.ts`. This is not optional — tools are only usable from the UI if they are wired into the block.
+After registering in `tools/registry.ts`, you MUST also update the block definition at `apps/labbai/blocks/blocks/{service}.ts`. This is not optional — tools are only usable from the UI if they are wired into the block.
 
 ### 1. Add to `tools.access`
 
@@ -591,7 +591,7 @@ If creating V2 tools (API-aligned outputs), use `_v2` suffix:
 - [ ] All tool IDs use snake_case
 - [ ] Chose exactly one boundary: registered `InternalToolConfig.operation` or absolute external
       HTTP(S) `ToolConfig.request`
-- [ ] No tool request points to `/api/...`, constructs a URL back to Sim, or declares
+- [ ] No tool request points to `/api/...`, constructs a URL back to Labbai, or declares
       `request.internal`
 - [ ] No tool declares `directExecution`; in-process work uses a registered operation
 - [ ] All params have explicit `required: true` or `required: false`
@@ -608,8 +608,8 @@ If creating V2 tools (API-aligned outputs), use `_v2` suffix:
       `bun run docs:check` fails on stale pages
 - [ ] Block wired: `tools.access`, dropdown options, subBlocks, `tools.config`, outputs, inputs
 - [ ] Model, durable-storage, and internal-execution boundaries use the shared provenance mechanisms
-      only where a concrete Sim `{{...}}` resolution path requires them
-- [ ] Ordinary third-party inputs/results remain unchanged and private metadata never leaves Sim
+      only where a concrete Labbai `{{...}}` resolution path requires them
+- [ ] Ordinary third-party inputs/results remain unchanged and private metadata never leaves Labbai
 
 ## Final Validation (Required)
 

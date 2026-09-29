@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { retryOnLockTimeout } from '@sim/db/scripts/lock-timeout-retry'
+import { retryOnLockTimeout } from '@labbai/db/scripts/lock-timeout-retry'
 import { describe, expect, it, vi } from 'vitest'
 
 const BACKOFF = { baseMs: 2_000, maxMs: 30_000 } as const

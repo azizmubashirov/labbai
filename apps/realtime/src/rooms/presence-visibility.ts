@@ -1,4 +1,4 @@
-import { type RoomRef, roomName } from '@sim/realtime-protocol/rooms'
+import { type RoomRef, roomName } from '@labbai/realtime-protocol/rooms'
 import type { Server } from 'socket.io'
 import type { IRoomManager, UserPresence } from '@/rooms/types'
 

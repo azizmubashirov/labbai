@@ -29,7 +29,7 @@ When geometric centering looks off, align optically. Buttons with icons, play tr
 
 ### 3. Shadows Over Borders
 
-For elevation (dropdowns, modals, cards) use the `shadow-subtle`/`shadow-medium`/`shadow-overlay`/`shadow-card` tokens. In this repo neutral edges and dividers stay as `--border` borders (`.claude/rules/sim-styling.md`, Line weight) — do not swap them for `0 0 0 1px` shadow rings.
+For elevation (dropdowns, modals, cards) use the `shadow-subtle`/`shadow-medium`/`shadow-overlay`/`shadow-card` tokens. In this repo neutral edges and dividers stay as `--border` borders (`.claude/rules/labbai-styling.md`, Line weight) — do not swap them for `0 0 0 1px` shadow rings.
 
 ### 4. Interruptible Animations
 

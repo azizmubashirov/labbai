@@ -160,7 +160,7 @@ export interface WorkflowExecutionDelegationContext {
   principal?: WorkflowExecutionPrincipal
   currentWorkflow?: WorkflowExecutionAuthority
   /**
-   * The trusted Sim user ID legacy executor routes ran as before principal wiring.
+   * The trusted Labbai user ID legacy executor routes ran as before principal wiring.
    *
    * This is compatibility policy, not the authenticated subject: workspace
    * authorization and audit identity continue to use the principal itself.
@@ -245,7 +245,7 @@ export class PrincipalSubjectUserRequiredError extends Error {
 }
 
 /**
- * The Sim user a principal represents, or `undefined` when it represents none.
+ * The Labbai user a principal represents, or `undefined` when it represents none.
  *
  * Actorless callers are ordinary, not exceptional: a scheduled or webhook run, a
  * workspace API key, and a Credential Group enrollment all act with real authority
@@ -267,7 +267,7 @@ export function requirePrincipalSubjectUserId(principal: Principal): string {
 }
 
 /**
- * Resolves the principal's Sim user subject or its principal-bound legacy
+ * Resolves the principal's Labbai user subject or its principal-bound legacy
  * execution actor.
  *
  * Only operations that deliberately preserve pre-principal executor behavior

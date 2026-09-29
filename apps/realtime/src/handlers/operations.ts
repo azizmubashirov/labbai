@@ -1,5 +1,5 @@
-import { createLogger } from '@sim/logger'
-import { assertWorkflowMutable, WorkflowLockedError } from '@sim/platform-authz/workflow'
+import { createLogger } from '@labbai/logger'
+import { assertWorkflowMutable, WorkflowLockedError } from '@labbai/platform-authz/workflow'
 import {
   BLOCK_OPERATIONS,
   BLOCKS_OPERATIONS,
@@ -8,11 +8,11 @@ import {
   VARIABLE_OPERATIONS,
   type VariableOperation,
   WORKFLOW_OPERATIONS,
-} from '@sim/realtime-protocol/constants'
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
-import { WorkflowOperationSchema } from '@sim/realtime-protocol/schemas'
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+} from '@labbai/realtime-protocol/constants'
+import { ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
+import { WorkflowOperationSchema } from '@labbai/realtime-protocol/schemas'
+import { getErrorMessage } from '@labbai/utils/errors'
+import { generateId } from '@labbai/utils/id'
 import { ZodError } from 'zod'
 import { persistWorkflowOperation } from '@/database/operations'
 import type { AuthenticatedSocket } from '@/middleware/auth'

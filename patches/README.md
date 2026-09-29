@@ -6,7 +6,7 @@ provider signs the consent request and stores the authorization code.
 
 The version-pinned patch adds one optional string field to that schema. It does
 not change signature verification, consent, PKCE, token validation, or any other
-provider behavior. Sim validates the canonical Search MCP URL at its authorization
+provider behavior. Labbai validates the canonical Search MCP URL at its authorization
 and token boundaries, then binds it to the stored opaque tokens after the provider
 verifies the code and PKCE.
 
@@ -15,7 +15,7 @@ resource tampering, and verifies issuance, refresh, audience enforcement, and th
 existing API OAuth flow. Run it when changing this patch.
 
 Remove this patch when upgrading to a provider version with native authorization
-resource preservation. Review its persisted resource model and migrate Sim's
+resource preservation. Review its persisted resource model and migrate Labbai's
 opaque-token audience binding at the same time; preserving the query alone does
 not enforce an access token's audience.
 
@@ -37,7 +37,7 @@ PostgreSQL 17+ uses `transaction_timeout`; older supported servers use
 `idle_in_transaction_session_timeout` alongside the statement timeout. Both release
 a stalled idle holder; the older fallback limits each idle interval and statement,
 not the total elapsed transaction time.
-`apps/sim/lib/billing/core/usage-log.postgres.test.ts` tests real ESM/CommonJS driver
+`apps/labbai/lib/billing/core/usage-log.postgres.test.ts` tests real ESM/CommonJS driver
 closure and reconnection, rollback after billing INSERT/UPDATE, and exact retry
 accounting. CI runs it against PostgreSQL 17 and 16. Set
 `BILLING_USAGE_TEST_DATABASE_URL` to a disposable local PostgreSQL 15+ database to

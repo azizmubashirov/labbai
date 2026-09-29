@@ -1,6 +1,6 @@
 ---
 name: validate-selector
-description: Audit a Sim dynamic selector across its declaration, browser-safe manifest, server attachment, provider primitive, and selectors.execute security boundary. Use when reviewing selector correctness, secret handling, scope authorization, or migration completeness.
+description: Audit a Labbai dynamic selector across its declaration, browser-safe manifest, server attachment, provider primitive, and selectors.execute security boundary. Use when reviewing selector correctness, secret handling, scope authorization, or migration completeness.
 argument-hint: <selector-key-or-service>
 ---
 
@@ -13,10 +13,10 @@ Validate the complete path, not only the provider adapter.
 Read:
 
 - Every block, trigger, and connector field using the selector key.
-- `apps/sim/lib/selectors/manifest.ts` and `types.ts`.
-- `apps/sim/lib/selectors/context.ts`.
+- `apps/labbai/lib/selectors/manifest.ts` and `types.ts`.
+- `apps/labbai/lib/selectors/context.ts`.
 - The matching server attachment and any shared provider listing primitive.
-- `apps/sim/lib/selectors/server/registry.ts`.
+- `apps/labbai/lib/selectors/server/registry.ts`.
 - The shared application executor, route contract, client transport, and focused tests when the
   finding concerns shared behavior.
 
@@ -93,7 +93,7 @@ egress as critical.
 Run the smallest relevant focused suites plus:
 
 ```bash
-bun run --cwd apps/sim type-check
+bun run --cwd apps/labbai type-check
 bun run check:api-validation:strict
 bun run check:fork-dependent-coverage
 bun run check:client-boundary

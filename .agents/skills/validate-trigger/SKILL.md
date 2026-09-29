@@ -1,18 +1,18 @@
 ---
 name: validate-trigger
-description: Validate an existing Sim webhook trigger against provider API docs and repository conventions
+description: Validate an existing Labbai webhook trigger against provider API docs and repository conventions
 argument-hint: <service-name> [api-docs-url]
 ---
 
 # Validate Trigger
 
-You are an expert auditor for Sim webhook triggers. Your job is to validate that an existing trigger implementation is correct, complete, secure, and aligned across all layers.
+You are an expert auditor for Labbai webhook triggers. Your job is to validate that an existing trigger implementation is correct, complete, secure, and aligned across all layers.
 
 ## Your Task
 
 1. Read the service's webhook/API documentation (via WebFetch)
 2. Read every trigger file, provider handler, and registry entry
-3. Cross-reference against the API docs and Sim conventions
+3. Cross-reference against the API docs and Labbai conventions
 4. Report all issues grouped by severity (critical, warning, suggestion)
 5. Fix all issues after reporting them
 
@@ -21,19 +21,19 @@ You are an expert auditor for Sim webhook triggers. Your job is to validate that
 Read **every** file for the trigger — do not skip any:
 
 ```
-apps/sim/triggers/{service}/           # All trigger files, utils.ts, index.ts
-apps/sim/lib/webhooks/providers/{service}.ts  # Provider handler (if exists)
-apps/sim/lib/webhooks/providers/registry.ts   # Handler registry
-apps/sim/triggers/registry.ts                 # Trigger registry
-apps/sim/blocks/blocks/{service}.ts           # Block definition (trigger wiring)
+apps/labbai/triggers/{service}/           # All trigger files, utils.ts, index.ts
+apps/labbai/lib/webhooks/providers/{service}.ts  # Provider handler (if exists)
+apps/labbai/lib/webhooks/providers/registry.ts   # Handler registry
+apps/labbai/triggers/registry.ts                 # Trigger registry
+apps/labbai/blocks/blocks/{service}.ts           # Block definition (trigger wiring)
 ```
 
 Also read for reference:
 ```
-apps/sim/lib/webhooks/providers/types.ts            # WebhookProviderHandler interface
-apps/sim/lib/webhooks/providers/utils.ts            # Shared helpers (createHmacVerifier, etc.)
-apps/sim/lib/webhooks/provider-subscription-utils.ts    # Subscription helpers
-apps/sim/lib/webhooks/processor.ts                  # Central webhook processor
+apps/labbai/lib/webhooks/providers/types.ts            # WebhookProviderHandler interface
+apps/labbai/lib/webhooks/providers/utils.ts            # Shared helpers (createHmacVerifier, etc.)
+apps/labbai/lib/webhooks/provider-subscription-utils.ts    # Subscription helpers
+apps/labbai/lib/webhooks/processor.ts                  # Central webhook processor
 ```
 
 If trigger sub-blocks use a `selectorKey`, also apply the `validate-selector` skill and read the
@@ -80,7 +80,7 @@ If a payload schema is unknown, validation must explicitly recommend:
 - [ ] Every trigger's `id` matches the convention `{service}_{event_name}`
 - [ ] Every trigger's `provider` matches the service name used in the handler registry
 - [ ] `index.ts` barrel exports all triggers
-- [ ] Every remote `selectorKey` is present in `apps/sim/lib/selectors/manifest.ts` and has exactly
+- [ ] Every remote `selectorKey` is present in `apps/labbai/lib/selectors/manifest.ts` and has exactly
       one server attachment
 - [ ] Trigger-mode `dependsOn` fields project only active canonical values; exact `{{KEY}}`
       references stay unresolved in the browser
@@ -222,7 +222,7 @@ After reporting, fix every **critical** and **warning** issue. Apply **suggestio
 After fixing, confirm:
 1. `bun run type-check` passes
 2. Re-read all modified files to verify fixes are correct
-3. Provider handler tests pass (if they exist): `bun run --cwd apps/sim test lib/webhooks/providers/<handler-basename>` — handler files are kebab-case (`azure-devops.ts`) while trigger directories are snake_case (`azure_devops`), so use the handler's actual basename
+3. Provider handler tests pass (if they exist): `bun run --cwd apps/labbai test lib/webhooks/providers/<handler-basename>` — handler files are kebab-case (`azure-devops.ts`) while trigger directories are snake_case (`azure_devops`), so use the handler's actual basename
 4. Any remaining unknown webhook payload schemas were explicitly reported to the user instead of guessed
 
 ## Checklist Summary

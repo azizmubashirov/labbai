@@ -27,10 +27,10 @@ RUN set -eux; \
       "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}"; \
     echo "${sha}  /usr/local/bin/supercronic" | sha256sum -c -; \
     chmod +x /usr/local/bin/supercronic; \
-    addgroup -g 1001 -S sim; \
-    adduser -u 1001 -S -G sim -H sim
+    addgroup -g 1001 -S labbai; \
+    adduser -u 1001 -S -G labbai -H labbai
 
-COPY docker/crontab /etc/sim/crontab
+COPY docker/crontab /etc/labbai/crontab
 COPY docker/cron-entrypoint.sh /usr/local/bin/cron-entrypoint.sh
 RUN chmod +x /usr/local/bin/cron-entrypoint.sh
 

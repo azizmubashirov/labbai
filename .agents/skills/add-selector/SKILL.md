@@ -1,6 +1,6 @@
 ---
 name: add-selector
-description: Add or update a Sim dynamic selector using the shared manifest, server attachment, and selectors.execute path. Use for provider-backed, internal, or local option lists referenced by block, trigger, or connector selectorKey fields.
+description: Add or update a Labbai dynamic selector using the shared manifest, server attachment, and selectors.execute path. Use for provider-backed, internal, or local option lists referenced by block, trigger, or connector selectorKey fields.
 argument-hint: <selector-key>
 ---
 
@@ -14,12 +14,12 @@ browser never resolves credentials or calls a provider directly.
 
 Before editing, read:
 
-- `apps/sim/lib/selectors/types.ts`
-- `apps/sim/lib/selectors/manifest.ts`
-- `apps/sim/lib/selectors/context.ts`
-- `apps/sim/lib/selectors/server/types.ts`
-- `apps/sim/lib/selectors/server/registry.ts`
-- `apps/sim/hooks/queries/selectors.ts`
+- `apps/labbai/lib/selectors/types.ts`
+- `apps/labbai/lib/selectors/manifest.ts`
+- `apps/labbai/lib/selectors/context.ts`
+- `apps/labbai/lib/selectors/server/types.ts`
+- `apps/labbai/lib/selectors/server/registry.ts`
+- `apps/labbai/hooks/queries/selectors.ts`
 
 Then read the nearest existing selector attachment and the block, trigger, or connector declaration
 that will consume the key.
@@ -27,7 +27,7 @@ that will consume the key.
 ## Classify the selector
 
 - `provider-server`: contacts an external provider or uses provider credentials.
-- `internal-server`: reads protected Sim data through an existing authorized application use case.
+- `internal-server`: reads protected Labbai data through an existing authorized application use case.
 - `local`: pure browser-safe data with no protected data, credentials, references, or network I/O.
 
 Add every key to the browser-safe manifest in `lib/selectors/manifest.ts`. `SelectorKey` derives from
@@ -54,9 +54,9 @@ explicitly on each relevant manifest entry. Never send a full block or connector
 ## Add the server attachment
 
 For `provider-server`, add the service's attachment map under
-`apps/sim/lib/selectors/server/providers/` and include it in the exhaustive server registry. For
-`internal-server`, add the attachment in `apps/sim/lib/selectors/server/internal.ts`. Local keys use
-the exhaustive browser-safe registry in `apps/sim/lib/selectors/client/local.ts` and never enter the
+`apps/labbai/lib/selectors/server/providers/` and include it in the exhaustive server registry. For
+`internal-server`, add the attachment in `apps/labbai/lib/selectors/server/internal.ts`. Local keys use
+the exhaustive browser-safe registry in `apps/labbai/lib/selectors/client/local.ts` and never enter the
 server registry. A provider attachment declares:
 
 - For stored credentials, a credential policy with the exact context field and trusted
@@ -123,7 +123,7 @@ Run the smallest relevant set, then:
 
 ```bash
 bunx vitest run <focused selector tests>
-bun run --cwd apps/sim type-check
+bun run --cwd apps/labbai type-check
 bun run check:fork-dependent-coverage
 bun run check:client-boundary
 git diff --check

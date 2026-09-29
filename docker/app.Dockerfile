@@ -6,7 +6,7 @@ FROM oven/bun:1.4.1-slim AS base
 # Install Node.js 24 (Active LTS) and the runtime dependencies once in base.
 # Node runs only the isolated-vm sandbox worker (the app itself runs under Bun);
 # the version is kept in lockstep with the `isolated-vm` pin in
-# apps/sim/package.json — Node 24 (ABI 137) requires isolated-vm 6.x.
+# apps/labbai/package.json — Node 24 (ABI 137) requires isolated-vm 6.x.
 #
 # Only what the running container needs belongs here. ffmpeg backs the media
 # subprocess adapter; python3 is the node-gyp interpreter and is kept because
@@ -34,17 +34,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     python3-pip python3-venv make g++
 
 # ========================================
-# Pruner Stage: Emit a minimal monorepo subset that sim depends on
+# Pruner Stage: Emit a minimal monorepo subset that the app depends on
 # ========================================
 FROM build-base AS pruner
 WORKDIR /app
 
 COPY . .
 
-# Read the package name from the app manifest. The published CLI also owns the
-# `sim` package name, so a hard-coded historical name can silently prune the CLI
-# instead of the application after either package is renamed.
-RUN APP_PACKAGE_NAME="$(bun -e "console.log(require('./apps/sim/package.json').name)")" && \
+# Read the package name from the app manifest, so a hard-coded historical name
+# cannot silently prune the wrong package after it is renamed.
+RUN APP_PACKAGE_NAME="$(bun -e "console.log(require('./apps/labbai/package.json').name)")" && \
     TURBO_VERSION="$(bun -e "console.log(require('./package.json').devDependencies.turbo)")" && \
     bunx --bun "turbo@${TURBO_VERSION}" prune "$APP_PACKAGE_NAME" --docker
 
@@ -67,7 +66,7 @@ COPY --from=pruner /app/bun.lock ./bun.lock
 # devDeps but required at build time). Then rebuild isolated-vm against Node.js.
 # JOBS=4 caps node-gyp parallelism — higher values OOM isolated-vm (laverdet/isolated-vm#428).
 #
-# node-gyp comes from the lockfile, not `npx`. It is a devDependency of apps/sim
+# node-gyp comes from the lockfile, not `npx`. It is a devDependency of apps/labbai
 # purely so `turbo prune` keeps it. `npx`
 # resolved it from the registry at build time, which pulled a different major
 # (13.x vs the pinned 12.4.0) and bypassed the `minimumReleaseAge` supply-chain
@@ -91,12 +90,12 @@ WORKDIR /app
 # Copy node_modules from deps stage (cached if dependencies don't change)
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy pruned source tree (apps/sim + workspace packages it depends on)
+# Copy pruned source tree (apps/labbai + workspace packages it depends on)
 COPY --from=pruner /app/out/full/ ./
 
 # Next.js 16 / Turbopack workspace-root detection looks for a lockfile next to
 # the workspace package.json. Without it, `next build` fails with
-# "couldn't find next/package.json from /app/apps/sim". turbo also warns
+# "couldn't find next/package.json from /app/apps/labbai". turbo also warns
 # "Lockfile not found at /app/bun.lock" without it.
 COPY --from=pruner /app/bun.lock ./bun.lock
 
@@ -112,16 +111,16 @@ ARG NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 
 # Per-platform cache id keeps arm64/amd64 SWC artifacts isolated.
-RUN --mount=type=cache,id=next-cache-${TARGETPLATFORM},target=/app/apps/sim/.next/cache \
+RUN --mount=type=cache,id=next-cache-${TARGETPLATFORM},target=/app/apps/labbai/.next/cache \
     --mount=type=cache,id=turbo-cache-${TARGETPLATFORM},target=/app/.turbo \
     bun run build
 
 # Bundle the secrets-loading bootstrap into a self-contained entrypoint. It runs
 # before (and outside) the Next standalone server, so its dependencies
-# (@sim/runtime-secrets, AWS SDK) are inlined here rather than resolved from the
+# (@labbai/runtime-secrets, AWS SDK) are inlined here rather than resolved from the
 # pruned standalone node_modules. The dynamic import of ./server.js stays a
 # runtime import.
-RUN bun build apps/sim/bootstrap.ts --target=bun --outfile=apps/sim/bootstrap.js
+RUN bun build apps/labbai/bootstrap.ts --target=bun --outfile=apps/labbai/bootstrap.js
 
 # ========================================
 # Runner Stage: Run the actual app
@@ -138,13 +137,13 @@ RUN groupadd -g 1001 nodejs && \
     useradd -u 1001 -g nodejs nextjs
 
 # Copy application artifacts from builder
-COPY --from=builder --chown=nextjs:nodejs /app/apps/sim/public ./apps/sim/public
-COPY --from=builder --chown=nextjs:nodejs /app/apps/sim/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/sim/.next/static ./apps/sim/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/labbai/public ./apps/labbai/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/labbai/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/labbai/.next/static ./apps/labbai/.next/static
 
 # Self-contained secrets-loading bootstrap (bundled in the builder stage). Runs
 # before the standalone server.js to hydrate process.env from the runtime secret.
-COPY --from=builder --chown=nextjs:nodejs /app/apps/sim/bootstrap.js ./apps/sim/bootstrap.js
+COPY --from=builder --chown=nextjs:nodejs /app/apps/labbai/bootstrap.js ./apps/labbai/bootstrap.js
 
 # Copy isolated-vm native module (compiled for Node.js in deps stage)
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/isolated-vm ./node_modules/isolated-vm
@@ -157,7 +156,7 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/node-gyp-build ./node_m
 # files that `yjs/dist/yjs.mjs` imports through `lib0`'s exports map (e.g. `lib0/logging`), so the seed
 # 500s ("Cannot find module 'lib0/logging'") and every collaborative doc is stuck read-only. Overwrite
 # the partial trace with the complete packages from the full install (outputFileTracingIncludes can't:
-# its globs resolve against apps/sim, but these deps hoist to the monorepo-root node_modules).
+# its globs resolve against apps/labbai, but these deps hoist to the monorepo-root node_modules).
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/lib0 ./node_modules/lib0
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/yjs ./node_modules/yjs
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/y-protocols ./node_modules/y-protocols
@@ -177,16 +176,16 @@ COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@img ./node_modules/@im
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules/@napi-rs ./node_modules/@napi-rs
 
 # Copy the isolated-vm worker script
-COPY --from=builder --chown=nextjs:nodejs /app/apps/sim/lib/execution/isolated-vm-worker.cjs ./apps/sim/lib/execution/isolated-vm-worker.cjs
+COPY --from=builder --chown=nextjs:nodejs /app/apps/labbai/lib/execution/isolated-vm-worker.cjs ./apps/labbai/lib/execution/isolated-vm-worker.cjs
 
 # Copy the pre-built sandbox library bundles (pptxgenjs, docx, pdf-lib) that
 # run inside the V8 isolate. Committed into the repo; see
-# apps/sim/lib/execution/sandbox/bundles/build.ts to regenerate.
-COPY --from=builder --chown=nextjs:nodejs /app/apps/sim/lib/execution/sandbox/bundles ./apps/sim/lib/execution/sandbox/bundles
+# apps/labbai/lib/execution/sandbox/bundles/build.ts to regenerate.
+COPY --from=builder --chown=nextjs:nodejs /app/apps/labbai/lib/execution/sandbox/bundles ./apps/labbai/lib/execution/sandbox/bundles
 
 # Create .next/cache directory with correct ownership
-RUN mkdir -p apps/sim/.next/cache && \
-    chown -R nextjs:nodejs apps/sim/.next/cache
+RUN mkdir -p apps/labbai/.next/cache && \
+    chown -R nextjs:nodejs apps/labbai/.next/cache
 
 # Switch to non-root user
 USER nextjs
@@ -195,4 +194,4 @@ EXPOSE 3000
 ENV PORT=3000 \
     HOSTNAME="0.0.0.0"
 
-CMD ["bun", "apps/sim/bootstrap.js"]
+CMD ["bun", "apps/labbai/bootstrap.js"]

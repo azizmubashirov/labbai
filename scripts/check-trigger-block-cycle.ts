@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const APP = join(ROOT, 'apps/sim')
+const APP = join(ROOT, 'apps/labbai')
 
 /** Entry points that must never reach `blocks/`. Both are barrels an app module may import first. */
 const ENTRIES = ['triggers/index.ts', 'triggers/registry.ts']
@@ -141,7 +141,7 @@ if (failed) {
       'Do not fix this by reordering imports at the call site — that guard is invisible to the\n' +
       'test suite and one unused-import cleanup away from breaking again. Either keep the\n' +
       'dependency out of the triggers/ tree, or load it with a dynamic import() from\n' +
-      'apps/sim/triggers/editor-state.ts the way the editor-state readers do.\n'
+      'apps/labbai/triggers/editor-state.ts the way the editor-state readers do.\n'
   )
   process.exit(1)
 }

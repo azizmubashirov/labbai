@@ -1,5 +1,5 @@
 /**
- * Comprehensive mock for `@sim/db/schema`.
+ * Comprehensive mock for `@labbai/db/schema`.
  *
  * Every exported table maps each column to a `table.column` string, which
  * satisfies the drizzle column references used in query builders while keeping

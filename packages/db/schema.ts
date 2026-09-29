@@ -51,7 +51,7 @@ export const bytea = customType<{
  * every comparison of an address by identity must use — and the exact expression
  * `user_email_lower_idx` indexes, so a predicate written any other way silently
  * becomes a sequential scan. The TypeScript twin is `normalizeEmail` in
- * `@sim/utils/string`; the two must agree, and both are trim-and-lowercase.
+ * `@labbai/utils/string`; the two must agree, and both are trim-and-lowercase.
  */
 export function foldedEmail(column: AnyPgColumn | SQL): SQL<string> {
   return sql<string>`lower(btrim(${column}))`
@@ -88,7 +88,7 @@ export const user = pgTable(
      *
      * Deliberately not `banned`. A ban is a platform-admin action whose
      * `user.update.after` hook runs `disableUserResources`, archiving every
-     * workspace the user owns and deleting their API keys, and Sim has no
+     * workspace the user owns and deleting their API keys, and Labbai has no
      * server-side unban to reverse it. SCIM `active: false` is a reversible
      * organization-level suspension that must preserve ownership for a later
      * reactivation, so it needs a state of its own.
@@ -496,7 +496,7 @@ export const workflowExecutionLogs = pgTable(
     ),
 
     level: text('level').notNull(), // 'info' | 'error'
-    /** See `PERSISTED_WORKFLOW_EXECUTION_STATUSES` in `apps/sim/lib/logs/types.ts`. */
+    /** See `PERSISTED_WORKFLOW_EXECUTION_STATUSES` in `apps/labbai/lib/logs/types.ts`. */
     status: text('status').notNull().default('running'),
     trigger: text('trigger').notNull(), // 'api' | 'webhook' | 'schedule' | 'manual' | 'chat'
 
@@ -1180,7 +1180,7 @@ export const webhookPathClaim = pgTable(
 )
 
 /**
- * Cooldown state for Sim workspace-event trigger subscriptions.
+ * Cooldown state for Labbai workspace-event trigger subscriptions.
  *
  * Keyed by (workflowId, blockId, scopeKey) rather than the webhook row because
  * webhook rows are recreated per deployment version — state stored there would
@@ -3232,7 +3232,7 @@ export const document = pgTable(
 
     /**
      * Sorted access-token list applied by every document read; the vocabulary
-     * is owned by `apps/sim/lib/knowledge/access/tokens.ts`. `{ws}` (the
+     * is owned by `apps/labbai/lib/knowledge/access/tokens.ts`. `{ws}` (the
      * default) is any workspace member and `{}` is nobody. Uploads, API-created
      * documents, and workspace-mode connectors keep the default; a members-mode
      * connector materialises it from `knowledge_document_observation`.
@@ -4498,7 +4498,7 @@ export const ssoProvider = pgTable(
       onDelete: 'cascade',
     }),
     /**
-     * Better Auth's SSO `domainVerification` flag. Sim proves ownership itself
+     * Better Auth's SSO `domainVerification` flag. Labbai proves ownership itself
      * via {@link ssoDomain} before registration, so this mirrors that decision
      * rather than driving a second flow. It makes Better Auth treat the provider
      * as authoritative for its domain and auto-link same-email accounts; without
@@ -4508,7 +4508,7 @@ export const ssoProvider = pgTable(
     domainVerified: boolean('domain_verified').notNull().default(true),
     /**
      * Whether a successful SSO sign-in may provision a new organization
-     * membership. Sim owns this admission path so seat checks, billing effects,
+     * membership. Labbai owns this admission path so seat checks, billing effects,
      * session policy, and audit all use the same transaction as every other join.
      * Defaults to true to preserve existing providers during a rolling deploy.
      */
@@ -4588,7 +4588,7 @@ export const ssoDomain = pgTable(
 /**
  * OAuth 2.0 provider tables (Better Auth `@better-auth/oauth-provider`).
  *
- * Sim is the authorization server: a registered client (the Sim CLI, or an
+ * Labbai is the authorization server: a registered client (the Labbai CLI, or an
  * admin-created third-party app) sends a user through `/api/auth/oauth2/authorize`,
  * the user consents, and the client redeems a code for an opaque access token and
  * a rotating refresh token. Tokens are stored hashed; the plaintext exists only in
@@ -4949,7 +4949,7 @@ export const auditLog = pgTable(
 )
 
 /**
- * `model_unbilled` records model usage Sim does not charge for — a call funded by
+ * `model_unbilled` records model usage Labbai does not charge for — a call funded by
  * the customer's own provider key (BYOK). Its `cost` is always `0` and its value is
  * the token counts in `metadata`, so the org usage panel can report volume the
  * billing ledger has no reason to know about.
@@ -7315,7 +7315,7 @@ export interface ScimUserAttributes {
     organization?: string
     manager?: { value?: string; displayName?: string }
   }
-  /** Attributes Sim does not model, preserved so responses round-trip them. */
+  /** Attributes Labbai does not model, preserved so responses round-trip them. */
   extra?: Record<string, unknown>
 }
 
@@ -7383,10 +7383,10 @@ export const scimCredential = pgTable(
 )
 
 /**
- * The User resource one connection provisioned, and its link to a Sim account.
+ * The User resource one connection provisioned, and its link to a Labbai account.
  *
  * `id` is the SCIM resource id the provider stores and addresses; it is never a
- * Sim user id, so a provider cannot reach an account it did not provision by
+ * Labbai user id, so a provider cannot reach an account it did not provision by
  * guessing one.
  */
 export const scimUser = pgTable(
@@ -7434,7 +7434,7 @@ export const scimUser = pgTable(
 )
 
 /**
- * Remembers which Sim account a deleted external identity belonged to.
+ * Remembers which Labbai account a deleted external identity belonged to.
  *
  * Directories delete and recreate a person for an ordinary rename or rehire. The
  * tombstone makes the recreated resource relink to the same account instead of
@@ -7520,7 +7520,7 @@ export const scimGroupMember = pgTable(
 )
 
 /**
- * What a directory group means inside Sim, as an administrator configured it.
+ * What a directory group means inside Labbai, as an administrator configured it.
  *
  * A group may carry several mappings — a permission group, one or more
  * workspaces, and the organization admin role are independent targets.
@@ -7673,7 +7673,7 @@ export const localCopilotAuditStatusEnum = pgEnum('local_copilot_audit_status', 
 
 /**
  * Allowlisted Local Copilot picker ids. Keep in sync with
- * `LOCAL_COPILOT_CATALOG` in `apps/sim/local-copilot/lib/model-catalog.ts`.
+ * `LOCAL_COPILOT_CATALOG` in `apps/labbai/local-copilot/lib/model-catalog.ts`.
  */
 export const localCopilotDefaultModelEnum = pgEnum('local_copilot_default_model', [
   'openai',
@@ -7961,7 +7961,7 @@ export const inboxMessage = pgTable(
     operatorUserId: text('operator_user_id').references(() => user.id, { onDelete: 'set null' }),
     text: text('text').notNull(),
     /**
-     * Media on the message (`InboxAttachment[]` in `apps/sim/lib/inbox/attachments.ts`): channel
+     * Media on the message (`InboxAttachment[]` in `apps/labbai/lib/inbox/attachments.ts`): channel
      * media ids or links, never the bytes, which are fetched from the channel on demand. Files an
      * operator sends are kept in file storage and referenced by `storageKey`.
      */

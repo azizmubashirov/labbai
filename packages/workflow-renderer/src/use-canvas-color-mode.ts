@@ -19,7 +19,7 @@ const getServerColorMode = (): ColorMode => 'light'
 /**
  * Keeps React Flow's wrapper theme aligned with the document theme.
  *
- * React Flow v12 always stamps a `light` or `dark` class on its root. Sim's
+ * React Flow v12 always stamps a `light` or `dark` class on its root. Labbai's
  * nested-theme variant treats `light` as an intentional light island, so the
  * wrapper must inherit the document mode for canvas dark styles to keep working.
  * `useSyncExternalStore` supplies a stable light server snapshot during hydration

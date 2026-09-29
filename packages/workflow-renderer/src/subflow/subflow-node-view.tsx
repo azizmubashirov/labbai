@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ChipTag, cn, handleKeyboardActivation, Tooltip } from '@sim/emcn'
-import { Ban, Lock, Repeat, Split } from '@sim/emcn/icons'
-import { getWorkflowTypeAccent } from '@sim/workflow-renderer/workflow-type'
+import { ChipTag, cn, handleKeyboardActivation, Tooltip } from '@labbai/emcn'
+import { Ban, Lock, Repeat, Split } from '@labbai/emcn/icons'
+import { getWorkflowTypeAccent } from '@labbai/workflow-renderer/workflow-type'
 import {
   Handle,
   Position,

@@ -35,7 +35,7 @@ describe('roomName', () => {
   })
 
   it('never collides a namespaced room with a bare workflow id for real ids', () => {
-    // Room ids in Sim are opaque tokens without a colon (UUIDs / short ids), so a
+    // Room ids in Labbai are opaque tokens without a colon (UUIDs / short ids), so a
     // bare workflow id can never look like a `${type}:${id}` namespaced name.
     const workflow = roomName({ type: ROOM_TYPES.WORKFLOW, id: 'a1b2c3d4-uuid' })
     const files = roomName({ type: ROOM_TYPES.WORKSPACE_FILES, id: 'a1b2c3d4-uuid' })

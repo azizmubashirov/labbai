@@ -7,7 +7,7 @@
  * revocation or downgrade), and a transient failure never evicts a still-authorized
  * socket.
  */
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
+import { ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockResolveRole } = vi.hoisted(() => ({

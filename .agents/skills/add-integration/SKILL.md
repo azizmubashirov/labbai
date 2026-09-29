@@ -1,12 +1,12 @@
 ---
 name: add-integration
-description: Add a complete Sim integration from API docs, covering tools, block, icon, optional triggers, registrations, resolved-secret/model-input safety, and integration conventions. Use when introducing a new service under `apps/sim/tools`, `apps/sim/blocks`, and `apps/sim/triggers`.
+description: Add a complete Labbai integration from API docs, covering tools, block, icon, optional triggers, registrations, resolved-secret/model-input safety, and integration conventions. Use when introducing a new service under `apps/labbai/tools`, `apps/labbai/blocks`, and `apps/labbai/triggers`.
 argument-hint: <service-name> [api-docs-url]
 ---
 
 # Add Integration Skill
 
-You are an expert at adding complete integrations to Sim. This skill orchestrates the full process of adding a new service integration.
+You are an expert at adding complete integrations to Labbai. This skill orchestrates the full process of adding a new service integration.
 
 ## Overview
 
@@ -50,7 +50,7 @@ If response schemas are missing or incomplete, do one of the following before pr
 
 ### Directory Structure
 ```
-apps/sim/tools/{service}/
+apps/labbai/tools/{service}/
 ├── index.ts          # Barrel exports
 ├── types.ts          # TypeScript interfaces
 ├── {action1}.ts      # Tool for action 1
@@ -62,12 +62,12 @@ apps/sim/tools/{service}/
 
 Choose the tool boundary before writing the declaration:
 
-- Use `InternalToolConfig.operation` for same-process Sim/provider work. Put the handler under
-  `apps/sim/lib/internal/{service}/execute-tool.ts` and register every ID in
-  `apps/sim/lib/internal/tool-operations/registry.server.ts`.
+- Use `InternalToolConfig.operation` for same-process Labbai/provider work. Put the handler under
+  `apps/labbai/lib/internal/{service}/execute-tool.ts` and register every ID in
+  `apps/labbai/lib/internal/tool-operations/registry.server.ts`.
 - Use `ToolConfig.request` only for an absolute external HTTP(S) provider endpoint.
 
-Never point a tool at `/api/...`, construct an absolute URL back to Sim, declare
+Never point a tool at `/api/...`, construct an absolute URL back to Labbai, declare
 `request.internal`, add a `directExecution` property (it fails `bun run check:tool-request-boundary`), or add an API route merely to reuse code, normalize files, or authorize
 resources. A real external/browser route and an in-process tool may share the same operation, but
 neither calls the other. Follow the full transport and handler rules in the `add-tools` skill.
@@ -92,7 +92,7 @@ export interface {Service}Response extends ToolResponse {
 }
 ```
 
-**Tool file pattern:** an external provider API uses `ToolConfig` with `request` (absolute `https://` URL, headers, body, `transformResponse`); same-process Sim work uses `InternalToolConfig` with `operation`. Both full templates, param visibility rules, and output typing live in `.agents/skills/add-tools/SKILL.md` — read it before writing the first tool.
+**Tool file pattern:** an external provider API uses `ToolConfig` with `request` (absolute `https://` URL, headers, body, `transformResponse`); same-process Labbai work uses `InternalToolConfig` with `operation`. Both full templates, param visibility rules, and output typing live in `.agents/skills/add-tools/SKILL.md` — read it before writing the first tool.
 
 ### Critical Rules
 - `visibility: 'hidden'` for OAuth tokens
@@ -107,26 +107,26 @@ export interface {Service}Response extends ToolResponse {
 ### Resolved Secrets at Model and Persistence Boundaries
 
 Classify every request field (ordinary provider input / AI-consumed text / opaque model bytes /
-Sim-durable storage) before implementing the tool and apply the shared projection or provenance
-mechanism only where a concrete Sim `{{...}}` resolution path reaches a later model or log boundary.
+Labbai-durable storage) before implementing the tool and apply the shared projection or provenance
+mechanism only where a concrete Labbai `{{...}}` resolution path reaches a later model or log boundary.
 Full rules and the required tests are in `.agents/skills/add-tools/SKILL.md` → "Resolved Secrets and
 Provenance Boundaries".
 
 ## Step 3: Create Block
 
 ### File Location
-`apps/sim/blocks/blocks/{service}.ts`
+`apps/labbai/blocks/blocks/{service}.ts`
 
 Follow `.agents/skills/add-block/SKILL.md` for the block structure, subBlock types,
 `condition`/`dependsOn`/`required`/`mode` syntax, outputs, `canvasPresentation` sentences, and the
 `{Service}BlockMeta` export (minimum 7 templates, plus `url` and `skills`). Every block declares
-`canvasPresentation`; `bun run apps/sim/scripts/check-canvas-sentences.ts --block={service}` must
+`canvasPresentation`; `bun run apps/labbai/scripts/check-canvas-sentences.ts --block={service}` must
 pass (CI runs `check:canvas-sentences --require-coverage`).
 
 Two rules that are easy to get wrong when copying from existing blocks:
 
 - Every remote `selectorKey` must use the unified server selector path. Apply the `add-selector` skill:
-  add browser-safe metadata to `apps/sim/lib/selectors/manifest.ts`, reuse or extract a server-only
+  add browser-safe metadata to `apps/labbai/lib/selectors/manifest.ts`, reuse or extract a server-only
   provider listing primitive, and add a credential- and destination-bound server attachment. Do not
   add code under `hooks/selectors/providers`, a provider-specific query key, browser token acquisition,
   or a selector-only API route. The shared context builder sends only active `dependsOn` values and
@@ -139,7 +139,7 @@ Two rules that are easy to get wrong when copying from existing blocks:
 ## Step 4: Add Icon
 
 ### File Location
-`apps/sim/components/icons.tsx`
+`apps/labbai/components/icons.tsx`
 
 ### Pattern
 ```typescript
@@ -199,7 +199,7 @@ If the service supports webhooks or needs polling, follow `.agents/skills/add-tr
 
 ## Step 6: Register Everything
 
-### Tools Registry (`apps/sim/tools/registry.ts`)
+### Tools Registry (`apps/labbai/tools/registry.ts`)
 
 ```typescript
 // Add import (alphabetically)
@@ -226,7 +226,7 @@ Client code reads `params`/`outputs` from these artifacts rather than importing
 the registry, so a tool you add, change or remove is invisible to the UI until they are regenerated,
 and CI fails on stale ones. See `.agents/skills/tool-registry-boundary/SKILL.md`.
 
-### Block Registry (`apps/sim/blocks/registry-maps.ts`)
+### Block Registry (`apps/labbai/blocks/registry-maps.ts`)
 
 The data maps (`BLOCK_REGISTRY` + `BLOCK_META_REGISTRY`) live in `registry-maps.ts`; `registry.ts` holds only the accessor functions. Add the import and an entry to each map alphabetically:
 
@@ -247,7 +247,7 @@ export const BLOCK_META_REGISTRY: Record<string, BlockMeta> = {
 }
 ```
 
-### Trigger Registry (`apps/sim/triggers/registry.ts`) - If triggers exist
+### Trigger Registry (`apps/labbai/triggers/registry.ts`) - If triggers exist
 
 ```typescript
 // Add import (alphabetically)
@@ -275,12 +275,12 @@ The block's `oauth-input.serviceId` is the canonical link between the generated 
 the OAuth service configuration, deployment availability, and the setup CLI.
 
 1. Ensure the block has exactly one distinct OAuth `serviceId` and that it matches the canonical
-   service entry in `apps/sim/lib/oauth/oauth.ts`.
+   service entry in `apps/labbai/lib/oauth/oauth.ts`.
 2. Confirm `resolveOAuthClientCapabilityId(serviceId)` resolves to the intended provider entry in
    `OAUTH_CLIENT_CAPABILITIES` in `packages/deployment-config/src/env-capabilities.ts`. Google and
    Microsoft service IDs deliberately share provider-level capabilities.
 3. For a new OAuth provider, add the required client fields to `OAUTH_CLIENT_CAPABILITIES`, add
-   every referenced field to the env schema in `apps/sim/lib/core/config/env.ts`, and add the
+   every referenced field to the env schema in `apps/labbai/lib/core/config/env.ts`, and add the
    matching `text` or `secret` entries to `OAUTH_CLIENT_SETUP_FIELDS` in
    `packages/sim-setup/src/capability-config.ts`. Do not create integration-specific setup logic or
    infer secret fields from naming; the CLI mapping is exhaustively checked against the runtime
@@ -345,7 +345,7 @@ If creating V2 versions (API-aligned outputs):
 - [ ] Created tool file for each operation
 - [ ] Chose exactly one boundary per tool: registered `InternalToolConfig.operation` or absolute
       external HTTP(S) `ToolConfig.request`
-- [ ] No tool points to `/api/...`, constructs a URL back to Sim, declares `request.internal` or a
+- [ ] No tool points to `/api/...`, constructs a URL back to Labbai, declares `request.internal` or a
       `directExecution` property (fails `bun run check:tool-request-boundary`), or has an HTTP fallback for an in-process operation
 - [ ] All params have correct visibility
 - [ ] All nullable fields use `?? null`
@@ -353,7 +353,7 @@ If creating V2 versions (API-aligned outputs):
 - [ ] Created `index.ts` barrel export
 - [ ] Registered all tools in `tools/registry.ts`
 - [ ] Ran `bun run tool-metadata:generate` and committed the regenerated artifacts
-- [ ] Classified every model-visible, opaque, Sim-durable, and internal-execution request field
+- [ ] Classified every model-visible, opaque, Labbai-durable, and internal-execution request field
 - [ ] Added shared model-input projection or private provenance only where required; ordinary
       external resource locators and control inputs retain their request semantics
 - [ ] Confirmed ordinary third-party tool results are not generically sanitized
@@ -380,7 +380,7 @@ If creating V2 versions (API-aligned outputs):
 - [ ] If triggers: set `triggers.enabled` and `triggers.available`
 - [ ] If triggers: spread trigger subBlocks with `getTrigger()`
 - [ ] Exported `{Service}BlockMeta` with at least 7 templates
-- [ ] `canvasPresentation.sentences` covers every operation; `bun run apps/sim/scripts/check-canvas-sentences.ts --block={service}` passes
+- [ ] `canvasPresentation.sentences` covers every operation; `bun run apps/labbai/scripts/check-canvas-sentences.ts --block={service}` passes
 - [ ] `{Service}BlockMeta` also sets `url` (verified external homepage) and `skills` (grounded in `tools.access`, sourced from real use cases) — see add-block → BlockMeta
 
 ### OAuth Scopes (if OAuth service)
@@ -392,7 +392,7 @@ If creating V2 versions (API-aligned outputs):
 ### Deployment Availability (if OAuth service)
 - [ ] Block declares exactly one distinct `oauth-input.serviceId`
 - [ ] `resolveOAuthClientCapabilityId(serviceId)` resolves to the intended `OAUTH_CLIENT_CAPABILITIES` entry
-- [ ] Every new OAuth capability field exists in `apps/sim/lib/core/config/env.ts`
+- [ ] Every new OAuth capability field exists in `apps/labbai/lib/core/config/env.ts`
 - [ ] Runtime OAuth fields live in `OAUTH_CLIENT_CAPABILITIES`; matching CLI input modes live in the exhaustively checked `OAUTH_CLIENT_SETUP_FIELDS`
 - [ ] If `serviceAccountProviderId` is configured, `SERVICE_ACCOUNT_METADATA_BY_OAUTH_SERVICE_ID` has the matching projection and deployment requirement
 
@@ -437,7 +437,7 @@ When your integration handles file uploads or downloads, follow these patterns t
 
 ### What is a UserFile?
 
-`UserFile` (`apps/sim/executor/types.ts`) is the standard file representation in Sim — id, name, an access `url` (not guaranteed presigned — `remoteUrl` is the short-lived signed one, set only for providers that fetch by URL), size, MIME `type`, storage `key`, and optional inline `base64` / provider file handles. Read file bytes through the documented upload helpers, never by fetching `url` directly. Read the interface rather than relying on a copy here.
+`UserFile` (`apps/labbai/executor/types.ts`) is the standard file representation in Labbai — id, name, an access `url` (not guaranteed presigned — `remoteUrl` is the short-lived signed one, set only for providers that fetch by URL), size, MIME `type`, storage `key`, and optional inline `base64` / provider file handles. Read file bytes through the documented upload helpers, never by fetching `url` directly. Read the interface rather than relying on a copy here.
 
 ### File Input Pattern (Uploads)
 
@@ -514,11 +514,11 @@ export const {service}UploadTool: InternalToolConfig<Params, Response> = {
 }
 ```
 
-Implement `apps/sim/lib/internal/{service}/execute-tool.ts` and keep the file/provider work in typed
+Implement `apps/labbai/lib/internal/{service}/execute-tool.ts` and keep the file/provider work in typed
 operations beside it. The handler validates `request.input`, derives storage authority only from
 trusted `request.context`, authorizes every stored file before reading bytes, forwards
 `request.signal`, enforces declared and actual byte caps, and returns the canonical tool response.
-Register `{service}_upload` in `apps/sim/lib/internal/tool-operations/registry.server.ts` and add a
+Register `{service}_upload` in `apps/labbai/lib/internal/tool-operations/registry.server.ts` and add a
 registry/direct-handler test. There is no HTTP fallback.
 
 ### File Output Pattern (Downloads)

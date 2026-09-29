@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn, OverflowText } from '@sim/emcn'
+import { cn, OverflowText } from '@labbai/emcn'
 import type { CodePreview } from '../types'
 import { CodeHoverCard } from './code-hover-card'
 

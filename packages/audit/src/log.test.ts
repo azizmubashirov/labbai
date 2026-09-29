@@ -1,10 +1,10 @@
 /**
  * @vitest-environment node
  */
-import { auditMock, dbChainMock, dbChainMockFns, resetDbChainMock } from '@sim/testing'
+import { auditMock, dbChainMock, dbChainMockFns, resetDbChainMock } from '@labbai/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@sim/db', () => ({
+vi.mock('@labbai/db', () => ({
   ...dbChainMock,
   auditLog: { id: 'id', workspaceId: 'workspace_id' },
   user: { id: 'id', name: 'name', email: 'email' },
@@ -19,7 +19,7 @@ const { mockGetRequestContext } = vi.hoisted(() => ({
   mockGetRequestContext: vi.fn(),
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@labbai/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -28,14 +28,14 @@ vi.mock('@sim/logger', () => ({
   }),
   getRequestContext: mockGetRequestContext,
 }))
-vi.mock('@sim/utils/id', () => ({
+vi.mock('@labbai/utils/id', () => ({
   generateId: () => 'test-uuid-123',
   generateShortId: () => 'test-id-123',
   isValidUuid: (v: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
 }))
 
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@labbai/utils/helpers'
 import {
   AuditAction,
   AuditResourceType,

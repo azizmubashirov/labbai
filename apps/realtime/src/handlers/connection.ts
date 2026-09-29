@@ -1,5 +1,5 @@
-import { createLogger } from '@sim/logger'
-import { parseRoomName, ROOM_TYPES, type RoomRef, roomName } from '@sim/realtime-protocol/rooms'
+import { createLogger } from '@labbai/logger'
+import { parseRoomName, ROOM_TYPES, type RoomRef, roomName } from '@labbai/realtime-protocol/rooms'
 import { cleanupFileDocForSocket } from '@/handlers/file-doc'
 import { cleanupPendingSubblocksForSocket } from '@/handlers/subblocks'
 import { cleanupPendingVariablesForSocket } from '@/handlers/variables'

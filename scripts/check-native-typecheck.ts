@@ -2,7 +2,7 @@
 /**
  * Asserts that every workspace's bare `tsc` runs the native (Go) TypeScript 7 compiler.
  *
- * `@typescript/typescript6` (needed for apps/sim's runtime TypeScript API, and for the audit
+ * `@typescript/typescript6` (needed for apps/labbai's runtime TypeScript API, and for the audit
  * scripts that read the stable compiler API) pulls in an alias of `typescript@6` that declares
  * its own `tsc` bin. Package managers pick bin winners by lexical sort, not dependency depth, so
  * it wins `node_modules/.bin/tsc` unless something sorts ahead — which is the only job the root

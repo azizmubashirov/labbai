@@ -1,5 +1,5 @@
 {
-  "name": "@sim/runtime-secrets",
+  "name": "@labbai/runtime-secrets",
   "version": "0.1.0",
   "private": true,
   "sideEffects": false,
@@ -26,11 +26,11 @@
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "3.1117.0",
-    "@sim/logger": "workspace:*",
-    "@sim/utils": "workspace:*"
+    "@labbai/logger": "workspace:*",
+    "@labbai/utils": "workspace:*"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "@types/node": "24.2.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.0"

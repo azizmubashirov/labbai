@@ -7,9 +7,9 @@ import {
   FILE_DOC_MESSAGE_TYPE,
   FILE_DOC_SCHEMA_VERSION,
   FILE_DOC_SEED,
-} from '@sim/realtime-protocol/file-doc'
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
-import { sleep } from '@sim/utils/helpers'
+} from '@labbai/realtime-protocol/file-doc'
+import { ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
+import { sleep } from '@labbai/utils/helpers'
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +26,7 @@ const { mockAuthorizeRoom, mockFetchFileDocSeed, mockFetchFileDocMerge, mockFetc
     mockFetchFileDocPersist: vi.fn(),
   }))
 
-vi.mock('@sim/platform-authz/rooms', () => ({
+vi.mock('@labbai/platform-authz/rooms', () => ({
   authorizeRoom: mockAuthorizeRoom,
 }))
 

@@ -2,9 +2,9 @@ import {
   KNOWLEDGE_PROJECTION_DEFERRED,
   SOURCE_ACL_PROJECTIONS,
   SYNCHRONOUS_PROJECTION_WHEN,
-} from '@sim/db/knowledge-projection'
-import type { ScriptMigration } from '@sim/db/script-migrations/types'
-import { createLogger } from '@sim/logger'
+} from '@labbai/db/knowledge-projection'
+import type { ScriptMigration } from '@labbai/db/script-migrations/types'
+import { createLogger } from '@labbai/logger'
 import postgres, { type Sql, type TransactionSql } from 'postgres'
 import { retryOnLockTimeout } from '../scripts/lock-timeout-retry'
 

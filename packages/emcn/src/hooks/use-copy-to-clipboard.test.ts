@@ -1,4 +1,4 @@
-import { writeTextToClipboard } from '@sim/emcn'
+import { writeTextToClipboard } from '@labbai/emcn'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 interface MockClipboardItem {

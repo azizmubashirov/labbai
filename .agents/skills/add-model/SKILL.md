@@ -1,18 +1,18 @@
 ---
 name: add-model
-description: Add a new LLM model to apps/sim/providers/models.ts with specs verified against the provider's live API docs (no hallucination)
+description: Add a new LLM model to apps/labbai/providers/models.ts with specs verified against the provider's live API docs (no hallucination)
 argument-hint: <provider> <model-id> [docs-url]
 ---
 
 # Add Model Skill
 
-You add a new model entry to `apps/sim/providers/models.ts`. **Every numeric and capability claim MUST be derived from a live web fetch of the provider's official docs in this session.** Marketing emails, training data, and your prior knowledge are not sources of truth — they routinely hallucinate pricing, context windows, and capability lists.
+You add a new model entry to `apps/labbai/providers/models.ts`. **Every numeric and capability claim MUST be derived from a live web fetch of the provider's official docs in this session.** Marketing emails, training data, and your prior knowledge are not sources of truth — they routinely hallucinate pricing, context windows, and capability lists.
 
 ## Hard rules (do not skip)
 
 1. **Live-fetch or refuse.** Before writing the entry, you must successfully WebFetch the provider's official models/pricing page in this session. If you cannot reach an authoritative source for any field, **mark the field as UNVERIFIED in your report and ask the user before guessing**. Never fill in pricing or capabilities from memory.
 2. **Two-source rule for pricing.** Cross-check input/output/cached pricing against at least one secondary source (OpenRouter, Artificial Analysis, CloudPrice, mem0, intuitionlabs). If sources disagree, the provider's own docs win — but flag the disagreement.
-3. **Read the code before setting capability flags.** Capability flags are dead unless the provider's implementation under `apps/sim/providers/{provider}/` actually consumes them (see Consumption Matrix below). Setting a flag the provider ignores is a silent bug.
+3. **Read the code before setting capability flags.** Capability flags are dead unless the provider's implementation under `apps/labbai/providers/{provider}/` actually consumes them (see Consumption Matrix below). Setting a flag the provider ignores is a silent bug.
 4. **Cite every fact.** Your final report must list the URL each value came from. No URL → not verified.
 
 ## Your Task
@@ -62,15 +62,15 @@ Use a precise WebFetch prompt: *"Extract for {model_id}: exact model id string, 
 **Always re-grep before relying on this table** — the codebase moves:
 
 ```bash
-rg "reasoningEffort|reasoning_effort" apps/sim/providers/<provider>/
-rg "verbosity" apps/sim/providers/<provider>/
-rg "request\.thinking|thinking:" apps/sim/providers/<provider>/
-rg "supportsNativeStructuredOutputs|nativeStructuredOutputs" apps/sim/providers/<provider>/
+rg "reasoningEffort|reasoning_effort" apps/labbai/providers/<provider>/
+rg "verbosity" apps/labbai/providers/<provider>/
+rg "request\.thinking|thinking:" apps/labbai/providers/<provider>/
+rg "supportsNativeStructuredOutputs|nativeStructuredOutputs" apps/labbai/providers/<provider>/
 ```
 
 ## Step 3: Match the provider's existing entry pattern
 
-Open `apps/sim/providers/models.ts`, find `PROVIDER_DEFINITIONS[<provider>].models`, read 2-3 sibling entries. Match field order exactly:
+Open `apps/labbai/providers/models.ts`, find `PROVIDER_DEFINITIONS[<provider>].models`, read 2-3 sibling entries. Match field order exactly:
 
 ```ts
 {
@@ -114,7 +114,7 @@ Adding the `models.ts` entry is most of the job because nearly every consumer is
 
 ### Hosted = auto-billed, by provider
 
-`getHostedModels()` in `apps/sim/providers/models.ts` returns the model IDs served with Sim's rotating hosted key and billed to the workspace via `shouldBillModelUsage()` (`providers/utils.ts`). It builds that list by expanding whole providers (`getProviderModels('openai')`, `'anthropic'`, `'google'`, and others) plus the static Fireworks catalog, so any model added under one of those providers is hosted automatically. Read the function before inserting — the provider set changes. Before you insert:
+`getHostedModels()` in `apps/labbai/providers/models.ts` returns the model IDs served with Labbai's rotating hosted key and billed to the workspace via `shouldBillModelUsage()` (`providers/utils.ts`). It builds that list by expanding whole providers (`getProviderModels('openai')`, `'anthropic'`, `'google'`, and others) plus the static Fireworks catalog, so any model added under one of those providers is hosted automatically. Read the function before inserting — the provider set changes. Before you insert:
 
 - **If the model should be BYOK-only / never-billed**, do not add it under a provider that `getHostedModels()` expands — that silently enrolls it in hosted billing. After inserting, verify with `getHostedModels().includes('<new-model-id>')` (a one-line `bun -e` or the assertion in `providers/utils.test.ts`). Confirm hosting/billing intent with the user. (Ollama Cloud is a deliberately separate `isReseller` provider specifically to stay BYOK-only/never-billed.)
 - **If the model should be hosted**, the deployment must actually have a key for it — the provider's `{PREFIX}_COUNT` / `{PREFIX}_1..N` env vars must be set, or hosted runs fail at execution time.
@@ -124,24 +124,24 @@ Adding the `models.ts` entry is most of the job because nearly every consumer is
 
 `bun run lint` does **not** run tests. A few tests assert specific model IDs and can break or need updating when you touch a hosted or flagship model:
 
-- `apps/sim/providers/utils.test.ts` — asserts membership of `getHostedModels()` / `shouldBillModelUsage()`
-- `apps/sim/providers/index.test.ts` and serializer tests — reference concrete model IDs
+- `apps/labbai/providers/utils.test.ts` — asserts membership of `getHostedModels()` / `shouldBillModelUsage()`
+- `apps/labbai/providers/index.test.ts` and serializer tests — reference concrete model IDs
 
 ```bash
-rg "<new-model-id>|getHostedModels|shouldBillModelUsage" apps/sim/providers/*.test.ts
+rg "<new-model-id>|getHostedModels|shouldBillModelUsage" apps/labbai/providers/*.test.ts
 ```
 
 If anything matches, run the affected provider tests and update assertions as needed.
 
 ### New API behavior is NOT data-driven
 
-The Consumption Matrix (Step 2) tells you which capability *flags* are honored by existing provider code. But if the new model needs **net-new** request handling that the provider doesn't implement yet — a new beta header, a new thinking/reasoning encoding, a Responses-API quirk — you must edit `apps/sim/providers/<provider>/core.ts` / `index.ts`. Setting a flag whose behavior isn't implemented is a silent no-op. When you do edit provider code, reuse the shared helpers rather than hand-rolling: streaming responses are assembled via `createStreamingExecution` (`@/providers/streaming-execution`) and tool schemas via `adaptOpenAIChatToolSchema` / `adaptAnthropicToolSchema` (`@/providers/tool-schema-adapter`).
+The Consumption Matrix (Step 2) tells you which capability *flags* are honored by existing provider code. But if the new model needs **net-new** request handling that the provider doesn't implement yet — a new beta header, a new thinking/reasoning encoding, a Responses-API quirk — you must edit `apps/labbai/providers/<provider>/core.ts` / `index.ts`. Setting a flag whose behavior isn't implemented is a silent no-op. When you do edit provider code, reuse the shared helpers rather than hand-rolling: streaming responses are assembled via `createStreamingExecution` (`@/providers/streaming-execution`) and tool schemas via `adaptOpenAIChatToolSchema` / `adaptAnthropicToolSchema` (`@/providers/tool-schema-adapter`).
 
 ### Thinking/reasoning models: `streamed` visibility + generated docs
 
 If the entry has `capabilities.thinking` or `capabilities.reasoningEffort`, it appears in the autogenerated "Streamed thinking and tool calls" table on the Agent block docs page:
 
-- **Anthropic-family (`anthropic`, `azure-anthropic`) thinking models MUST declare `capabilities.thinking.streamed`** (`'full' | 'summary' | 'none'`). Verify against Anthropic's current thinking-display and streaming docs: visible thinking returned by the API is summarized, including when Sim opts models whose default display is `omitted` into `display: 'summarized'` on agent-events runs, so current Claude thinking models use `'summary'`. Use `'full'` only if future official API docs explicitly guarantee raw thinking deltas. `bun run agent-stream-docs:check` (CI) fails if the field is missing.
+- **Anthropic-family (`anthropic`, `azure-anthropic`) thinking models MUST declare `capabilities.thinking.streamed`** (`'full' | 'summary' | 'none'`). Verify against Anthropic's current thinking-display and streaming docs: visible thinking returned by the API is summarized, including when Labbai opts models whose default display is `omitted` into `display: 'summarized'` on agent-events runs, so current Claude thinking models use `'summary'`. Use `'full'` only if future official API docs explicitly guarantee raw thinking deltas. `bun run agent-stream-docs:check` (CI) fails if the field is missing.
 - Other families usually omit the field and inherit the provider default in `getThinkingStreamVisibility` (Gemini/OpenAI → summaries; Bedrock/Meta → none; OpenAI-compatible vendors with documented reasoning fields → full deltas). Set it explicitly only when the model deviates from its family.
 - After inserting the entry, run `bun run agent-stream-docs:generate` and commit the regenerated `apps/docs/content/docs/workflows/blocks/agent.mdx` — CI diffs it.
 - Include the `streamed` value (with its source URL) in the verification report when set.

@@ -31,7 +31,7 @@ function toolGuard(label: string, detect: () => { ok: boolean; hint: string }): 
     }
     if (!warned) {
       warned = true
-      console.warn(`[@sim/testing] Skipping tests that require ${label}. ${result.hint}`)
+      console.warn(`[@labbai/testing] Skipping tests that require ${label}. ${result.hint}`)
     }
     return false
   }

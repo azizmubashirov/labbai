@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { repairWorkspaceFileContentRevisions } from '@sim/db/script-migrations/0018_repair_workspace_file_content_revision'
-import { generateId } from '@sim/utils/id'
+import { repairWorkspaceFileContentRevisions } from '@labbai/db/script-migrations/0018_repair_workspace_file_content_revision'
+import { generateId } from '@labbai/utils/id'
 import postgres, { type Sql } from 'postgres'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 

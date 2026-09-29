@@ -302,15 +302,15 @@ describe('tool self-hop audit', () => {
 
   it('rejects a same-origin path passed through a local URL helper', () => {
     const audit = auditToolSelfHops(`
-      import { getBaseUrl as getSimOrigin } from '@/lib/core/utils/urls'
+      import { getBaseUrl as getLabbaiOrigin } from '@/lib/core/utils/urls'
       function providerUrl(path, host) {
         return new URL(path, host).toString()
       }
-      const simOrigin = getSimOrigin()
+      const labbaiOrigin = getLabbaiOrigin()
       const tool = {
         id: 'test_tool',
         request: {
-          url: () => providerUrl('/api/tools/test', simOrigin),
+          url: () => providerUrl('/api/tools/test', labbaiOrigin),
           method: 'POST',
         },
       }
@@ -360,7 +360,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a same-origin path concatenated with the Sim origin', () => {
+  it('rejects a same-origin path concatenated with the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -372,7 +372,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a helper-returned path concatenated with the Sim origin', () => {
+  it('rejects a helper-returned path concatenated with the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       function buildPath() {
@@ -387,7 +387,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a locally-bound helper path concatenated with the Sim origin', () => {
+  it('rejects a locally-bound helper path concatenated with the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       function buildPath() {
@@ -403,7 +403,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a same-origin path interpolated with the Sim origin', () => {
+  it('rejects a same-origin path interpolated with the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -415,7 +415,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a helper-returned path interpolated with the Sim origin', () => {
+  it('rejects a helper-returned path interpolated with the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       function buildPath() {
@@ -430,7 +430,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a helper-returned path resolved against the Sim origin', () => {
+  it('rejects a helper-returned path resolved against the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       function buildPath() {
@@ -445,7 +445,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a relative internal path resolved against the Sim origin', () => {
+  it('rejects a relative internal path resolved against the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -457,7 +457,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a normalized relative internal path resolved against the Sim origin', () => {
+  it('rejects a normalized relative internal path resolved against the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       function buildPath() {
@@ -472,7 +472,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects an internal path resolved against a path-normalized Sim origin', () => {
+  it('rejects an internal path resolved against a path-normalized Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const baseUrl = getBaseUrl() + '/tool-proxy/'
@@ -485,7 +485,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects an internal path resolved against a template-normalized Sim origin', () => {
+  it('rejects an internal path resolved against a template-normalized Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const baseUrl = \`\${getBaseUrl()}/tool-proxy/\`
@@ -498,7 +498,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects an internal path resolved against a helper-normalized Sim origin', () => {
+  it('rejects an internal path resolved against a helper-normalized Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       function getNormalizedOrigin() {
@@ -517,7 +517,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a one-argument URL built from the Sim origin', () => {
+  it('rejects a one-argument URL built from the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -532,7 +532,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a one-argument URL concatenated from the Sim origin', () => {
+  it('rejects a one-argument URL concatenated from the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -547,7 +547,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a chained path concatenated from the Sim origin', () => {
+  it('rejects a chained path concatenated from the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -559,7 +559,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects a known Sim URL builder wrapped in URL construction', () => {
+  it('rejects a known Labbai URL builder wrapped in URL construction', () => {
     const audit = auditToolSelfHops(`
       import { buildAPIUrl } from '@/executor/utils/http'
       const tool = {
@@ -574,7 +574,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations[0]?.reason).toBe('same-origin-tool-request')
   })
 
-  it('rejects an internal path resolved against a local Sim-origin wrapper', () => {
+  it('rejects an internal path resolved against a local Labbai-origin wrapper', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       function getHost() {
@@ -603,11 +603,11 @@ describe('tool self-hop audit', () => {
 
   it('rejects a same-origin path passed through a known imported URL builder', () => {
     const audit = auditToolSelfHops(`
-      import { buildAPIUrl as buildSimUrl } from '@/executor/utils/http'
+      import { buildAPIUrl as buildLabbaiUrl } from '@/executor/utils/http'
       const tool = {
         id: 'test_tool',
         request: {
-          url: () => buildSimUrl('/api/tools/test').toString(),
+          url: () => buildLabbaiUrl('/api/tools/test').toString(),
           method: 'POST',
         },
       }
@@ -756,7 +756,7 @@ describe('tool self-hop audit', () => {
     ])
   })
 
-  it('does not mistake a provider-relative path argument for a Sim API route', () => {
+  it('does not mistake a provider-relative path argument for a Labbai API route', () => {
     const audit = auditToolSelfHops(`
       function providerUrl(path, host) {
         return new URL(path, host).toString()
@@ -804,7 +804,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations).toEqual([])
   })
 
-  it('allows a protocol-relative provider URL resolved against the Sim origin', () => {
+  it('allows a protocol-relative provider URL resolved against the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -819,7 +819,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations).toEqual([])
   })
 
-  it('does not treat hostname mutation as Sim-origin normalization', () => {
+  it('does not treat hostname mutation as Labbai-origin normalization', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const providerOrigin = getBaseUrl() + '.provider.example.com'
@@ -835,7 +835,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations).toEqual([])
   })
 
-  it('fails closed when a dynamic suffix follows the Sim origin', () => {
+  it('fails closed when a dynamic suffix follows the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -920,7 +920,7 @@ describe('tool self-hop audit', () => {
     expect(audit.violations).toEqual([])
   })
 
-  it('preserves Sim-origin arguments passed into an imported request factory', () => {
+  it('preserves Labbai-origin arguments passed into an imported request factory', () => {
     const audit = auditToolSelfHops(
       `
         import { getBaseUrl } from '@/lib/core/utils/urls'
@@ -973,7 +973,7 @@ describe('tool self-hop audit', () => {
     ])
   })
 
-  it('rejects an uninspectable URL helper combined with the Sim origin', () => {
+  it('rejects an uninspectable URL helper combined with the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -990,7 +990,7 @@ describe('tool self-hop audit', () => {
     ])
   })
 
-  it('rejects a dynamic path resolved against the Sim origin', () => {
+  it('rejects a dynamic path resolved against the Labbai origin', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {
@@ -1007,7 +1007,7 @@ describe('tool self-hop audit', () => {
     ])
   })
 
-  it('allows an encoded path segment resolved against a static non-API Sim path', () => {
+  it('allows an encoded path segment resolved against a static non-API Labbai path', () => {
     const audit = auditToolSelfHops(`
       import { getBaseUrl } from '@/lib/core/utils/urls'
       const tool = {

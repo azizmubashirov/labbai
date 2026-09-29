@@ -28,11 +28,11 @@
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { tools } from '../apps/sim/tools/registry'
+import { tools } from '../apps/labbai/tools/registry'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const APP = resolve(ROOT, 'apps/sim')
+const APP = resolve(ROOT, 'apps/labbai')
 const TOOL_TYPES = resolve(APP, 'tools/types.ts')
 const CONTRACT = resolve(APP, 'lib/api/contracts/byok-keys.ts')
 const SETTINGS = resolve(APP, 'app/workspace/[workspaceId]/settings/components/byok/byok.tsx')

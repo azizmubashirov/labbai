@@ -13,7 +13,7 @@ const tables = vi.hoisted(() => ({
   workflowSubflows: { name: 'workflowSubflows' as const, workflowId: 'workflow_id' },
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@labbai/db', () => ({
   db: {},
   workflow: tables.workflow,
   workflowBlocks: tables.workflowBlocks,
@@ -21,7 +21,7 @@ vi.mock('@sim/db', () => ({
   workflowSubflows: tables.workflowSubflows,
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@labbai/logger', () => ({
   createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
 }))
 

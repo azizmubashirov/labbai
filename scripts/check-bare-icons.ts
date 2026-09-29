@@ -16,7 +16,7 @@
  * Each block's main `icon:` AND every template's own `icon:` is audited (a
  * template may reuse another block's brand icon). Only icons imported from
  * `@/components/icons` are checked — that is the only module this script can
- * resolve; `@sim/emcn/icons` are design-system line icons drawn with
+ * resolve; `@labbai/emcn/icons` are design-system line icons drawn with
  * `currentColor` and are safe by construction, so they are intentionally
  * skipped.
  *
@@ -33,8 +33,8 @@ import path from 'node:path'
 import { perceivedBrightness } from '../packages/utils/src/color'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const BLOCKS_DIR = path.join(ROOT, 'apps/sim/blocks/blocks')
-const ICONS_FILE = path.join(ROOT, 'apps/sim/components/icons.tsx')
+const BLOCKS_DIR = path.join(ROOT, 'apps/labbai/blocks/blocks')
+const ICONS_FILE = path.join(ROOT, 'apps/labbai/components/icons.tsx')
 
 const isNearWhite = (c: string) => {
   const b = perceivedBrightness(c)

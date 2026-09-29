@@ -1,8 +1,8 @@
 ---
 description: SEO and GEO guidelines for the landing page
 paths:
-  - "apps/sim/app/(landing)/**/*.tsx"
-  - "apps/sim/content/**/*.mdx"
+  - "apps/labbai/app/(landing)/**/*.tsx"
+  - "apps/labbai/content/**/*.mdx"
 ---
 
 # Landing Page — SEO / GEO
@@ -20,10 +20,10 @@ paths:
 
 ## GEO (Generative Engine Optimisation)
 
-- **Answer-first pattern**: each section's H2 + subtitle should directly answer a user question (e.g. "What is Sim?", "How fast can I deploy?").
+- **Answer-first pattern**: each section's H2 + subtitle should directly answer a user question (e.g. "What is Labbai?", "How fast can I deploy?").
 - **Atomic answer blocks**: each feature / template card should be independently extractable by an AI summariser.
-- **Entity consistency**: always write "Sim" by name — never "the platform" or "our tool".
-- **Keyword density**: first 150 visible chars of Hero must name "AI workspace" and "AI agents". "Sim" is carried by the title tag, the meta description, and the Hero `sr-only` summary — the H1 does not have to spend its opening words on the brand.
+- **Entity consistency**: always write "Labbai" by name — never "the platform" or "our tool".
+- **Keyword density**: first 150 visible chars of Hero must name "AI workspace" and "AI agents". "Labbai" is carried by the title tag, the meta description, and the Hero `sr-only` summary — the H1 does not have to spend its opening words on the brand.
 - **sr-only summaries**: Hero and Templates each have a `<p className="sr-only">` (~50 words) as an atomic product/catalog summary for AI citation.
 - **Specific numbers**: prefer concrete figures ("1,000+ integrations", "15+ AI providers") over vague claims.
 
@@ -44,4 +44,4 @@ Answer engines weight recency to avoid repeating stale facts, and a reader decid
 - **Show the same date to the reader.** `/comparisons/[provider]` renders "Last verified …" from `getLatestVerifiedDate()`; `/library` and `/blog` posts render "Updated …" next to the publish date. A date that exists only in metadata is invisible to a reader deciding whether to trust the page.
 - **Only surface a modified date when it differs from the publish date** — an "Updated" label on the publish day is noise.
 - **Bump the date only on a substantive edit.** Touching frontmatter without changing the content is date-washing; it degrades the signal for every other page on the domain.
-- **Comparison facts are dated at the fact level.** Every `Fact` in `apps/sim/lib/compare/data` carries `sources: [{ url, label, asOf }]`. Re-checking a fact means updating its `asOf`, which flows through `getLatestVerifiedDate()` to the visible date, the JSON-LD, and the sitemap.
+- **Comparison facts are dated at the fact level.** Every `Fact` in `apps/labbai/lib/compare/data` carries `sources: [{ url, label, asOf }]`. Re-checking a fact means updating its `asOf`, which flows through `getLatestVerifiedDate()` to the visible date, the JSON-LD, and the sitemap.

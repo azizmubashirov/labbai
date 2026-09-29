@@ -6,7 +6,7 @@ argument-hint: <flag-name>
 
 # Add Feature Flag Skill
 
-You add a **runtime feature flag** to Sim that can change on prod with no redeploy (AWS AppConfig). Prefer a global on/off flag unless the rollout actually needs per-workspace, per-organization, per-user, or platform-admin targeting. When AppConfig isn't the source of truth, the flag falls back to a single **secret** (on/off only).
+You add a **runtime feature flag** to Labbai that can change on prod with no redeploy (AWS AppConfig). Prefer a global on/off flag unless the rollout actually needs per-workspace, per-organization, per-user, or platform-admin targeting. When AppConfig isn't the source of truth, the flag falls back to a single **secret** (on/off only).
 
 ## When to use this vs `env-flags.ts`
 
@@ -41,7 +41,7 @@ Critically, **none of this is expressible in code** — gating (especially `admi
    - If the user chooses scoped gating but does not name the dimensions, ask which of workspace, organization, user, and platform admin it needs. Wire only the selected dimensions.
    - If the user wants a fixed per-deployment toggle rather than a runtime AppConfig flag, use `env-flags.ts` instead.
 
-2. **Define the flag.** Add one entry to the `FEATURE_FLAGS` registry in `apps/sim/lib/core/config/feature-flags.ts`. Each entry is the flag's whole definition — name (kebab-case key), `description`, and the `fallback` secret consulted when AppConfig isn't the source of truth (truthy ⇒ on globally):
+2. **Define the flag.** Add one entry to the `FEATURE_FLAGS` registry in `apps/labbai/lib/core/config/feature-flags.ts`. Each entry is the flag's whole definition — name (kebab-case key), `description`, and the `fallback` secret consulted when AppConfig isn't the source of truth (truthy ⇒ on globally):
 
    ```ts
    const FEATURE_FLAGS = {
@@ -52,7 +52,7 @@ Critically, **none of this is expressible in code** — gating (especially `admi
    }
    ```
 
-   `fallback` is the env/secret key (typed as `keyof typeof env`), so add `<FLAG_SECRET>` to `apps/sim/lib/core/config/env.ts` first (and the deployment's secret store) — it won't typecheck otherwise. Do **not** add workspace/org/user/admin defaults here — that gating exists only in AppConfig. Adding the entry makes `<flag-name>` a valid `FeatureFlagName`.
+   `fallback` is the env/secret key (typed as `keyof typeof env`), so add `<FLAG_SECRET>` to `apps/labbai/lib/core/config/env.ts` first (and the deployment's secret store) — it won't typecheck otherwise. Do **not** add workspace/org/user/admin defaults here — that gating exists only in AppConfig. Adding the entry makes `<flag-name>` a valid `FeatureFlagName`.
 
 3. **Gate the call site at the chosen granularity.** For the recommended global mode, pass no context:
 
@@ -83,7 +83,7 @@ Critically, **none of this is expressible in code** — gating (especially `admi
 
 4. **(Prod) configure in AppConfig.** The infra `feature-flags` profile schema is permissive, so a new flag needs **no infra change**. Operators add the flag to the hosted `feature-flags` document using `enabled` for global rollout or only the selected `workspaceIds`/`orgIds`/`userIds`/`adminEnabled` clauses for scoped rollout, then start a `sim-<env>-fast` deployment (see the AppConfig runbook in the infra README — same flow as `access-control`). The fallback secret only applies when AppConfig is disabled.
 
-5. **Test.** Add a case to `apps/sim/lib/core/config/feature-flags.test.ts` that matches the chosen granularity. For a global flag, exercise `isFeatureEnabled('<flag-name>')` with an AppConfig `enabled` rule and toggle the fallback secret for the off-AppConfig path. For scoped rollout, cover only the selected clauses and mock `isPlatformAdmin` when testing `adminEnabled`.
+5. **Test.** Add a case to `apps/labbai/lib/core/config/feature-flags.test.ts` that matches the chosen granularity. For a global flag, exercise `isFeatureEnabled('<flag-name>')` with an AppConfig `enabled` rule and toggle the fallback secret for the off-AppConfig path. For scoped rollout, cover only the selected clauses and mock `isPlatformAdmin` when testing `adminEnabled`.
 
 6. **Clean up after rollout.** When the feature ships to everyone, delete the flag's entry from `FEATURE_FLAGS`, the `<FLAG_SECRET>` env entry, the AppConfig document, the call sites, and the test. Leaving dead flags around is the main failure mode of flag systems.
 

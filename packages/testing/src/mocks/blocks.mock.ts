@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * import { blocksMock, mockBlockConfigs } from '@sim/testing/mocks'
+ * import { blocksMock, mockBlockConfigs } from '@labbai/testing/mocks'
  *
  * vi.mock('@/blocks', () => blocksMock)
  *

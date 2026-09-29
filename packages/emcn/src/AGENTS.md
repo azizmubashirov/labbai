@@ -2,7 +2,7 @@
 
 These rules apply to `packages/emcn/**`.
 
-- Import from `@sim/emcn`, never from subpaths except CSS files.
+- Import from `@labbai/emcn`, never from subpaths except CSS files.
 - Use Radix UI primitives for accessibility where applicable.
 - Use CVA when a component has 2+ variants; use direct `className` composition for single-style components.
 - Export both the component and its variants helper when using CVA.

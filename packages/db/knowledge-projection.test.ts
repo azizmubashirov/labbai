@@ -5,7 +5,7 @@ import {
   FILL_MARK_CEILING,
   markUnfilledProjectionDocuments,
   runKnowledgeProjection,
-} from '@sim/db/knowledge-projection'
+} from '@labbai/db/knowledge-projection'
 import type { Sql } from 'postgres'
 import { describe, expect, it, vi } from 'vitest'
 

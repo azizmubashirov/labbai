@@ -5,7 +5,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { mcpOauthMockFns } from '@sim/testing'
+ * import { mcpOauthMockFns } from '@labbai/testing'
  *
  * mcpOauthMockFns.mockGetOrCreateOauthRow.mockResolvedValue({ id: 'oauth-row-1', ... })
  * ```
@@ -57,7 +57,7 @@ export class OauthStepTimeoutErrorMock extends Error {
  * it stays constructable under vitest 4's `Reflect.construct` path while
  * remaining assignable to `mockImplementation`.
  */
-function buildSimMcpOauthProvider(value: object) {
+function buildLabbaiMcpOauthProvider(value: object) {
   return value
 }
 
@@ -90,7 +90,7 @@ export const mcpOauthMock = {
   McpOauthRedirectRequired: McpOauthRedirectRequiredMock,
   McpOauthInsecureUrlError: McpOauthInsecureUrlErrorMock,
   OauthStepTimeoutError: OauthStepTimeoutErrorMock,
-  SimMcpOauthProvider: vi.fn().mockImplementation(buildSimMcpOauthProvider),
+  LabbaiMcpOauthProvider: vi.fn().mockImplementation(buildLabbaiMcpOauthProvider),
   // Pass-through: run the step immediately, no bounding, so route tests exercise real behavior.
   // Wrap in Promise.resolve like the real helper so a mock returning a non-promise still chains.
   makeTimedStep:

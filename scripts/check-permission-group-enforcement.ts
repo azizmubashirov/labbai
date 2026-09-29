@@ -82,9 +82,9 @@ const ROOT = resolve(SCRIPT_DIR, '..')
  * `enrichments`, or in a `.tsx`, would be invisible here — so widen this list
  * (and `walk`) at the same time as moving one, not afterwards.
  */
-const SCAN_ROOTS = ['apps/sim/lib', 'apps/sim/app', 'apps/sim/executor']
-const CAPABILITIES_FILE = 'apps/sim/lib/permission-groups/capabilities.ts'
-const FIELDS_FILE = 'apps/sim/lib/permission-groups/fields.ts'
+const SCAN_ROOTS = ['apps/labbai/lib', 'apps/labbai/app', 'apps/labbai/executor']
+const CAPABILITIES_FILE = 'apps/labbai/lib/permission-groups/capabilities.ts'
+const FIELDS_FILE = 'apps/labbai/lib/permission-groups/fields.ts'
 const ENFORCED_ANNOTATION = 'permission-group-enforced:'
 const EXEMPT_ANNOTATION = 'permission-group-exempt:'
 const MAX_ANNOTATION_LOOKBACK = 3

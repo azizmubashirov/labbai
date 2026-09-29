@@ -1,7 +1,7 @@
 import {
   backfillLegacyKnowledgeBaseWorkspaces,
   type LegacyKnowledgeBaseWorkspaceStore,
-} from '@sim/db/script-migrations/0013_backfill_legacy_knowledge_base_workspaces'
+} from '@labbai/db/script-migrations/0013_backfill_legacy_knowledge_base_workspaces'
 import { describe, expect, it, vi } from 'vitest'
 
 function store(pages: string[][]): LegacyKnowledgeBaseWorkspaceStore {

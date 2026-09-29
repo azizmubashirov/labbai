@@ -6,7 +6,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { storageServiceMockFns } from '@sim/testing'
+ * import { storageServiceMockFns } from '@labbai/testing'
  *
  * storageServiceMockFns.mockHasCloudStorage.mockReturnValue(true)
  * storageServiceMockFns.mockGeneratePresignedDownloadUrl.mockResolvedValue('https://s3/test')

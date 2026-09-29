@@ -6,7 +6,7 @@ describe('database audit candidate scans', () => {
   it('finds renamed pending-table imports', () => {
     expect(
       mayReferencePendingTable(
-        "import { organization as org } from '@sim/db/schema'",
+        "import { organization as org } from '@labbai/db/schema'",
         new Set(['organization'])
       )
     ).toBe(true)
@@ -15,7 +15,7 @@ describe('database audit candidate scans', () => {
   it('decodes escaped schema module literals', () => {
     expect(
       mayReferencePendingTable(
-        String.raw`const organization = require('@sim/db/sch\u0065ma')`,
+        String.raw`const organization = require('@labbai/db/sch\u0065ma')`,
         new Set(['organization'])
       )
     ).toBe(true)

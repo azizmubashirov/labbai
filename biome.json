@@ -26,11 +26,11 @@
       "!**/public/workbox-*.js",
       "!**/public/worker-*.js",
       "!**/public/fallback-*.js",
-      "!**/apps/sim/tools/generated",
+      "!**/apps/labbai/tools/generated",
       "!**/venv",
       "!**/.venv",
       "!**/uploads",
-      "!**/apps/sim/lib/execution/sandbox/bundles/*.cjs",
+      "!**/apps/labbai/lib/execution/sandbox/bundles/*.cjs",
       "!**/test-results",
       "!**/playwright-report"
     ]
@@ -120,8 +120,8 @@
           "level": "error",
           "options": {
             "paths": {
-              "nanoid": "Use generateId() or generateShortId() from @sim/utils/id instead",
-              "uuid": "Use generateId() from @sim/utils/id instead"
+              "nanoid": "Use generateId() or generateShortId() from @labbai/utils/id instead",
+              "uuid": "Use generateId() from @labbai/utils/id instead"
             }
           }
         }
@@ -140,7 +140,7 @@
   },
   "overrides": [
     {
-      "includes": ["apps/sim/app/_styles/tailwind.css"],
+      "includes": ["apps/labbai/app/_styles/tailwind.css"],
       "linter": { "enabled": false },
       "formatter": { "enabled": false }
     },

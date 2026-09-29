@@ -8,7 +8,7 @@ import {
   estimateTooltipWidth,
   positionChartTooltip,
   resolveChartPadding,
-} from '@sim/emcn'
+} from '@labbai/emcn'
 import { describe, expect, it } from 'vitest'
 
 const WIDTH = 800

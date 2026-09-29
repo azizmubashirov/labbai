@@ -1,19 +1,19 @@
 ---
 name: validate-integration
-description: Validate an existing Sim integration (tools, block, registry, and resolved-secret/model-input boundaries) against the service's API docs and Sim execution conventions
+description: Validate an existing Labbai integration (tools, block, registry, and resolved-secret/model-input boundaries) against the service's API docs and Labbai execution conventions
 argument-hint: <service-name> [api-docs-url]
 ---
 
 # Validate Integration Skill
 
-You are an expert auditor for Sim integrations. Your job is to thoroughly validate that an existing integration is correct, complete, and follows all conventions.
+You are an expert auditor for Labbai integrations. Your job is to thoroughly validate that an existing integration is correct, complete, and follows all conventions.
 
 ## Your Task
 
 When the user asks you to validate an integration:
 1. Read the service's API documentation (via WebFetch or Context7)
 2. Read every tool, the block, and registry entries
-3. Cross-reference everything against the API docs and Sim conventions
+3. Cross-reference everything against the API docs and Labbai conventions
 4. Report all issues found, grouped by severity (critical, warning, suggestion)
 5. Fix all issues after reporting them
 
@@ -22,16 +22,16 @@ When the user asks you to validate an integration:
 Read **every** file for the integration — do not skip any:
 
 ```
-apps/sim/tools/{service}/          # All tool files, types.ts, index.ts
-apps/sim/blocks/blocks/{service}.ts # Block definition
-apps/sim/tools/registry.ts          # Tool registry entries for this service
-apps/sim/blocks/registry-maps.ts    # Block + meta registry entry (BLOCK_REGISTRY / BLOCK_META_REGISTRY)
-apps/sim/components/icons.tsx        # Icon definition
-apps/sim/lib/auth/auth.ts           # OAuth config — should use getCanonicalScopesForProvider()
-apps/sim/lib/oauth/oauth.ts         # OAuth provider config — single source of truth for scopes
-apps/sim/lib/oauth/utils.ts         # Scope utilities, SCOPE_DESCRIPTIONS for modal UI
+apps/labbai/tools/{service}/          # All tool files, types.ts, index.ts
+apps/labbai/blocks/blocks/{service}.ts # Block definition
+apps/labbai/tools/registry.ts          # Tool registry entries for this service
+apps/labbai/blocks/registry-maps.ts    # Block + meta registry entry (BLOCK_REGISTRY / BLOCK_META_REGISTRY)
+apps/labbai/components/icons.tsx        # Icon definition
+apps/labbai/lib/auth/auth.ts           # OAuth config — should use getCanonicalScopesForProvider()
+apps/labbai/lib/oauth/oauth.ts         # OAuth provider config — single source of truth for scopes
+apps/labbai/lib/oauth/utils.ts         # Scope utilities, SCOPE_DESCRIPTIONS for modal UI
 packages/deployment-config/src/env-capabilities.ts # OAuth client runtime capability source of truth
-apps/sim/lib/core/config/env.ts     # Runtime env schema for capability fields
+apps/labbai/lib/core/config/env.ts     # Runtime env schema for capability fields
 packages/sim-setup/src/capability-config.ts # Exhaustive CLI input-mode mapping for OAuth fields
 packages/deployment-config/src/integrations.json # Generated client-safe integration catalog
 packages/deployment-config/src/service-account-providers.generated.ts # Generated provider-ID facts
@@ -39,7 +39,7 @@ packages/deployment-config/src/service-account-metadata.ts # Handwritten deploym
 ```
 
 If the block, its triggers, or connector fields use a `selectorKey`, also apply the `validate-selector` skill and read
-the key's entry in `apps/sim/lib/selectors/manifest.ts`, its server attachment and provider listing
+the key's entry in `apps/labbai/lib/selectors/manifest.ts`, its server attachment and provider listing
 primitive, and the shared context builder. There is no client provider selector registry.
 
 ## Step 2: Pull API Documentation
@@ -137,7 +137,7 @@ For **every** tool file, check:
 ### Resolved-Secret Provenance and Model Input
 
 For every request field, determine whether it is ordinary API input, model-visible text/structured
-content, opaque model input, or a value persisted into Sim-owned durable storage.
+content, opaque model input, or a value persisted into Labbai-owned durable storage.
 
 Treat model-input provenance as opt-in. Require official documentation or an unambiguous local
 execution path proving that the exact field reaches an AI model. If the evidence is ambiguous,
@@ -160,7 +160,7 @@ search, extraction, or "AI-powered" marketing terminology.
 - [ ] Persisted workspace-file contents are checked with the shared provenance guard only when
       their bytes or decoded content cross into a model/tool-result boundary; ordinary file APIs
       remain unchanged. Unsupported secret-bearing file paths are rejected at `file_write`
-- [ ] Sim-owned durable writes and internal execution handoffs that can enter workflows/models use
+- [ ] Labbai-owned durable writes and internal execution handoffs that can enter workflows/models use
       field-scoped `request.secretProvenance`; authenticated receivers validate the exact selection
       and scope, strip private metadata, and persist, import, or propagate it at the owning boundary
 - [ ] Private provenance is never attached to external URLs; registered in-process operations
@@ -168,10 +168,10 @@ search, extraction, or "AI-powered" marketing terminology.
       model-visible external fields use request projection and other external inputs remain unchanged
 - [ ] No tool performs raw secret plaintext/source substitution or serializes plaintext provenance
 - [ ] No `transformResponse` or tool-local helper blanket-sanitizes ordinary third-party results;
-      only execution-scoped, activated Sim provenance is projected at shared model/log boundaries
+      only execution-scoped, activated Labbai provenance is projected at shared model/log boundaries
 - [ ] Private headers/envelopes are produced and stripped by the shared tool executor, never
       hand-rolled or returned as functional output
-- [ ] Every added provenance hook has a concrete Sim `{{...}}` resolution path and a later
+- [ ] Every added provenance hook has a concrete Labbai `{{...}}` resolution path and a later
       persistence/model/log crossing; there is no generic handling for arbitrary filenames,
       metadata, provider results, or API payloads
 - [ ] Diagnostic projection is applied only to values carrying execution-scoped provenance;
@@ -252,7 +252,7 @@ For **each tool** in `tools.access`:
 - [ ] Outputs cover the key fields returned by ALL tools (not just one operation)
 - [ ] Output types are correct (`'string'`, `'number'`, `'boolean'`, `'json'`)
 - [ ] `type: 'json'` outputs describe inner fields in the description string: `'User profile (id, name, username, bio)'` or `'[{address, status, type}]'` for arrays
-- [ ] **Do NOT add a `properties: {...}` field on block outputs.** Block-level `OutputFieldDefinition` (from `@sim/workflow-types/blocks`) only accepts `{ type, description?, condition?, hiddenFromDisplay? }`. Nested `properties` is a tool-level construct (`OutputProperty`) — adding it to a block output will fail TypeScript at build time
+- [ ] **Do NOT add a `properties: {...}` field on block outputs.** Block-level `OutputFieldDefinition` (from `@labbai/workflow-types/blocks`) only accepts `{ type, description?, condition?, hiddenFromDisplay? }`. Nested `properties` is a tool-level construct (`OutputProperty`) — adding it to a block output will fail TypeScript at build time
 - [ ] No opaque `type: 'json'` with vague descriptions like `'Response data'`
 - [ ] Outputs that only appear for certain operations use `condition` if supported, or document which operations return them
 
@@ -261,7 +261,7 @@ For **each tool** in `tools.access`:
 - [ ] `name` is human-readable (e.g., `'X'`, `'Cloudflare'`)
 - [ ] `description` is a concise one-liner
 - [ ] `longDescription` provides detail for docs
-- [ ] `docsLink` points to `'https://docs.sim.ai/integrations/{service}'`
+- [ ] No `docsLink` (Labbai has no public docs site yet)
 - [ ] `category` is `'tools'`
 - [ ] `bgColor` uses the service's brand color hex
 - [ ] `icon` references the correct icon component from `@/components/icons`
@@ -317,7 +317,7 @@ block's generated `oauthServiceId` through the shared deployment capability cata
 - [ ] The visible integration block has exactly one distinct `oauth-input.serviceId`
 - [ ] `resolveOAuthClientCapabilityId(serviceId)` returns the intended provider capability
 - [ ] The resolved provider exists in `OAUTH_CLIENT_CAPABILITIES`
-- [ ] Every field listed by that capability exists in `apps/sim/lib/core/config/env.ts`
+- [ ] Every field listed by that capability exists in `apps/labbai/lib/core/config/env.ts`
 - [ ] Every capability field has the correct `text` or `secret` entry in `OAUTH_CLIENT_SETUP_FIELDS`; no CLI naming heuristic is required
 - [ ] Shared Google/Microsoft service IDs resolve to their provider capability rather than duplicate entries
 - [ ] `npx sim-setup add integration <capabilityId>` is the command emitted by availability; the CLI has only the exhaustive input-mode projection, not a second runtime provider definition
@@ -389,7 +389,7 @@ Group findings by severity:
 - Type coercions in `tools.config.tool` instead of `tools.config.params`
 - Proven model-visible request fields bypass the shared projection or private-provenance boundary
 - Opaque model input is downloaded or sent before provenance and workspace-file checks
-- A Sim-owned durable sink or internal execution handoff drops encrypted provenance or breaks
+- A Labbai-owned durable sink or internal execution handoff drops encrypted provenance or breaks
   legacy headerless/`NULL` data
 - A tool substitutes secret plaintext into source, leaks private metadata, or generically sanitizes
   unrelated third-party results
@@ -412,7 +412,7 @@ Group findings by severity:
 **Suggestion** (minor improvements):
 - Better description text
 - Inconsistent naming across tools
-- Missing `longDescription` or `docsLink`
+- Missing `longDescription`
 - Pagination fields that could benefit from `wandConfig`
 
 ### Fix All Issues
@@ -424,7 +424,7 @@ After reporting, fix every **critical** and **warning** issue. Apply **suggestio
 Several files are generated from tool and block definitions. Editing a tool or block WITHOUT regenerating them fails CI, so run these before pushing:
 
 ```bash
-bun run tool-metadata:generate       # repo root — apps/sim/tools/generated/*
+bun run tool-metadata:generate       # repo root — apps/labbai/tools/generated/*
 bun run scripts/generate-docs.ts     # docs .mdx + deployment-config/integrations.json + docs icons
 bun run deployment-config:generate  # canonical OAuth registry + catalog → provider-ID facts
 bun run integration-catalog:check    # registry ↔ committed deployment metadata drift
@@ -450,7 +450,7 @@ upstream PR that skipped regeneration), and investigate anything that looks like
 page losing a section usually means its source block moved or a generator input broke, not that the
 hunk should be reverted.
 
-If an icon changed, `apps/sim/components/icons.tsx` is the source of truth and `apps/docs/components/icons.tsx` is its generated mirror — they must end up byte-identical for that component.
+If an icon changed, `apps/labbai/components/icons.tsx` is the source of truth and `apps/docs/components/icons.tsx` is its generated mirror — they must end up byte-identical for that component.
 
 ### Validation Output
 
@@ -462,7 +462,7 @@ After fixing, confirm:
 5. `bun run integration-catalog:check` passes
 6. `bun run docs:check` passes
 7. For OAuth or service-account changes, `bun run deployment-config:check` passes
-8. For OAuth or service-account changes, `bun run --cwd apps/sim test lib/integrations/availability.server.test.ts` passes
+8. For OAuth or service-account changes, `bun run --cwd apps/labbai test lib/integrations/availability.server.test.ts` passes
 9. Re-read all modified files to verify fixes are correct
 10. Any remaining unknown response schemas were explicitly reported to the user instead of guessed
 
@@ -485,10 +485,10 @@ After fixing, confirm:
 - [ ] Validated memory load safety using `.agents/skills/memory-load-check/SKILL.md` when tools list/search/download/import/export/batch data
 - [ ] Validated error handling (error checks, meaningful messages)
 - [ ] Validated registry entries (tools and block, alphabetical, correct imports)
-- [ ] Validated model-visible/opaque inputs and Sim-durable/internal-execution provenance at their
+- [ ] Validated model-visible/opaque inputs and Labbai-durable/internal-execution provenance at their
       owning boundaries
 - [ ] Confirmed legacy persisted data keeps working and tracked invalid provenance fails closed
-- [ ] Confirmed ordinary third-party results remain unchanged absent activated Sim provenance
+- [ ] Confirmed ordinary third-party results remain unchanged absent activated Labbai provenance
 - [ ] Validated `{Service}BlockMeta` exported with at least 7 templates
 - [ ] Validated every dynamic selector through the shared manifest, server attachment, and
       `selectors.execute` boundary

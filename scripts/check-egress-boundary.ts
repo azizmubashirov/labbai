@@ -2,7 +2,7 @@
 /**
  * Keeps outbound HTTP behind the egress guard.
  *
- * Every request Sim makes to a user- or model-influenced destination has to go
+ * Every request Labbai makes to a user- or model-influenced destination has to go
  * through `lib/core/security/egress`, which resolves DNS, classifies each
  * address against the deployment's policy, and pins the connection to the
  * address it approved. A module that reaches for `node:http`, `node:https`, or
@@ -33,15 +33,15 @@ import ts from '@typescript/typescript6'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 const SCAN_DIRS = [
-  'apps/sim/app',
-  'apps/sim/background',
-  'apps/sim/blocks',
-  'apps/sim/connectors',
-  'apps/sim/executor',
-  'apps/sim/lib',
-  'apps/sim/providers',
-  'apps/sim/tools',
-  'apps/sim/triggers',
+  'apps/labbai/app',
+  'apps/labbai/background',
+  'apps/labbai/blocks',
+  'apps/labbai/connectors',
+  'apps/labbai/executor',
+  'apps/labbai/lib',
+  'apps/labbai/providers',
+  'apps/labbai/tools',
+  'apps/labbai/triggers',
 ]
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.next', '.turbo', 'coverage'])
@@ -71,11 +71,11 @@ const TRANSPORTS = new Set([
  */
 const ALLOWED = new Set([
   // The guard itself: resolves, classifies, pins, and follows redirects.
-  'apps/sim/lib/core/security/input-validation.server.ts',
+  'apps/labbai/lib/core/security/input-validation.server.ts',
   // Streaming MCP transport, built on the guard's pinned dispatcher.
-  'apps/sim/lib/mcp/pinned-fetch.ts',
+  'apps/labbai/lib/mcp/pinned-fetch.ts',
   // Builds a dispatcher to carry a caller's deadline; issues no request itself.
-  'apps/sim/lib/core/utils/fetch-deadline.ts',
+  'apps/labbai/lib/core/utils/fetch-deadline.ts',
 ])
 
 function walk(dir: string, out: string[] = []): string[] {

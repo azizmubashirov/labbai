@@ -5,7 +5,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { permissionsMockFns } from '@sim/testing'
+ * import { permissionsMockFns } from '@labbai/testing'
  *
  * permissionsMockFns.mockCheckWorkspaceAccess.mockResolvedValue({
  *   exists: true, hasAccess: true, canWrite: true, workspace: { id: 'ws-1', name: 'Test', ownerId: 'user-1' },

@@ -26,8 +26,8 @@ Read these before analyzing:
 ## Rules to enforce
 
 ### Query keys and hooks
-Enforce CLAUDE.md "React Query" and `.claude/rules/sim-queries.md` (key factory with `all` + plural prefixes, `signal` forwarding, named `staleTime` constants reused by prefetches, `keepPreviousData` only on variable keys, `requestJson` boundary). Additionally:
-- Key factories live next to their hooks — except a factory, standalone fetcher/mapper, or `staleTime` constant that a server module (a `prefetch.ts`, route, block, trigger) imports, which must live in a non-`'use client'` module under `hooks/queries/utils/` per `.claude/rules/sim-queries.md` (a `'use client'` export called from the server crashes SSR)
+Enforce CLAUDE.md "React Query" and `.claude/rules/labbai-queries.md` (key factory with `all` + plural prefixes, `signal` forwarding, named `staleTime` constants reused by prefetches, `keepPreviousData` only on variable keys, `requestJson` boundary). Additionally:
+- Key factories live next to their hooks — except a factory, standalone fetcher/mapper, or `staleTime` constant that a server module (a `prefetch.ts`, route, block, trigger) imports, which must live in a non-`'use client'` module under `hooks/queries/utils/` per `.claude/rules/labbai-queries.md` (a `'use client'` export called from the server crashes SSR)
 - Use `enabled` to prevent queries from running without required params
 - Warm data for hover/focus intent with `queryClient.prefetchQuery` and shared `queryOptions`; never temporarily enable a mounted hidden observer, which can remain active after focus restoration and refetch data for closed UI
 - When gating a query by view or modal state, move every consumer to the active query too: imperative refresh/pagination, loading and error feedback, and data-derived controls must never read a disabled query or placeholder data from a previous key
@@ -38,12 +38,12 @@ Enforce CLAUDE.md "React Query" and `.claude/rules/sim-queries.md` (key factory 
 
 ### Mutations
 Enforce CLAUDE.md "Mutation Hooks" (targeted invalidation, `onMutate`/`onError` rollback, mutation objects out of `useCallback` deps). Additionally:
-- Plain mutations invalidate in `onSuccess`; optimistic mutations reconcile in `onSettled` (fires on success and error) with rollback in `onError` — see `.claude/rules/sim-queries.md` "Mutation Hook" / "Optimistic Updates"
+- Plain mutations invalidate in `onSuccess`; optimistic mutations reconcile in `onSettled` (fires on success and error) with rollback in `onError` — see `.claude/rules/labbai-queries.md` "Mutation Hook" / "Optimistic Updates"
 
 ### Server state ownership
 - Never copy query data into useState. Use query data directly in components.
 - Never copy query data into Zustand stores (exception: mutation callbacks that coordinate cross-store state like temp ID replacement)
-- The query cache is not a local state manager — `setQueryData` is for optimistic updates and the server-prefetch seeding case in `.claude/rules/sim-queries.md` "Server prefetching", nothing else
+- The query cache is not a local state manager — `setQueryData` is for optimistic updates and the server-prefetch seeding case in `.claude/rules/labbai-queries.md` "Server prefetching", nothing else
 - Forms are the one deliberate exception (a keyed form child initialized lazily from loaded query data) — the pattern is owned by `/you-might-not-need-an-effect` "Query-backed forms"; do not duplicate its finding
 
 ## Steps

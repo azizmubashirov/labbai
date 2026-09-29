@@ -18,7 +18,7 @@
  * role check, the audit actor and the log line sitting beside the gate. This
  * audit is the thing that stops it.
  *
- * It asserts, over `apps/sim/app/api/v1/**` (excluding `admin/`, the
+ * It asserts, over `apps/labbai/app/api/v1/**` (excluding `admin/`, the
  * platform-admin surface, and test files):
  *
  *   A  `capabilityGovernedUserId` is still exported from the v1 middleware.
@@ -83,7 +83,7 @@ import { fileURLToPath } from 'node:url'
  * `import.meta.dir` is undefined outside Bun.
  */
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const V1_ROOT = 'apps/sim/app/api/v1'
+const V1_ROOT = 'apps/labbai/app/api/v1'
 const MIDDLEWARE = `${V1_ROOT}/middleware.ts`
 /** Out of scope: the platform-admin surface authenticates platform admins, not workspace keys. */
 const EXCLUDED_DIRECTORIES = ['admin']

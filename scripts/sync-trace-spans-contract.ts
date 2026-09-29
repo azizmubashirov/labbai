@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { formatGeneratedSource } from './format-generated-source'
 
 /**
- * Generate `apps/sim/lib/copilot/generated/trace-spans-v1.ts` from the
+ * Generate `apps/labbai/lib/copilot/generated/trace-spans-v1.ts` from the
  * Go-side `contracts/trace-spans-v1.schema.json` contract.
  *
  * The contract is a single-enum JSON Schema. We emit:
@@ -16,7 +16,7 @@ import { formatGeneratedSource } from './format-generated-source'
  *
  * We deliberately do NOT pass through `json-schema-to-typescript` —
  * it would generate a noisy `TraceSpansV1` object type for the wrapper
- * that drives reflection; the wrapper type has no runtime use on the Sim
+ * that drives reflection; the wrapper type has no runtime use on the Labbai
  * side and would obscure the actual enum.
  */
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
@@ -25,7 +25,7 @@ const DEFAULT_CONTRACT_PATH = resolve(
   ROOT,
   '../copilot/copilot/contracts/trace-spans-v1.schema.json'
 )
-const OUTPUT_PATH = resolve(ROOT, 'apps/sim/lib/copilot/generated/trace-spans-v1.ts')
+const OUTPUT_PATH = resolve(ROOT, 'apps/labbai/lib/copilot/generated/trace-spans-v1.ts')
 
 function extractSpanNames(schema: Record<string, unknown>): string[] {
   const defs = (schema.$defs ?? {}) as Record<string, unknown>

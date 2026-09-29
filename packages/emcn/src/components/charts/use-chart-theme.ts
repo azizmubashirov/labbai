@@ -1,7 +1,7 @@
 'use client'
 
 import { type RefObject, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { CHART_MIN_WIDTH } from '@sim/emcn'
+import { CHART_MIN_WIDTH } from '@labbai/emcn'
 
 function subscribeToDarkTheme(onStoreChange: () => void): () => void {
   const observer = new MutationObserver(onStoreChange)

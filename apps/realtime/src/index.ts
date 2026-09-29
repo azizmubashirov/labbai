@@ -1,5 +1,5 @@
 import { createServer } from 'http'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@labbai/logger'
 import type { Server as SocketIOServer } from 'socket.io'
 import { startAccessRevalidationSweep } from '@/access-revalidation'
 import { createSocketIOServer, shutdownSocketIOAdapter } from '@/config/socket'

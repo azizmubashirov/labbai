@@ -5,7 +5,7 @@
  *
  * @vitest-environment node
  */
-import { ROOM_TYPES, type RoomRef } from '@sim/realtime-protocol/rooms'
+import { ROOM_TYPES, type RoomRef } from '@labbai/realtime-protocol/rooms'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRoomManager } from '@/rooms/memory-manager'
 import { sweepStalePresence } from '@/rooms/presence-visibility'

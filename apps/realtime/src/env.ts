@@ -37,11 +37,8 @@ export const isProd = env.NODE_ENV === 'production'
 export const isDev = env.NODE_ENV === 'development'
 export const isTest = env.NODE_ENV === 'test'
 
-let appHostname = ''
-try {
-  appHostname = new URL(env.NEXT_PUBLIC_APP_URL).hostname
-} catch {}
-export const isHosted = appHostname === 'sim.ai' || appHostname.endsWith('.sim.ai')
+/** No deployment of this realtime server is the hosted environment. */
+export const isHosted = false
 
 export const isAuthDisabled = env.DISABLE_AUTH === true && !isHosted
 

@@ -45,7 +45,7 @@ const ANNOTATION = 'canonical-index-unscoped:'
  * `git ls-files` started listing it.
  */
 const NOT_CALLERS = new Set([
-  'apps/sim/lib/workflows/subblocks/visibility.ts',
+  'apps/labbai/lib/workflows/subblocks/visibility.ts',
   'scripts/check-canonical-index-surface.ts',
 ])
 

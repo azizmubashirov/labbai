@@ -1,7 +1,7 @@
 import {
   formatDisplayText,
   getValidWorkflowSearchRange,
-} from '@sim/workflow-renderer/formatted-text'
+} from '@labbai/workflow-renderer/formatted-text'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 

@@ -50,8 +50,8 @@
  * Usage:
  *   bun run scripts/check-tool-param-reachability.ts
  */
-import { tools } from '../apps/sim/tools/registry'
-import type { ToolConfig } from '../apps/sim/tools/types'
+import { tools } from '../apps/labbai/tools/registry'
+import type { ToolConfig } from '../apps/labbai/tools/types'
 
 /**
  * The one parameter credential resolution assigns unconditionally.
@@ -77,7 +77,7 @@ const RESOLVER_GUARANTEED = 'accessToken'
  * that hides one without declaring it is asserting a filler the resolver may
  * never run — the exact shape this audit exists to reject.
  *
- * Kept in step with the assignments in `apps/sim/tools/index.ts` and the
+ * Kept in step with the assignments in `apps/labbai/tools/index.ts` and the
  * `authoritativeParams` union in `tools/types.ts`.
  */
 const TOKEN_RESPONSE_FIELDS = new Set([
@@ -104,10 +104,10 @@ interface Finding {
  * Direct execution (`POST /api/v2/tools/{toolId}/execute`) bills hosted-key
  * spend by reading `output.cost` on a tool with `hosting` — because on such a
  * tool that field has exactly one writer, `applyHostedKeyCostToResult`, which
- * runs only when the registry actually used Sim's key on a successful call. A
+ * runs only when the registry actually used Labbai's key on a successful call. A
  * BYOK call leaves it absent and so is not billed. A hosted tool that also
  * reported its own cost there would break that reading: its self-reported
- * number would bill as Sim's spend on a BYOK call or a caller-keyed call. Tools
+ * number would bill as Labbai's spend on a BYOK call or a caller-keyed call. Tools
  * without `hosting` may report cost freely; the meter never looks at them.
  */
 function findHostedToolsReportingCost(): string[] {
@@ -171,7 +171,7 @@ function main(): void {
     console.error('Tool parameter reachability audit failed:\n')
     for (const toolId of costReporters) {
       console.error(
-        `  ${toolId} — declares hosting AND a 'cost' output; direct execution reads output.cost on a hosted tool as "Sim's key paid", so a self-reported cost would bill BYOK and caller-keyed calls`
+        `  ${toolId} — declares hosting AND a 'cost' output; direct execution reads output.cost on a hosted tool as "Labbai's key paid", so a self-reported cost would bill BYOK and caller-keyed calls`
       )
     }
     process.exit(1)
@@ -194,7 +194,7 @@ function main(): void {
       'A required hidden parameter has no caller. Supply it by declaration, not by hoping:',
       "  - the user types it into a block field  ->  visibility: 'user-only'",
       '  - a bound OAuth credential supplies it  ->  declare oauth on the tool',
-      "  - Sim's hosted key supplies it          ->  declare hosting with this apiKeyParam",
+      "  - Labbai's hosted key supplies it          ->  declare hosting with this apiKeyParam",
       "  - a block composes it from siblings     ->  publish the shape as 'user-or-llm'",
       '',
       'Leaving it hidden means every direct caller sends undefined and reads an',

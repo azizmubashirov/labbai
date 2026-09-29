@@ -33,17 +33,17 @@ describe('urls mock', () => {
   })
 
   it('domain helpers derive from the base URL', () => {
-    setEnv({ NEXT_PUBLIC_APP_URL: 'https://www.sim.ai' })
-    expect(urlsMock.getBaseDomain()).toBe('www.sim.ai')
-    expect(urlsMock.getEmailDomain()).toBe('sim.ai')
+    setEnv({ NEXT_PUBLIC_APP_URL: 'https://www.labbai.example.com' })
+    expect(urlsMock.getBaseDomain()).toBe('www.labbai.example.com')
+    expect(urlsMock.getEmailDomain()).toBe('labbai.example.com')
   })
 
   it('pure helpers behave like the real module', () => {
     expect(urlsMock.isLoopbackHostname('localhost')).toBe(true)
-    expect(urlsMock.isLoopbackHostname('sim.ai')).toBe(false)
+    expect(urlsMock.isLoopbackHostname('labbai.example.com')).toBe(false)
     expect(urlsMock.isLocalhostUrl('http://127.0.0.1:3000')).toBe(true)
     expect(urlsMock.isSafeHttpUrl('javascript:alert(1)')).toBe(false)
-    expect(urlsMock.isSafeHttpUrl('https://sim.ai')).toBe(true)
+    expect(urlsMock.isSafeHttpUrl('https://labbai.example.com')).toBe(true)
     expect(
       urlsMock.parseOriginList('https://a.example.com/path, https://a.example.com, bad-url')
     ).toEqual(['https://a.example.com'])

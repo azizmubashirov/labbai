@@ -1,5 +1,5 @@
 /**
- * Client attribution: which official Sim client sent a request.
+ * Client attribution: which official Labbai client sent a request.
  *
  * Every first-party client declares itself with one header, `X-Sim-Client-Info`,
  * whose value is a list of `name/version` product tokens in the `User-Agent`
@@ -28,15 +28,15 @@
 export const CLIENT_INFO_HEADER = 'x-sim-client-info'
 
 /**
- * The official Sim clients, as they name themselves on the wire. `mcp` is the
- * Sim MCP server, which declares itself on each v2 request it dispatches.
+ * The official Labbai clients, as they name themselves on the wire. `mcp` is the
+ * Labbai MCP server, which declares itself on each v2 request it dispatches.
  */
-export const SIM_SURFACES = ['web', 'desktop', 'cli', 'sdk-js', 'sdk-python', 'mcp'] as const
+export const LABBAI_SURFACES = ['web', 'desktop', 'cli', 'sdk-js', 'sdk-python', 'mcp'] as const
 
-export type SimSurface = (typeof SIM_SURFACES)[number]
+export type LabbaiSurface = (typeof LABBAI_SURFACES)[number]
 
 export interface ClientInfo {
-  surface: SimSurface
+  surface: LabbaiSurface
   /** The client's own version, absent when the client is not versioned (the web app). */
   version?: string
   /** The runtime the client executes in, such as `node`, `electron`, or `python`. */
@@ -59,7 +59,7 @@ export interface ClientInfo {
  * request and run is attributed to something rather than left blank:
  *
  * - `api`: direct API traffic, authenticated by a customer's credential.
- * - `internal`: Sim's own services calling each other, authenticated by a
+ * - `internal`: Labbai's own services calling each other, authenticated by a
  *   service credential.
  * - `webhook`, `schedule`: a run a trigger started rather than a client.
  * - `unknown`: none of the above, such as an unauthenticated webhook delivery.
@@ -69,7 +69,7 @@ export const UNDECLARED_SURFACES = ['api', 'internal', 'webhook', 'schedule', 'u
 export type UndeclaredSurface = (typeof UNDECLARED_SURFACES)[number]
 
 /** Every surface a request or run can be attributed to. */
-export type RequestSurface = SimSurface | UndeclaredSurface
+export type RequestSurface = LabbaiSurface | UndeclaredSurface
 
 /** How the server established a request's client. */
 export type ClientInfoSource =
@@ -115,9 +115,9 @@ const USER_AGENT_PRODUCT = /^([A-Za-z0-9._+-]{1,64})(?:[/\s]|$)/
 /** The product every browser, and many libraries imitating one, names first. */
 const BROWSER_PRODUCT = 'mozilla'
 
-const SURFACE_SET: ReadonlySet<string> = new Set(SIM_SURFACES)
+const SURFACE_SET: ReadonlySet<string> = new Set(LABBAI_SURFACES)
 
-function isSurface(value: string): value is SimSurface {
+function isSurface(value: string): value is LabbaiSurface {
   return SURFACE_SET.has(value)
 }
 
@@ -217,7 +217,7 @@ export interface ResolveClientInfoOptions {
  * 2. The `User-Agent` of CLI releases that predate the header.
  * 3. Fetch Metadata. Browsers stamp `Sec-Fetch-*` on every request and nothing
  *    else does, so a browser request that carries no external credentials can
- *    only have come from a page Sim served — the web app, or a public surface
+ *    only have come from a page Labbai served — the web app, or a public surface
  *    such as a shared chat. A browser request that does carry an API key is a
  *    third-party integration, and falls through to the credential. The web app
  *    declares itself on its contract-bound calls; this covers the raw-`fetch`
@@ -225,7 +225,7 @@ export interface ResolveClientInfoOptions {
  *
  * 4. Anything else is `unknown` until it authenticates, when
  *    {@link attributeUndeclaredClient} refines it by the credential it used.
- *    Headers alone cannot separate a customer's API key from one of Sim's own
+ *    Headers alone cannot separate a customer's API key from one of Labbai's own
  *    services, so the refinement waits for the credential to verify.
  *
  * An undeclared client records its `User-Agent` product name, so it still says
@@ -250,7 +250,7 @@ export function resolveClientInfo(
   return { surface: 'unknown', source: 'unidentified', ...(name ? { name } : {}) }
 }
 
-/** Auth kinds only Sim's own services hold: the executor, Copilot, and system jobs. */
+/** Auth kinds only Labbai's own services hold: the executor, Copilot, and system jobs. */
 const INTERNAL_AUTH_KINDS: ReadonlySet<string> = new Set([
   'internal_jwt',
   'delegated',
@@ -261,7 +261,7 @@ const INTERNAL_AUTH_KINDS: ReadonlySet<string> = new Set([
 /**
  * Refines an undeclared client by the credential its request authenticated
  * with: a customer's credential (an API key, an OAuth token, a SCIM or Slack
- * connection) makes it `api`, a Sim service credential makes it `internal`. A
+ * connection) makes it `api`, a Labbai service credential makes it `internal`. A
  * session stays `unknown`, since a cookie without browser headers says nothing
  * about the client. A client that identified itself is returned unchanged, and
  * so is one a trigger started.

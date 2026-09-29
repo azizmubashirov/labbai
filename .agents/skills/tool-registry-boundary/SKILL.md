@@ -1,6 +1,6 @@
 ---
 name: tool-registry-boundary
-description: Keep the executable tool registry out of client-reachable module graphs — when to read `@/tools/metadata` instead of `getTool`, how to measure whether an import edge pulls the registry, and how to regenerate the metadata artifacts. Use when touching `apps/sim/tools/registry.ts`, `tools/utils.ts`, `tools/params.ts`, or anything that calls `getTool`.
+description: Keep the executable tool registry out of client-reachable module graphs — when to read `@/tools/metadata` instead of `getTool`, how to measure whether an import edge pulls the registry, and how to regenerate the metadata artifacts. Use when touching `apps/labbai/tools/registry.ts`, `tools/utils.ts`, `tools/params.ts`, or anything that calls `getTool`.
 ---
 
 # Tool Registry Boundary Skill
@@ -37,7 +37,7 @@ All lookups guard with `Object.hasOwn`. `JSON.parse` yields an object with the n
 
 ## The generated artifacts
 
-`apps/sim/tools/generated/tool-ids.ts`, `tool-metadata.ts` and `tool-outputs.ts` are produced by `scripts/sync-tool-metadata.ts`:
+`apps/labbai/tools/generated/tool-ids.ts`, `tool-metadata.ts` and `tool-outputs.ts` are produced by `scripts/sync-tool-metadata.ts`:
 
 ```bash
 bun run tool-metadata:generate   # after adding/changing a tool
@@ -58,7 +58,7 @@ Three non-obvious properties, each of which was measured and is easy to undo by 
 Mock the module the code under test actually reads. `vi.mock('@/tools/utils', () => toolsUtilsMock)` only controls `getTool`; code that reads `params`/`outputs`/`name` goes through `@/tools/metadata`, so mocking `tools/utils` there is a **no-op that still passes** — because the real generated artifacts happen to agree with the mock fixtures. The test looks green while controlling nothing.
 
 ```ts
-import { blocksMock, toolsMetadataMock, toolsUtilsMock } from '@sim/testing/mocks'
+import { blocksMock, toolsMetadataMock, toolsUtilsMock } from '@labbai/testing/mocks'
 
 vi.mock('@/tools/utils', () => toolsUtilsMock)      // executable lookup
 vi.mock('@/tools/metadata', () => toolsMetadataMock) // params / outputs / name
@@ -81,8 +81,8 @@ Re-record with `--update-baseline` and commit the JSON when growth is deliberate
 
 Do not eyeball imports — the registry is reached through several redundant paths, so cutting one buys nothing while another survives. Walk the graph:
 
-1. From the entry you care about, follow `import` and `export … from` (skipping `import type`), resolving `@/` against `apps/sim`.
-2. Check whether `apps/sim/tools/registry.ts` is in the reachable set, and print the parent chain if it is.
+1. From the entry you care about, follow `import` and `export … from` (skipping `import type`), resolving `@/` against `apps/labbai`.
+2. Check whether `apps/labbai/tools/registry.ts` is in the reachable set, and print the parent chain if it is.
 3. Compare the reachable module count before and after.
 
 Reference points measured on this repo:

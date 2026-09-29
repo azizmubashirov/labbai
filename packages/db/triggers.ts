@@ -62,7 +62,7 @@ EXECUTE FUNCTION decrement_table_row_count();
  *
  * @example
  * ```ts
- * import { ensureRowCountTriggers } from '@sim/db/triggers'
+ * import { ensureRowCountTriggers } from '@labbai/db/triggers'
  *
  * await ensureRowCountTriggers()
  * ```

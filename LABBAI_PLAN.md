@@ -5,7 +5,7 @@ ported in. We do not sync with upstream Sim; we develop it ourselves from here.
 
 ## Remove
 
-- `apps/docs`, landing pages `apps/sim/app/(landing)`, `apps/sim/public/landing`, sim.ai
+- `apps/docs`, landing pages `apps/labbai/app/(landing)`, `apps/labbai/public/landing`, sim.ai
   marketing/SEO routes (`sitemap`, `llms.txt`, `changelog.xml`, contact / demo-requests / stars APIs)
 - `apps/desktop` and desktop-only pieces: `browser-protocol`, `terminal-protocol`,
   `desktop-bridge`, desktop/browser/terminal settings, copilot browser_* / terminal tools
@@ -38,9 +38,9 @@ ported in. We do not sync with upstream Sim; we develop it ourselves from here.
 - Activity log, Access requests, Credential groups, Authorized apps,
   SCIM, audit-logs API, permission groups
 
-## Enterprise (`apps/sim/ee`) — license
+## Enterprise (`apps/labbai/ee`) — license
 
-`apps/sim/ee` is under the Sim Enterprise License: no production use without a Sim
+`apps/labbai/ee` is under the Sim Enterprise License: no production use without a Sim
 subscription and no modification. The directory is removed. Features we keep that
 lived there (Activity log / audit logs UI, Access requests, Credential groups, SCIM,
 permission groups / access control) are re-implemented as Labbai code — same behavior,

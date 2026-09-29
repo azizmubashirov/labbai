@@ -473,7 +473,7 @@ describe('the loopback carve-out stops short of the port denylist', () => {
     ['http://localhost:5432/', 'Postgres'],
     ['http://127.0.0.1:6379/', 'Redis'],
     ['http://localhost:22/', 'SSH'],
-  ])('refuses %s — %s is where Sim listens, and nobody asked for it', (href) => {
+  ])('refuses %s — %s is where Labbai listens, and nobody asked for it', (href) => {
     expect(reason(loopbackAllowed, href)).toBe('port-denied')
   })
 

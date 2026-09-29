@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { readFile } from 'node:fs/promises'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@labbai/utils/id'
 import postgres from 'postgres'
 import { describe, expect, it } from 'vitest'
 

@@ -1,8 +1,8 @@
 import {
   indexProjectionAcl,
   installProjectionSourceAcl,
-} from '@sim/db/script-migrations/0021_embedding_search_connector'
-import type { ScriptMigration } from '@sim/db/script-migrations/types'
+} from '@labbai/db/script-migrations/0021_embedding_search_connector'
+import type { ScriptMigration } from '@labbai/db/script-migrations/types'
 
 /**
  * Installs the projection source and ACL triggers and builds their indexes; both are idempotent,

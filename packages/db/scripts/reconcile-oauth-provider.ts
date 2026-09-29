@@ -1,5 +1,5 @@
-import { reconcileOAuthProviderLifecycle } from '@sim/db/oauth-provider-lifecycle'
-import { createLogger } from '@sim/logger'
+import { reconcileOAuthProviderLifecycle } from '@labbai/db/oauth-provider-lifecycle'
+import { createLogger } from '@labbai/logger'
 import postgres from 'postgres'
 
 const logger = createLogger('OAuthProviderLifecycleReconciliation')

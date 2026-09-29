@@ -1,28 +1,28 @@
-# Sim Development Guidelines
+# Labbai Development Guidelines
 
 You are a professional software engineer. All code must follow best practices: accurate, readable, clean, and efficient.
 
 ## Global Standards
 
 - **Linting / Audit**: `bun run check:api-validation` must pass on PRs. Do not introduce route-local boundary Zod schemas, direct route Zod imports, or ad-hoc client wire types — see "API Contracts" and "API Route Pattern" below
-- **Logging**: Import `createLogger` from `@sim/logger`. Use `logger.info`, `logger.warn`, `logger.error` instead of `console.log`. Inside API routes wrapped with `withRouteHandler`, loggers automatically include the request ID — no manual `withMetadata({ requestId })` needed
+- **Logging**: Import `createLogger` from `@labbai/logger`. Use `logger.info`, `logger.warn`, `logger.error` instead of `console.log`. Inside API routes wrapped with `withRouteHandler`, loggers automatically include the request ID — no manual `withMetadata({ requestId })` needed
 - **API Route Handlers**: All API route handlers (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`) must run inside `withRouteHandler`. Ordinary internal and v2 handlers use the shared JSON/binary route builders, which already apply it; never double-wrap a builder. Use raw `withRouteHandler` only for documented protocol or lifecycle exceptions. See "API Route Pattern" below
 - **Comments**: Use TSDoc for documentation. No `====` separators. No non-TSDoc comments
 - **Styling**: Never update global styles. Keep all styling local to components
-- **ID Generation**: Never use `crypto.randomUUID()`, `nanoid`, or `uuid` package. Use `generateId()` (UUID v4) or `generateShortId()` (compact) from `@sim/utils/id`
-- **Common Utilities**: Use shared helpers from `@sim/utils` instead of inline implementations:
-  - `sleep(ms)` from `@sim/utils/helpers` — never `new Promise(resolve => setTimeout(resolve, ms))`
-  - `toError(e)` from `@sim/utils/errors` — normalize caught values to `Error`
-  - `getErrorMessage(e, fallback?)` from `@sim/utils/errors` — extract message string from unknown caught value; never write `e instanceof Error ? e.message : 'fallback'`
+- **ID Generation**: Never use `crypto.randomUUID()`, `nanoid`, or `uuid` package. Use `generateId()` (UUID v4) or `generateShortId()` (compact) from `@labbai/utils/id`
+- **Common Utilities**: Use shared helpers from `@labbai/utils` instead of inline implementations:
+  - `sleep(ms)` from `@labbai/utils/helpers` — never `new Promise(resolve => setTimeout(resolve, ms))`
+  - `toError(e)` from `@labbai/utils/errors` — normalize caught values to `Error`
+  - `getErrorMessage(e, fallback?)` from `@labbai/utils/errors` — extract message string from unknown caught value; never write `e instanceof Error ? e.message : 'fallback'`
   - `structuredClone(value)` — built-in deep clone; never `JSON.parse(JSON.stringify(...))`
-  - `omit(obj, keys)` / `filterUndefined(obj)` from `@sim/utils/object` — object trimming; never `Object.fromEntries(Object.entries(...).filter(...))`
-  - `isRecordLike(value)` from `@sim/utils/object` — never redeclare `typeof value === 'object' && value !== null && !Array.isArray(value)`
-  - `toRecord(value)` / `toRecordOrNull(value)` / `toArray(value)` from `@sim/utils/object` — coerce an untyped payload value to a record or array; never inline `isRecordLike(v) ? v : {}` or `Array.isArray(v) ? v : []`. Where the source is already typed, keep the inline `Array.isArray` check: it narrows, while `toArray` asserts
-  - `toStringOrNull(value)` / `toNumberOrNull(value)` / `toBooleanOrNull(value)` from `@sim/utils/coerce` — read one scalar out of an untyped payload; never declare a local one-liner byte-identical to one of these. Keep a local helper that differs: `undefined` instead of `null` changes the wire shape, and a `Number.isFinite` or string-parse variant is a stricter check these omit
-  - `truncate(str, maxLength, suffix?)` from `@sim/utils/string` — never inline slice + ellipsis
-  - `escapeRegExp(value)` from `@sim/utils/string` — never inline `replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`
-  - `compareStrings(left, right)` from `@sim/utils/string` — code-unit ordering for hashes, fingerprints, and cross-process comparisons; never `localeCompare` there
-  - `backoffWithJitter(attempt, retryAfterMs, options?)` / `parseRetryAfter(header)` from `@sim/utils/retry` — shared retry pacing; never reimplement exponential backoff inline
+  - `omit(obj, keys)` / `filterUndefined(obj)` from `@labbai/utils/object` — object trimming; never `Object.fromEntries(Object.entries(...).filter(...))`
+  - `isRecordLike(value)` from `@labbai/utils/object` — never redeclare `typeof value === 'object' && value !== null && !Array.isArray(value)`
+  - `toRecord(value)` / `toRecordOrNull(value)` / `toArray(value)` from `@labbai/utils/object` — coerce an untyped payload value to a record or array; never inline `isRecordLike(v) ? v : {}` or `Array.isArray(v) ? v : []`. Where the source is already typed, keep the inline `Array.isArray` check: it narrows, while `toArray` asserts
+  - `toStringOrNull(value)` / `toNumberOrNull(value)` / `toBooleanOrNull(value)` from `@labbai/utils/coerce` — read one scalar out of an untyped payload; never declare a local one-liner byte-identical to one of these. Keep a local helper that differs: `undefined` instead of `null` changes the wire shape, and a `Number.isFinite` or string-parse variant is a stricter check these omit
+  - `truncate(str, maxLength, suffix?)` from `@labbai/utils/string` — never inline slice + ellipsis
+  - `escapeRegExp(value)` from `@labbai/utils/string` — never inline `replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`
+  - `compareStrings(left, right)` from `@labbai/utils/string` — code-unit ordering for hashes, fingerprints, and cross-process comparisons; never `localeCompare` there
+  - `backoffWithJitter(attempt, retryAfterMs, options?)` / `parseRetryAfter(header)` from `@labbai/utils/retry` — shared retry pacing; never reimplement exponential backoff inline
 - **Deployment flags in the browser**: client code inside a workspace, organization, or standalone settings surface reads `hosted`, `billingEnabled`, `chatEnabled`, and the enterprise feature set through `useDeploymentShape()` (components) or `getDeploymentShape()` (block conditions, stores, helpers) from `@/lib/core/config/deployment-shape`, never `isHosted`/`isBillingEnabled`/... from `env-flags`. The constants freeze at module init from the root layout's `NEXT_PUBLIC_*` transport, which Next's bare 404 shell and `global-error` never emit; the reader is seeded from the server-resolved workspace host context, organization layout, or standalone settings layout instead. Server code keeps reading `env-flags`
 - **Package Manager**: Use `bun` and `bunx`, not `npm` and `npx`
 - **Type-checking**: Run `bun run type-check` (per workspace) or `bunx turbo run type-check` (all of them). Do not remove the `@typescript/native` alias from the root `devDependencies` — nothing imports it, but it is what makes a bare `tsc` resolve to the native TypeScript 7 compiler instead of the ~10x slower JavaScript TypeScript 6 one that `@typescript/typescript6` pulls in transitively. `bun run check:native-typecheck` enforces this
@@ -51,7 +51,7 @@ You are a professional software engineer. All code must follow best practices: a
 
 ```
 apps/
-├── sim/                    # Next.js app (UI + API routes + workflow editor)
+├── labbai/                 # Next.js app (UI + API routes + workflow editor)
 │   ├── app/                # Next.js app router (pages, API routes)
 │   ├── blocks/             # Block definitions and registry
 │   ├── components/         # Shared UI (emcn/, ui/)
@@ -65,24 +65,24 @@ apps/
 └── realtime/               # Bun Socket.IO server (collaborative canvas)
 
 packages/
-├── audit/                  # @sim/audit
-├── auth/                   # @sim/auth — shared Better Auth verifier
-├── db/                     # @sim/db — drizzle schema + client
-├── logger/                 # @sim/logger
-├── platform-authz/         # @sim/platform-authz — workspace + workflow authz (subpath exports)
-├── realtime-protocol/      # @sim/realtime-protocol — socket op constants + zod schemas
-├── security/               # @sim/security — safeCompare
+├── audit/                  # @labbai/audit
+├── auth/                   # @labbai/auth — shared Better Auth verifier
+├── db/                     # @labbai/db — drizzle schema + client
+├── logger/                 # @labbai/logger
+├── platform-authz/         # @labbai/platform-authz — workspace + workflow authz (subpath exports)
+├── realtime-protocol/      # @labbai/realtime-protocol — socket op constants + zod schemas
+├── security/               # @labbai/security — safeCompare
 ├── tsconfig/               # shared tsconfig presets
-├── utils/                  # @sim/utils
-├── workflow-persistence/   # @sim/workflow-persistence
-└── workflow-types/         # @sim/workflow-types — pure BlockState/Loop/Parallel types
+├── utils/                  # @labbai/utils
+├── workflow-persistence/   # @labbai/workflow-persistence
+└── workflow-types/         # @labbai/workflow-types — pure BlockState/Loop/Parallel types
 ```
 
 ### Package boundaries
 
 - `apps/* → packages/*` only. Packages never import from `apps/*`.
 - `apps/realtime` intentionally avoids Next.js, React, the block/tool registry, provider SDKs, and the executor. Do not add imports from `@/lib/webhooks/providers/*`, `@/executor/*`, `@/blocks/*`, or `@/tools/*` to any package consumed by `apps/realtime`. CI enforces this via `scripts/check-monorepo-boundaries.ts` and `scripts/check-realtime-prune-graph.ts`.
-- Auth is shared across both apps via the Better Auth "Shared Database Session" pattern (same `BETTER_AUTH_SECRET`, same DB via `@sim/db`).
+- Auth is shared across both apps via the Better Auth "Shared Database Session" pattern (same `BETTER_AUTH_SECRET`, same DB via `@labbai/db`).
 
 ### Naming Conventions
 
@@ -111,7 +111,7 @@ Use barrel exports (`index.ts`) when a folder has 3+ exports. Do not re-export f
 
 1. React/core libraries
 2. External libraries
-3. UI components (`@sim/emcn`, `@/components/ui`)
+3. UI components (`@labbai/emcn`, `@/components/ui`)
 4. Utilities (`@/lib/...`)
 5. Stores (`@/stores/...`)
 6. Feature imports
@@ -145,16 +145,16 @@ export function Component({ requiredProp, optionalProp = false }: ComponentProps
 
 Extract when: 50+ lines, used in 2+ files, or has own state/logic. Keep inline when: < 10 lines, single use, purely presentational.
 
-Behavior-preserving render-performance idioms — lazy-init object refs, hoist closure-free values/functions to module scope, pre-index repeated lookups with `Map`/`Set`, and never mutating a shared array in place — are in `.claude/rules/sim-react-performance.md` (which also explains why `toSorted`/`toReversed` are unsafe on client render paths despite the ES2023 tsconfig lib — SWC does not polyfill prototype methods, so use `[...arr].sort()`). For the render-timing effect/state anti-patterns use the `/you-might-not-need-*` skills and verify against the running UI.
+Behavior-preserving render-performance idioms — lazy-init object refs, hoist closure-free values/functions to module scope, pre-index repeated lookups with `Map`/`Set`, and never mutating a shared array in place — are in `.claude/rules/labbai-react-performance.md` (which also explains why `toSorted`/`toReversed` are unsafe on client render paths despite the ES2023 tsconfig lib — SWC does not polyfill prototype methods, so use `[...arr].sort()`). For the render-timing effect/state anti-patterns use the `/you-might-not-need-*` skills and verify against the running UI.
 
 ## API Contracts
 
-Boundary HTTP request and response shapes for all routes under `apps/sim/app/api/**` live in `apps/sim/lib/api/contracts/**` (one file per resource family — `folders.ts`, `chats.ts`, `knowledge.ts`, etc.). Routes never define route-local boundary Zod schemas, and clients never define ad-hoc wire types — both sides consume the same contract.
+Boundary HTTP request and response shapes for all routes under `apps/labbai/app/api/**` live in `apps/labbai/lib/api/contracts/**` (one file per resource family — `folders.ts`, `chats.ts`, `knowledge.ts`, etc.). Routes never define route-local boundary Zod schemas, and clients never define ad-hoc wire types — both sides consume the same contract.
 
 - Each contract is built with `defineRouteContract({ method, path, params?, query?, body?, headers?, response: { mode: 'json', schema } })` from `@/lib/api/contracts`
 - Contracts export named schemas (e.g., `createFolderBodySchema`) AND named TypeScript type aliases (e.g., `export type CreateFolderBody = z.input<typeof createFolderBodySchema>`)
 - Clients (hooks, utilities, components) import the named type aliases from the contract file. They must never write `z.input<...>` / `z.output<...>` themselves
-- Shared identifier schemas live in `apps/sim/lib/api/contracts/primitives.ts` (e.g., `workspaceIdSchema`, `workflowIdSchema`). Reuse these instead of redefining string-based ID schemas
+- Shared identifier schemas live in `apps/labbai/lib/api/contracts/primitives.ts` (e.g., `workspaceIdSchema`, `workflowIdSchema`). Reuse these instead of redefining string-based ID schemas
 - Audit script: `bun run check:api-validation` enforces boundary policy and prints ratchet metrics for route Zod imports, route-local schema constructors, route `ZodError` references, client hook Zod imports, and related counters. It must pass on PRs. `bun run check:api-validation:strict` is the strict CI gate and additionally fails on annotations with empty reasons
 
 Domain validators that are not HTTP boundaries — tools, blocks, triggers, connectors, realtime handlers, and internal helpers — may still use Zod directly. The contract rule is boundary-only.
@@ -163,7 +163,7 @@ Domain validators that are not HTTP boundaries — tools, blocks, triggers, conn
 
 A small number of legitimate exceptions to the boundary rules are tolerated when annotated. The audit script recognizes four annotation forms:
 
-- `// boundary-raw-fetch: <reason>` — placed on the line directly above a raw `fetch(` call in client hooks (`apps/sim/hooks/queries/**`, `apps/sim/hooks/selectors/**`) AND any same-origin `/api/...` fetch elsewhere under `apps/sim/**` outside an API route handler. Use only for documented exceptions: streaming responses, binary downloads, multipart uploads, signed-URL flows, OAuth redirects, and external-origin requests
+- `// boundary-raw-fetch: <reason>` — placed on the line directly above a raw `fetch(` call in client hooks (`apps/labbai/hooks/queries/**`, `apps/labbai/hooks/selectors/**`) AND any same-origin `/api/...` fetch elsewhere under `apps/labbai/**` outside an API route handler. Use only for documented exceptions: streaming responses, binary downloads, multipart uploads, signed-URL flows, OAuth redirects, and external-origin requests
 - `// double-cast-allowed: <reason>` — placed on the line directly above an `as unknown as X` cast outside test files
 - `// boundary-raw-json: <reason>` — placed on the line directly above a raw `await request.json()` / `await req.json()` read in a route handler. Use only when the body is a JSON-RPC envelope, a tolerant `.catch(() => ({}))` parse, or otherwise cannot go through `parseRequest`
 - `// untyped-response: <reason>` — placed on the line directly above a `schema: z.unknown()` response declaration in a contract file. Use only when the response body is genuinely opaque (user-supplied data, third-party passthrough)
@@ -216,7 +216,7 @@ export const PATCH = defineInternalJsonRoute({
 
 The contract, operation, and use case must agree at definition time. Authentication and request-rate admission happen before parsing; canonical loading and authorization happen in the application use case. The presenter returns only the surface success body.
 
-Routes under `apps/sim/app/api/v1/**` use the shared middleware in `apps/sim/app/api/v1/middleware.ts` for auth, rate-limit, and workspace access. Compose contract validation inside that middleware — never reimplement auth/rate-limit per-route.
+Routes under `apps/labbai/app/api/v1/**` use the shared middleware in `apps/labbai/app/api/v1/middleware.ts` for auth, rate-limit, and workspace access. Compose contract validation inside that middleware — never reimplement auth/rate-limit per-route.
 
 Never export a bare `async function GET/POST/...`. Export the result of a shared builder or, for a documented special route, `withRouteHandler(...)`.
 
@@ -224,10 +224,10 @@ Never export a bare `async function GET/POST/...`. Export the result of a shared
 
 When adding a new route + client surface, follow this order. Each step has one place it lives.
 
-1. **Author the contract first** in `apps/sim/lib/api/contracts/<domain>.ts` (or a subdirectory for large domains: `knowledge/`, `selectors/`, `tools/`). Define one schema per request slice (`params`, `query`, `body`, `headers`) and one for the response, then wrap with `defineRouteContract`. Export named type aliases (`z.input` for inputs, `z.output` for outputs).
-2. **Define the semantic operation and application use case** under `apps/sim/lib/<domain>/application/`. The use case owns canonical loading, asserted-scope checks, current authorization, business behavior, semantic audit, and shared domain effects.
-3. **Implement the route adapter** in `apps/sim/app/api/<path>/route.ts` with the appropriate shared builder. Declare auth, operation, rate policy, error policy, input mapping, use case, and presenter. Auth always runs **before** parsing. Use raw `withRouteHandler` only for an explicit special route, and keep protected work in application use cases.
-4. **Add the React Query hook** in `apps/sim/hooks/queries/<domain>.ts`. Use `requestJson(contract, input)` for the call. Build a hierarchical query-key factory (`all` → `lists()` → `list(workspaceId)` → `details()` → `detail(id)`) so invalidations can target prefixes.
+1. **Author the contract first** in `apps/labbai/lib/api/contracts/<domain>.ts` (or a subdirectory for large domains: `knowledge/`, `selectors/`, `tools/`). Define one schema per request slice (`params`, `query`, `body`, `headers`) and one for the response, then wrap with `defineRouteContract`. Export named type aliases (`z.input` for inputs, `z.output` for outputs).
+2. **Define the semantic operation and application use case** under `apps/labbai/lib/<domain>/application/`. The use case owns canonical loading, asserted-scope checks, current authorization, business behavior, semantic audit, and shared domain effects.
+3. **Implement the route adapter** in `apps/labbai/app/api/<path>/route.ts` with the appropriate shared builder. Declare auth, operation, rate policy, error policy, input mapping, use case, and presenter. Auth always runs **before** parsing. Use raw `withRouteHandler` only for an explicit special route, and keep protected work in application use cases.
+4. **Add the React Query hook** in `apps/labbai/hooks/queries/<domain>.ts`. Use `requestJson(contract, input)` for the call. Build a hierarchical query-key factory (`all` → `lists()` → `list(workspaceId)` → `details()` → `detail(id)`) so invalidations can target prefixes.
 5. **Use the hook in the component**. The mutation's `data` and `error` are fully typed from the contract; surface `error.message` (already extracted from the response body's `error` or `message` field by `requestJson`).
 
 ### Schema review checklist (read the contract diff like a DB migration)
@@ -294,7 +294,7 @@ Hooks consume contracts the same way routes do. Every same-origin JSON call must
 
 - Hooks import named type aliases from `@/lib/api/contracts/**`. Never write `z.input<...>` / `z.output<...>` in hooks, and never `import { z } from 'zod'` in client code
 - `requestJson` parses params, query, body, and headers against the contract on the way out and validates the JSON response on the way back. Hooks always forward `signal` for cancellation
-- Documented exceptions for raw `fetch`: streaming responses, binary downloads, multipart uploads, signed-URL flows, OAuth redirects, and external-origin requests. Mark each raw `fetch` with a TSDoc comment explaining which exception applies. The `// boundary-raw-fetch` annotation is required not only in client hooks but for any same-origin `/api/...` fetch anywhere under `apps/sim/**` outside an API route handler — strict CI flags these regardless of location
+- Documented exceptions for raw `fetch`: streaming responses, binary downloads, multipart uploads, signed-URL flows, OAuth redirects, and external-origin requests. Mark each raw `fetch` with a TSDoc comment explaining which exception applies. The `// boundary-raw-fetch` annotation is required not only in client hooks but for any same-origin `/api/...` fetch anywhere under `apps/labbai/**` outside an API route handler — strict CI flags these regardless of location
 
 ```typescript
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
@@ -386,7 +386,7 @@ export function useUpdateEntity() {
 
 Shareable *client* view-state (active tab/panel, filters, search query, pagination, selected entity id, view mode, a deep-linked drawer/modal) lives in the URL via [`nuqs`](https://nuqs.dev) — not in a store synced with effects, and never read via `useSearchParams().get(...)` / `new URLSearchParams(window.location.search)`. Remote data stays in React Query; high-frequency / large / ephemeral / socket-synced state stays in Zustand (canvas pan/zoom, cursor, drag, resize widths, live collaborative selection).
 
-Co-locate a `search-params.ts` per feature exporting the parser map (single source of truth, shared by client `useQueryStates`/`useQueryState` and server `createSearchParamsCache`). Never `import { z }` in client code for params — use nuqs parsers. Full decision framework, conventions, the debounced-input pattern, and the workflow-editor carve-out are in `.claude/rules/sim-url-state.md`.
+Co-locate a `search-params.ts` per feature exporting the parser map (single source of truth, shared by client `useQueryStates`/`useQueryState` and server `createSearchParamsCache`). Never `import { z }` in client code for params — use nuqs parsers. Full decision framework, conventions, the debounced-input pattern, and the workflow-editor carve-out are in `.claude/rules/labbai-url-state.md`.
 
 ## List & Menu Ordering
 
@@ -394,11 +394,11 @@ A list orders itself the way the user already reads the same things somewhere el
 
 Encode the order in ONE exported constant and sort by it — never a hand-maintained literal per menu (`RESOURCE_MENU_ORDER` / `byResourceMenuOrder` in `home/components/mothership-view/components/resource-registry`). Render mixed item kinds in a single ordered pass; emitting all submenu-backed families and then all flat ones silently pins every submenu to the top no matter what the constant says. Divergence is allowed only for search ranking, user-controlled ordering, and recency.
 
-**Grouping**: a `DropdownMenuSeparator` marks a change in WHAT the action acts on — the clicked item (no rule), something else like the page's filters or a new sibling (rule), or destroying it (rule). Most row menus have only the destructive transition and carry one rule before Delete/Leave/Close/Hide; menus that also filter the page or insert siblings carry two. Never band by verb (navigation/status/edit/copy) — the toolbars are flat, so that taxonomy exists nowhere else. No toolbar in the app renders a divider, so multi-band menus teach a taxonomy that exists on no other surface. Build each separator's guard from the EXACT render conditions of the items on both sides — a looser guard is what leaves a dangling rule when its group is conditional. Never add a prop to move a rule. Full rule in `.claude/rules/sim-list-ordering.md`.
+**Grouping**: a `DropdownMenuSeparator` marks a change in WHAT the action acts on — the clicked item (no rule), something else like the page's filters or a new sibling (rule), or destroying it (rule). Most row menus have only the destructive transition and carry one rule before Delete/Leave/Close/Hide; menus that also filter the page or insert siblings carry two. Never band by verb (navigation/status/edit/copy) — the toolbars are flat, so that taxonomy exists nowhere else. No toolbar in the app renders a divider, so multi-band menus teach a taxonomy that exists on no other surface. Build each separator's guard from the EXACT render conditions of the items on both sides — a looser guard is what leaves a dangling rule when its group is conditional. Never add a prop to move a rule. Full rule in `.claude/rules/labbai-list-ordering.md`.
 
 ## Styling
 
-Use Tailwind only, no inline styles. Use `cn()` from `@sim/emcn` for conditional classes.
+Use Tailwind only, no inline styles. Use `cn()` from `@labbai/emcn` for conditional classes.
 
 ```typescript
 <div className={cn('base-classes', isActive && 'active-classes')} />
@@ -410,13 +410,13 @@ For equal height and width, use the `size-*` shorthand — never `h-[Npx] w-[Npx
 <Icon className='size-[14px] text-[var(--text-icon)]' />
 ```
 
-On chip components (see "EMCN Components"), drive chrome through PROPS, not `className`: `error` for the error state, `icon`/`endAdornment` for adornments, `inputClassName` for the inner field. `className` carries ONLY layout/sizing — never re-specify canonical chrome (border, fill, radius, height, text/icon color) or add focus rings. Full consumer rules in `.claude/rules/sim-styling.md`.
+On chip components (see "EMCN Components"), drive chrome through PROPS, not `className`: `error` for the error state, `icon`/`endAdornment` for adornments, `inputClassName` for the inner field. `className` carries ONLY layout/sizing — never re-specify canonical chrome (border, fill, radius, height, text/icon color) or add focus rings. Full consumer rules in `.claude/rules/labbai-styling.md`.
 
 ## EMCN Components
 
-Import components, `cn`, and tokens from the `@sim/emcn` barrel; icons come from the `@sim/emcn/icons` subpath, and CSS modules from their file path. Never deep-import other component subpaths. Use CVA only when 2+ genuine variants exist; otherwise plain `cn()`.
+Import components, `cn`, and tokens from the `@labbai/emcn` barrel; icons come from the `@labbai/emcn/icons` subpath, and CSS modules from their file path. Never deep-import other component subpaths. Use CVA only when 2+ genuine variants exist; otherwise plain `cn()`.
 
-The chip family is the canonical UI chrome and is progressively replacing the legacy EMCN primitives — always reach for the chip equivalent: `ChipInput` over `Input`, `ChipTextarea` over `Textarea`, `ChipModal`/`ChipModalField` over `Modal`, `ChipSelect`/`ChipCombobox` (searchable) or `ChipDropdown` (simple menu-select) over `Select`/`Combobox`, `ChipSwitch` over `Switch`, `ChipDatePicker` over a raw date field, `Chip`/`ChipLink` for pill buttons/links, `ChipTag` for inline tags/badges. For context/action menus the canonical control is `DropdownMenu` (not a chip, but the standard menu — not a hand-rolled popover). Components OWN their chrome (single source of truth) — consumers pass props, not class overrides. Authoring rules in `.claude/rules/emcn-components.md`; consumer rules in `.claude/rules/sim-styling.md`.
+The chip family is the canonical UI chrome and is progressively replacing the legacy EMCN primitives — always reach for the chip equivalent: `ChipInput` over `Input`, `ChipTextarea` over `Textarea`, `ChipModal`/`ChipModalField` over `Modal`, `ChipSelect`/`ChipCombobox` (searchable) or `ChipDropdown` (simple menu-select) over `Select`/`Combobox`, `ChipSwitch` over `Switch`, `ChipDatePicker` over a raw date field, `Chip`/`ChipLink` for pill buttons/links, `ChipTag` for inline tags/badges. For context/action menus the canonical control is `DropdownMenu` (not a chip, but the standard menu — not a hand-rolled popover). Components OWN their chrome (single source of truth) — consumers pass props, not class overrides. Authoring rules in `.claude/rules/emcn-components.md`; consumer rules in `.claude/rules/labbai-styling.md`.
 
 Inside a `ChipModalBody`, EVERY labeled field MUST be a `ChipModalField` — never hand-roll a field row (a raw `<div>` + a hand-rolled `<p>`/`<label>` title + a bare `ChipInput`/`ChipTextarea`). `ChipModalBody` applies `px-2` + `gap-4`; `ChipModalField` adds ANOTHER `px-2`, so each field lands at effective `px-4`, exactly matching `ChipModalHeader`/`ChipModalFooter` (`px-4`). Hand-rolled rows skip the field's gutter and sit at `px-2`, visibly misaligned with the header/footer. For controls `ChipModalField` does not cover (`ChipCombobox`, `ChipSelect`, `DatePicker`, `TimePicker`, `ButtonGroup`, arbitrary JSX), use `ChipModalField type='custom'` with a `title` — it still applies the `px-2` gutter and renders the canonical `Label`. Drive intent via props (`title`/`value`/`onChange`/`error`/`hint`/`required`/`flush`); never pass `variant`/`className`/`id` to the inner control, and never add a body-level wrapper `<div>` with a custom `gap-*` that fights `ChipModalBody`'s `gap-4`.
 
@@ -434,11 +434,11 @@ Principles when building or migrating shared UI:
 
 ## Testing
 
-Use Vitest. Test files: `feature.ts` → `feature.test.ts`. See `.claude/rules/sim-testing.md` for full details.
+Use Vitest. Test files: `feature.ts` → `feature.test.ts`. See `.claude/rules/labbai-testing.md` for full details.
 
 ### Global Mocks (vitest.setup.ts)
 
-`@sim/db`, `@sim/db/schema`, `drizzle-orm`, `@sim/logger`, `@sim/platform-authz/workflow`, `@/blocks/registry`, `@/lib/auth`, `@/lib/auth/hybrid`, `@/lib/core/utils/request`, `@trigger.dev/sdk`, and store mocks are provided globally. Do NOT re-mock them unless overriding behavior. (The `vi.mock('@/lib/auth', ...)` in the example below is an override of the global mock so `getSession` can be controlled per-test.)
+`@labbai/db`, `@labbai/db/schema`, `drizzle-orm`, `@labbai/logger`, `@labbai/platform-authz/workflow`, `@/blocks/registry`, `@/lib/auth`, `@/lib/auth/hybrid`, `@/lib/core/utils/request`, `@trigger.dev/sdk`, and store mocks are provided globally. Do NOT re-mock them unless overriding behavior. (The `vi.mock('@/lib/auth', ...)` in the example below is an override of the global mock so `getSession` can be controlled per-test.)
 
 ### Standard Test Pattern
 
@@ -446,7 +446,7 @@ Use Vitest. Test files: `feature.ts` → `feature.test.ts`. See `.claude/rules/s
 /**
  * @vitest-environment node
  */
-import { createMockRequest } from '@sim/testing'
+import { createMockRequest } from '@labbai/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockGetSession } = vi.hoisted(() => ({
@@ -473,12 +473,12 @@ describe('my route', () => {
 
 - **NEVER** use `vi.resetModules()` + `vi.doMock()` + `await import()` — use `vi.hoisted()` + `vi.mock()` + static imports
 - **NEVER** use `vi.importActual()` — mock everything explicitly
-- **NEVER** use `mockAuth()`, `mockConsoleLogger()`, `setupCommonApiMocks()` from `@sim/testing` — they use `vi.doMock()` internally
+- **NEVER** use `mockAuth()`, `mockConsoleLogger()`, `setupCommonApiMocks()` from `@labbai/testing` — they use `vi.doMock()` internally
 - **Mock heavy deps** (`@/blocks`, `@/tools/registry`, `@/triggers`) in tests that don't need them
 - **Use `@vitest-environment node`** unless DOM APIs are needed (`window`, `document`, `FormData`)
 - **Avoid real timers** — use 1ms delays or `vi.useFakeTimers()`
 
-Use `@sim/testing` mocks/factories over local test data.
+Use `@labbai/testing` mocks/factories over local test data.
 
 ## Caching
 
@@ -494,7 +494,7 @@ thing ends (`activeStreams`, `pendingChildRuns`) is a plain `Map`, and giving it
 introduces an expiry that races the lifecycle. Cache the gate, never the credential — entitlements
 tolerate bounded staleness in the safe direction, key material must stay fresh so revocation is
 immediate. Full decision tree, sizing, `!== undefined` reads, and the invalidation rule are in
-`.claude/rules/sim-caching.md`.
+`.claude/rules/labbai-caching.md`.
 
 ## Utils Rules
 
@@ -515,6 +515,6 @@ For the full authoring instructions — SubBlock property tables, `condition`/`d
 
 ## Tables
 
-Table column types are registry entries in `apps/sim/lib/table/column-types/` — one file per type owning its label, icon, storage cast, coercion, validation, conversion compatibility, formatting, and editor. `Record<ColumnType, …>` on `registry.ts` and `registry.server.ts` is a compile-time completeness gate: adding a type to the union errors until both entries exist.
+Table column types are registry entries in `apps/labbai/lib/table/column-types/` — one file per type owning its label, icon, storage cast, coercion, validation, conversion compatibility, formatting, and editor. `Record<ColumnType, …>` on `registry.ts` and `registry.server.ts` is a compile-time completeness gate: adding a type to the union errors until both entries exist.
 
 Never add a `case 'sometype':` outside `column-types/` — a missing arm fails silently (a wrong `jsonbCast` breaks every filter on the column). If a consumer needs per-type knowledge, add a registry field. Use `/add-column-type` for the full procedure.

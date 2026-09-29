@@ -1,5 +1,5 @@
 {
-  "name": "@sim/security",
+  "name": "@labbai/security",
   "version": "0.1.0",
   "private": true,
   "sideEffects": false,
@@ -64,7 +64,7 @@
     "ipaddr.js": "2.3.0"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "@types/node": "24.2.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.0"

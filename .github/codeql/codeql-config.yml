@@ -1,4 +1,4 @@
-name: Sim CodeQL config
+name: Labbai CodeQL config
 
 # Trims the extraction surface. CodeQL parses every matching file into a
 # database before a single query runs, and that phase dominates runtime on a
@@ -22,7 +22,7 @@ paths-ignore:
   # Deliberately no '**/test/**' or '**/tests/**'. A directory named `test` is a
   # routable Next.js path segment, not necessarily test code: those globs
   # excluded the real endpoint
-  # apps/sim/app/api/organizations/[id]/data-drains/[drainId]/test/route.ts,
+  # apps/labbai/app/api/organizations/[id]/data-drains/[drainId]/test/route.ts,
   # which authorizes, decrypts destination credentials, and makes an outbound
   # request. CodeQL's paths-ignore has no `!` negation to carve it back out
   # ("The filter pattern characters ?, +, [, ], and ! are not supported and will

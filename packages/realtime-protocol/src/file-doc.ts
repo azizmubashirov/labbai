@@ -4,7 +4,7 @@
  * Yjs document sync + awareness over the shared Socket.IO connection. These are
  * the event names, binary message tags, and join payloads that the server
  * (`apps/realtime/src/handlers/file-doc.ts`) and the client provider
- * (`apps/sim/.../file-doc`) must agree on exactly — the single source of truth
+ * (`apps/labbai/.../file-doc`) must agree on exactly — the single source of truth
  * for both sides so they can never drift.
  *
  * The binary channel uses the standard Yjs "websocket" framing: every
@@ -117,7 +117,7 @@ export const FILE_DOC_SEED = {
  * bound must exceed the bound of the call it wraps, or the outer aborts while the inner is still
  * running — orphaning work that lands late (see the assertion in the accompanying test):
  *
- * - `applyEditMs` (app → relay `apply-edit`, in `apps/sim`) wraps `mergeRequestMs` (relay → app
+ * - `applyEditMs` (app → relay `apply-edit`, in `apps/labbai`) wraps `mergeRequestMs` (relay → app
  *   `/merge`, in `apps/realtime`), so `mergeRequestMs < applyEditMs`.
  * - `readinessDeadlineMs` (the client's give-up-and-fall-back-read-only deadline) must outlast
  *   `seedRequestMs` (relay → app `/seed`), so `seedRequestMs < readinessDeadlineMs`.

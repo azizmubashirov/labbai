@@ -501,7 +501,7 @@ const WORKFLOW_CONTAINER_BLOCK_TYPES = new Set(['loop', 'parallel'])
  * "notifications" configuration block (its rules are read at deploy time, never executed).
  */
 const WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPES: ReadonlySet<string> = new Set(['note', 'notifications'])
-/** Legacy trigger block type — see TRIGGER_TYPES.STARTER in apps/sim/lib/workflows/triggers/triggers.ts. */
+/** Legacy trigger block type — see TRIGGER_TYPES.STARTER in apps/labbai/lib/workflows/triggers/triggers.ts. */
 const LEGACY_STARTER_BLOCK_TYPE = 'starter'
 
 export interface WorkflowEdgeScopeBlock extends WorkflowLockBlock {
@@ -560,12 +560,12 @@ export interface WorkflowTriggerCapableBlock {
  * toggle, or the legacy starter block type. Does NOT cover blocks whose
  * trigger status comes from the block registry's `category: 'triggers'`
  * field (most modern trigger blocks) — that classification only exists in
- * the client's block registry (apps/sim/blocks), which apps/realtime is
+ * the client's block registry (apps/labbai/blocks), which apps/realtime is
  * architecturally forbidden from importing (see
  * scripts/check-monorepo-boundaries.ts). Persisting a redundant "isTrigger"
  * flag on the block row to cover that case would itself be a driftable
  * duplicate, so that case remains client-enforced only; see
- * TriggerUtils.isTriggerBlock in apps/sim/lib/workflows/triggers/triggers.ts
+ * TriggerUtils.isTriggerBlock in apps/labbai/lib/workflows/triggers/triggers.ts
  * for the full (client-only) check.
  */
 export function isKnownWorkflowTriggerBlock(block: WorkflowTriggerCapableBlock): boolean {

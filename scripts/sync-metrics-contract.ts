@@ -4,14 +4,14 @@ import { fileURLToPath } from 'node:url'
 import { formatGeneratedSource } from './format-generated-source'
 
 /**
- * Generate `apps/sim/lib/copilot/generated/metrics-v1.ts` from the Go-side
+ * Generate `apps/labbai/lib/copilot/generated/metrics-v1.ts` from the Go-side
  * `contracts/metrics-v1.schema.json` contract.
  *
  * The contract is a single-enum JSON Schema listing every canonical mothership
- * OTel METRIC name. Go and Sim BOTH emit mothership metrics (the agent loop in
- * Go; server-side tool/VFS/file instrumentation in Sim), so both sides MUST
+ * OTel METRIC name. Go and Labbai BOTH emit mothership metrics (the agent loop in
+ * Go; server-side tool/VFS/file instrumentation in Labbai), so both sides MUST
  * emit identical metric names for `histogram_quantile(sum by (le) …)` over the
- * Go∪Sim union to be valid. We emit:
+ * Go∪Labbai union to be valid. We emit:
  *   - A `Metric` const object keyed by PascalCase identifier whose values are
  *     the exact wire names, so call sites read `meter.createHistogram(
  *     Metric.CopilotToolDuration)` instead of a raw string literal.
@@ -21,7 +21,7 @@ import { formatGeneratedSource } from './format-generated-source'
  * Label allowlists and histogram bucket boundaries are NOT encoded in the
  * schema (name-only). The Go side owns the label-cardinality allowlist
  * (contracts/metrics_v1.go) and the shared bucket constant
- * (internal/telemetry/metrics.go); the Sim emitter MUST use the identical
+ * (internal/telemetry/metrics.go); the Labbai emitter MUST use the identical
  * label keys and bucket boundaries by hand.
  *
  * This is the metric-name twin of `sync-trace-attributes-contract.ts`; the two
@@ -30,7 +30,7 @@ import { formatGeneratedSource } from './format-generated-source'
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
 const DEFAULT_CONTRACT_PATH = resolve(ROOT, '../copilot/copilot/contracts/metrics-v1.schema.json')
-const OUTPUT_PATH = resolve(ROOT, 'apps/sim/lib/copilot/generated/metrics-v1.ts')
+const OUTPUT_PATH = resolve(ROOT, 'apps/labbai/lib/copilot/generated/metrics-v1.ts')
 
 function extractMetricNames(schema: Record<string, unknown>): string[] {
   const defs = (schema.$defs ?? {}) as Record<string, unknown>
@@ -93,7 +93,7 @@ function render(metricNames: string[]): string {
 //
 // NAMES ONLY. Label keys and histogram bucket boundaries are NOT in this
 // contract — Go owns the label-cardinality allowlist and the shared bucket
-// constant, and the Sim emitter MUST mirror those by hand so the Go∪Sim metric
+// constant, and the Labbai emitter MUST mirror those by hand so the Go∪Labbai metric
 // union is queryable as one series set.
 
 export const Metric = {

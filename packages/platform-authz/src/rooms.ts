@@ -1,5 +1,5 @@
-import { db, userTableDefinitions, workspace, workspaceFiles } from '@sim/db'
-import { ROOM_TYPES, type RoomRef, type RoomType } from '@sim/realtime-protocol/rooms'
+import { db, userTableDefinitions, workspace, workspaceFiles } from '@labbai/db'
+import { ROOM_TYPES, type RoomRef, type RoomType } from '@labbai/realtime-protocol/rooms'
 import { and, eq, isNull } from 'drizzle-orm'
 import {
   type PermissionType,

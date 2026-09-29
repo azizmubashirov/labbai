@@ -1153,8 +1153,8 @@ export const OCR_CAPABILITY = defineCapability({
 
 /**
  * Model families a knowledge base can be indexed with. Labbai indexes with
- * OpenAI `text-embedding-3-small` only; this mirrors `apps/sim/lib/embeddings/catalog.ts`,
- * pinned by `apps/sim/lib/embeddings/knowledge-embedding-family.test.ts`.
+ * OpenAI `text-embedding-3-small` only; this mirrors `apps/labbai/lib/embeddings/catalog.ts`,
+ * pinned by `apps/labbai/lib/embeddings/knowledge-embedding-family.test.ts`.
  */
 /** Labbai: OpenAI is the only knowledge-embedding family. */
 export type KnowledgeEmbeddingFamily = 'openai'

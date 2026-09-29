@@ -1,6 +1,6 @@
 ---
 name: migrate-application-operation
-description: Create or migrate a protected Sim resource operation in the shared Principal and application-use-case architecture across internal APIs, public or versioned APIs, Copilot, and other trusted tool adapters. Use when adding a protected endpoint, tool command, or CRUD method; removing route- or tool-local authorization and business logic; consolidating resource reads or writes behind semantic operation policies; or adding another surface to an existing application operation while preserving contracts, identity, errors, rate limits, audit, analytics, and compatibility behavior. Treat v1, uploads, streams, large bodies, bulk recursion, and polymorphic tools as explicitly scoped special cases.
+description: Create or migrate a protected Labbai resource operation in the shared Principal and application-use-case architecture across internal APIs, public or versioned APIs, Copilot, and other trusted tool adapters. Use when adding a protected endpoint, tool command, or CRUD method; removing route- or tool-local authorization and business logic; consolidating resource reads or writes behind semantic operation policies; or adding another surface to an existing application operation while preserving contracts, identity, errors, rate limits, audit, analytics, and compatibility behavior. Treat v1, uploads, streams, large bodies, bulk recursion, and polymorphic tools as explicitly scoped special cases.
 ---
 
 # Create Or Migrate Application Operation
@@ -39,24 +39,24 @@ A helper that resolves a path is valid only when the actual protected lookup run
 Read these files completely before editing:
 
 - `packages/auth/src/principal.ts`
-- `apps/sim/lib/core/application/operation.ts`
-- `apps/sim/lib/core/application/workspace-operation.ts`
-- `apps/sim/lib/core/application/workspace-authorization.ts`
-- `apps/sim/lib/core/application/authorized-workspace-use-case.ts`
-- `apps/sim/lib/api/server/routes/definition.ts`
-- `apps/sim/lib/api/server/routes/internal-json-route.ts`
-- `apps/sim/lib/api/server/routes/v2-json-route.ts`
-- `apps/sim/lib/auth/internal-delegation.ts`
-- `apps/sim/lib/copilot/application/application-adapter.ts`
-- `apps/sim/lib/copilot/auth/application-delegation.ts`
+- `apps/labbai/lib/core/application/operation.ts`
+- `apps/labbai/lib/core/application/workspace-operation.ts`
+- `apps/labbai/lib/core/application/workspace-authorization.ts`
+- `apps/labbai/lib/core/application/authorized-workspace-use-case.ts`
+- `apps/labbai/lib/api/server/routes/definition.ts`
+- `apps/labbai/lib/api/server/routes/internal-json-route.ts`
+- `apps/labbai/lib/api/server/routes/v2-json-route.ts`
+- `apps/labbai/lib/auth/internal-delegation.ts`
+- `apps/labbai/lib/copilot/application/application-adapter.ts`
+- `apps/labbai/lib/copilot/auth/application-delegation.ts`
 
 Use the file domain only as a representative golden slice:
 
-- `apps/sim/lib/workspace-files/application/operations.ts`
-- `apps/sim/lib/workspace-files/application/authorized-workspace-file-use-case.ts`
-- `apps/sim/lib/workspace-files/application/rename-workspace-file.ts`
-- `apps/sim/lib/copilot/application/execute-file-use-case.ts`
-- `apps/sim/lib/copilot/auth/file-delegation.ts`
+- `apps/labbai/lib/workspace-files/application/operations.ts`
+- `apps/labbai/lib/workspace-files/application/authorized-workspace-file-use-case.ts`
+- `apps/labbai/lib/workspace-files/application/rename-workspace-file.ts`
+- `apps/labbai/lib/copilot/application/execute-file-use-case.ts`
+- `apps/labbai/lib/copilot/auth/file-delegation.ts`
 
 Then read the target domain's operation registry, application code, repositories, contracts, adapters, aliases, resume paths, and focused tests. Fail immediately if the shared foundation is absent. Do not recreate it inside the domain.
 
@@ -336,7 +336,7 @@ Run at minimum:
 ```bash
 bunx vitest run <focused test files>
 bunx biome check <changed source and test files>
-bunx turbo run type-check --filter=@sim/app --filter=@sim/auth
+bunx turbo run type-check --filter=@labbai/app --filter=@labbai/auth
 bun run check:api-validation:strict
 git diff --check
 ```

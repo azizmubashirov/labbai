@@ -13,13 +13,13 @@ import {
   useRef,
   useState,
 } from 'react'
-import { ChevronsDownUp, Expand } from '@sim/emcn/icons'
+import { ChevronsDownUp, Expand } from '@labbai/emcn/icons'
 import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { defaultRehypePlugins, Streamdown, type StreamdownProps } from 'streamdown'
 import 'streamdown/styles.css'
-import { Button, cn, handleKeyboardActivation, Tooltip } from '@sim/emcn'
-import { getEmbedInfo } from '@sim/utils/media-embed'
+import { Button, cn, handleKeyboardActivation, Tooltip } from '@labbai/emcn'
+import { getEmbedInfo } from '@labbai/utils/media-embed'
 import { BLOCK_DIMENSIONS, clampNoteBlockHeight, estimateNoteBlockHeight } from '../dimensions'
 import { OverflowSpan } from '../lib/overflow-span'
 import { useActionMenuSwell } from '../workflow-block/use-action-menu-swell'

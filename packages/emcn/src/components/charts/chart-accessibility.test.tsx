@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-import { ChartDataTable, DashboardMetric } from '@sim/emcn'
+import { ChartDataTable, DashboardMetric } from '@labbai/emcn'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 

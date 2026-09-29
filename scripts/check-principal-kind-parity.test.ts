@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { auditSource, parsePrincipalKindLiterals } from './check-principal-kind-parity'
 
-const FILE = 'apps/sim/lib/things/application/operations.ts'
+const FILE = 'apps/labbai/lib/things/application/operations.ts'
 
 describe('principal policy parsing', () => {
   it('reads value arrays and literal tuples without reading comments', () => {

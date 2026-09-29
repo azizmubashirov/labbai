@@ -16,7 +16,7 @@ const { mockAuthorizeWorkflow, mockPersist, mockAssertMutable } = vi.hoisted(() 
   mockAssertMutable: vi.fn(),
 }))
 
-vi.mock('@sim/platform-authz/workflow', () => ({
+vi.mock('@labbai/platform-authz/workflow', () => ({
   authorizeWorkflowByWorkspacePermission: mockAuthorizeWorkflow,
   assertWorkflowMutable: mockAssertMutable,
   WorkflowLockedError: class WorkflowLockedError extends Error {},

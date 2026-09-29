@@ -6,7 +6,7 @@ FROM oven/bun:1.4.1-alpine AS base
 RUN apk add --no-cache libc6-compat curl
 
 # ========================================
-# Pruner Stage: Emit a minimal monorepo subset that @sim/realtime depends on
+# Pruner Stage: Emit a minimal monorepo subset that @labbai/realtime depends on
 # ========================================
 FROM base AS pruner
 WORKDIR /app
@@ -14,7 +14,7 @@ WORKDIR /app
 COPY . .
 
 RUN TURBO_VERSION="$(bun -e "console.log(require('./package.json').devDependencies.turbo)")" && \
-    bunx --bun "turbo@${TURBO_VERSION}" prune @sim/realtime --docker
+    bunx --bun "turbo@${TURBO_VERSION}" prune @labbai/realtime --docker
 
 # ========================================
 # Dependencies Stage: Install Dependencies

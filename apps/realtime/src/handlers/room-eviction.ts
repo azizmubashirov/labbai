@@ -1,9 +1,9 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@labbai/logger'
 import {
   ROOM_ACCESS_REVOKED_EVENT,
   type RoomAccessRevokedBroadcast,
-} from '@sim/realtime-protocol/events'
-import { type RoomRef, type RoomType, roomName } from '@sim/realtime-protocol/rooms'
+} from '@labbai/realtime-protocol/events'
+import { type RoomRef, type RoomType, roomName } from '@labbai/realtime-protocol/rooms'
 import type { Server } from 'socket.io'
 import type { AuthenticatedSocket } from '@/middleware/auth'
 

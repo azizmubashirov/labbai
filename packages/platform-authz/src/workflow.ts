@@ -1,4 +1,4 @@
-import { db, folder as folderTable, workflow, workspace } from '@sim/db'
+import { db, folder as folderTable, workflow, workspace } from '@labbai/db'
 import { and, eq, isNull } from 'drizzle-orm'
 import {
   type PermissionType,

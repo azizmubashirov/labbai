@@ -1,5 +1,5 @@
-import { createLogger } from '@sim/logger'
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
+import { createLogger } from '@labbai/logger'
+import { ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
 import { getWorkflowState } from '@/database/operations'
 import { resolveAvatarUrl } from '@/handlers/avatar'
 import type { AuthenticatedSocket } from '@/middleware/auth'

@@ -8,7 +8,7 @@ alwaysApply: true
 # Global Standards
 
 ## Logging
-Import `createLogger` from `@sim/logger`. Use `logger.info`, `logger.warn`, `logger.error` instead of `console.log`. Inside API routes wrapped with `withRouteHandler`, loggers automatically include the request ID.
+Import `createLogger` from `@labbai/logger`. Use `logger.info`, `logger.warn`, `logger.error` instead of `console.log`. Inside API routes wrapped with `withRouteHandler`, loggers automatically include the request ID.
 
 ## API Route Handlers
 All API route handlers must run inside `withRouteHandler`. Ordinary internal and v2 JSON/binary handlers use the shared route builders, which already apply it; never double-wrap them. Use raw `withRouteHandler` only for documented protocol or lifecycle exceptions. Never export a bare `async function GET/POST/...`.
@@ -25,7 +25,7 @@ Use TSDoc for documentation. No `====` separators. No non-TSDoc comments.
 Never update global styles. Keep all styling local to components.
 
 ## ID Generation
-Never use `crypto.randomUUID()`, `nanoid`, or the `uuid` package directly. Use the utilities from `@sim/utils/id`:
+Never use `crypto.randomUUID()`, `nanoid`, or the `uuid` package directly. Use the utilities from `@labbai/utils/id`:
 
 - `generateId()` — UUID v4, use by default
 - `generateShortId(size?)` — short URL-safe ID (default 21 chars), for compact identifiers
@@ -39,29 +39,29 @@ import { v4 as uuidv4 } from 'uuid'
 const id = crypto.randomUUID()
 
 // ✓ Good
-import { generateId, generateShortId } from '@sim/utils/id'
+import { generateId, generateShortId } from '@labbai/utils/id'
 const uuid = generateId()
 const shortId = generateShortId()
 const tiny = generateShortId(8)
 ```
 
 ## Common Utilities
-Use shared helpers from `@sim/utils` instead of writing inline implementations:
+Use shared helpers from `@labbai/utils` instead of writing inline implementations:
 
-- `sleep(ms)` from `@sim/utils/helpers` — async delay. Never write `new Promise(resolve => setTimeout(resolve, ms))`
-- `toError(value)` from `@sim/utils/errors` — normalize unknown caught values to `Error`. Never write `e instanceof Error ? e : new Error(String(e))`
-- `getErrorMessage(value, fallback?)` from `@sim/utils/errors` — extract error message string. Never write `e instanceof Error ? e.message : 'fallback'`
+- `sleep(ms)` from `@labbai/utils/helpers` — async delay. Never write `new Promise(resolve => setTimeout(resolve, ms))`
+- `toError(value)` from `@labbai/utils/errors` — normalize unknown caught values to `Error`. Never write `e instanceof Error ? e : new Error(String(e))`
+- `getErrorMessage(value, fallback?)` from `@labbai/utils/errors` — extract error message string. Never write `e instanceof Error ? e.message : 'fallback'`
 - `structuredClone(value)` — built-in deep clone, no import needed. Never write `JSON.parse(JSON.stringify(obj))`
-- `omit(obj, keys)` from `@sim/utils/object` — remove keys from object
-- `filterUndefined(obj)` from `@sim/utils/object` — strip undefined-valued keys. Never write `Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))`
-- `isRecordLike(value)` from `@sim/utils/object` — indexable-object guard. Never redeclare `typeof value === 'object' && value !== null && !Array.isArray(value)`
-- `toRecord(value)` / `toRecordOrNull(value)` / `toArray(value)` from `@sim/utils/object` — coerce an untyped payload value to a record or array. Never inline `isRecordLike(v) ? v : {}` or `Array.isArray(v) ? v : []`. Where the source is already typed, keep the inline `Array.isArray` check: it narrows, while `toArray` asserts
-- `toStringOrNull(value)` / `toNumberOrNull(value)` / `toBooleanOrNull(value)` from `@sim/utils/coerce` — read one scalar out of an untyped payload. Never declare a local one-liner that is byte-identical to one of these (`asString`, `getString`, `nullableString`, …). Keep a local helper that differs: one returning `undefined` rather than `null` changes the wire shape, and one adding `Number.isFinite` or a string parse is a stricter check these deliberately omit
-- `truncate(str, maxLength, suffix?)` from `@sim/utils/string` — safe string truncation with ellipsis
-- `escapeRegExp(value)` from `@sim/utils/string` — escape regex metacharacters. Never inline `replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`
-- `compareStrings(left, right)` from `@sim/utils/string` — code-unit string comparator for hashes, fingerprints, and values compared across processes. Never `localeCompare` there
-- `backoffWithJitter(attempt, retryAfterMs, options?)` from `@sim/utils/retry` — exponential backoff with jitter
-- `parseRetryAfter(header)` from `@sim/utils/retry` — parse HTTP `Retry-After` header to milliseconds
+- `omit(obj, keys)` from `@labbai/utils/object` — remove keys from object
+- `filterUndefined(obj)` from `@labbai/utils/object` — strip undefined-valued keys. Never write `Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))`
+- `isRecordLike(value)` from `@labbai/utils/object` — indexable-object guard. Never redeclare `typeof value === 'object' && value !== null && !Array.isArray(value)`
+- `toRecord(value)` / `toRecordOrNull(value)` / `toArray(value)` from `@labbai/utils/object` — coerce an untyped payload value to a record or array. Never inline `isRecordLike(v) ? v : {}` or `Array.isArray(v) ? v : []`. Where the source is already typed, keep the inline `Array.isArray` check: it narrows, while `toArray` asserts
+- `toStringOrNull(value)` / `toNumberOrNull(value)` / `toBooleanOrNull(value)` from `@labbai/utils/coerce` — read one scalar out of an untyped payload. Never declare a local one-liner that is byte-identical to one of these (`asString`, `getString`, `nullableString`, …). Keep a local helper that differs: one returning `undefined` rather than `null` changes the wire shape, and one adding `Number.isFinite` or a string parse is a stricter check these deliberately omit
+- `truncate(str, maxLength, suffix?)` from `@labbai/utils/string` — safe string truncation with ellipsis
+- `escapeRegExp(value)` from `@labbai/utils/string` — escape regex metacharacters. Never inline `replace(/[.*+?^${}()|[\]\\]/g, '\\$&')`
+- `compareStrings(left, right)` from `@labbai/utils/string` — code-unit string comparator for hashes, fingerprints, and values compared across processes. Never `localeCompare` there
+- `backoffWithJitter(attempt, retryAfterMs, options?)` from `@labbai/utils/retry` — exponential backoff with jitter
+- `parseRetryAfter(header)` from `@labbai/utils/retry` — parse HTTP `Retry-After` header to milliseconds
 
 ```typescript
 // ✗ Bad
@@ -71,9 +71,9 @@ const clone = JSON.parse(JSON.stringify(obj))
 const filtered = Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined))
 
 // ✓ Good
-import { sleep } from '@sim/utils/helpers'
-import { getErrorMessage, toError } from '@sim/utils/errors'
-import { filterUndefined } from '@sim/utils/object'
+import { sleep } from '@labbai/utils/helpers'
+import { getErrorMessage, toError } from '@labbai/utils/errors'
+import { filterUndefined } from '@labbai/utils/object'
 await sleep(1000)
 const msg = getErrorMessage(error, 'Unknown error')
 const clone = structuredClone(obj)
@@ -81,7 +81,7 @@ const filtered = filterUndefined(obj)
 ```
 
 ## Deployment flags in the browser
-Client code inside a workspace, organization, or standalone settings surface reads `hosted`, `billingEnabled`, `chatEnabled`, and the enterprise feature set through `useDeploymentShape()` (components) or `getDeploymentShape()` (block conditions, stores, helpers) from `@/lib/core/config/deployment-shape`, never the `isHosted`/`isBillingEnabled` constants from `env-flags`. Those constants freeze at module init from the root layout's `NEXT_PUBLIC_*` transport, which Next's bare 404 shell and `global-error` never emit, so a tab recovered from one would render Sim Cloud as self-hosted. The reader is seeded from the server-resolved workspace host context, organization layout, or standalone settings layout. Server code keeps reading `env-flags`.
+Client code inside a workspace, organization, or standalone settings surface reads `hosted`, `billingEnabled`, `chatEnabled`, and the enterprise feature set through `useDeploymentShape()` (components) or `getDeploymentShape()` (block conditions, stores, helpers) from `@/lib/core/config/deployment-shape`, never the `isHosted`/`isBillingEnabled` constants from `env-flags`. Those constants freeze at module init from the root layout's `NEXT_PUBLIC_*` transport, which Next's bare 404 shell and `global-error` never emit, so a tab recovered from one would render Labbai Cloud as self-hosted. The reader is seeded from the server-resolved workspace host context, organization layout, or standalone settings layout. Server code keeps reading `env-flags`.
 
 ## Package Manager
 Use `bun` and `bunx`, not `npm` and `npx`.
@@ -89,6 +89,6 @@ Use `bun` and `bunx`, not `npm` and `npx`.
 ## Type-checking
 `tsc` must resolve to the native (Go) TypeScript 7 compiler. Do not remove the `@typescript/native` alias from the root `devDependencies` — nothing imports it, and deleting it looks harmless.
 
-`apps/sim` needs `@typescript/typescript6` for its runtime TypeScript API, and that package depends on `@typescript/old` — an alias of `typescript@6` — which declares its own `tsc` bin. Package managers pick bin winners by lexical sort rather than dependency depth, so `@typescript/old` beats `typescript` and `node_modules/.bin/tsc` silently becomes the JavaScript TypeScript 6 compiler: identical diagnostics, ~10x slower (83s vs 8s on `apps/sim`). The `@typescript/native` alias exists only to sort ahead of `@typescript/old`.
+`apps/labbai` needs `@typescript/typescript6` for its runtime TypeScript API, and that package depends on `@typescript/old` — an alias of `typescript@6` — which declares its own `tsc` bin. Package managers pick bin winners by lexical sort rather than dependency depth, so `@typescript/old` beats `typescript` and `node_modules/.bin/tsc` silently becomes the JavaScript TypeScript 6 compiler: identical diagnostics, ~10x slower (83s vs 8s on `apps/labbai`). The `@typescript/native` alias exists only to sort ahead of `@typescript/old`.
 
 `bun run check:native-typecheck` fails the build if a bare `tsc` stops reporting 7.x — which is also what a newly added package that sorts ahead of `@typescript/native` and ships a `tsc` bin would look like. See [microsoft/typescript-go#4567](https://github.com/microsoft/typescript-go/issues/4567).

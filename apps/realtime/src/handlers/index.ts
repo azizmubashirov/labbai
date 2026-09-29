@@ -1,4 +1,4 @@
-import { WORKSPACE_LIST_ROOM_TYPES } from '@sim/realtime-protocol/rooms'
+import { WORKSPACE_LIST_ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
 import { setupConnectionHandlers } from '@/handlers/connection'
 import { setupWorkspaceFileDocHandlers } from '@/handlers/file-doc'
 import { setupOperationsHandlers } from '@/handlers/operations'

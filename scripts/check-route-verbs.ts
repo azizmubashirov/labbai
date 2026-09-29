@@ -22,12 +22,12 @@
  * the directory path with Next route-group segments (`(group)`) stripped.
  *
  * Guard shape:
- *   1. Statically scan every `apps/sim/app/api/**\/route.ts` for
+ *   1. Statically scan every `apps/labbai/app/api/**\/route.ts` for
  *      `export const <VERB> = define…Route({` and the `contract:` key inside it.
  *   2. Resolve the contract identifier through the route file's own `import`
  *      statement, then `await import()` the CONTRACT module only. Contract
  *      modules are pure Zod; the route module is never imported, because doing
- *      so drags in `@sim/db`, auth and `next/server` side effects.
+ *      so drags in `@labbai/db`, auth and `next/server` side effects.
  *   3. Compare the exported verb symbol to `contract.method`, and the derived
  *      URL to `contract.path`.
  *
@@ -49,7 +49,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const APP = path.join(ROOT, 'apps/sim')
+const APP = path.join(ROOT, 'apps/labbai')
 const API_DIR = path.join(APP, 'app/api')
 
 /** Verb symbols Next.js recognises as route handlers. */

@@ -16,26 +16,26 @@ Labbai is a modified version of [Sim](https://github.com/simstudioai/sim) v0.8.5
 ## Layout
 
 ```
-apps/sim/         Next.js app: UI, API routes, workflow builder, executor
-apps/sim/local-copilot/   the in-app agent (OpenAI-compatible)
+apps/labbai/      Next.js app: UI, API routes, workflow builder, executor
+apps/labbai/local-copilot/  the in-app agent (OpenAI-compatible)
 apps/realtime/    Socket.IO server for the collaborative workflow builder
-packages/         shared packages (@sim/db, @sim/auth, @sim/emcn, …)
+packages/         shared packages (@labbai/db, @labbai/auth, @labbai/emcn, …)
 ```
 
 ## Run it
 
 Images are built in GitHub Actions and published to GHCR
-(`ghcr.io/azizmubashirov/labbai-sim-{simstudio,realtime,migrations,cron}`).
+(`ghcr.io/azizmubashirov/labbai-{app,realtime,migrations,cron}`).
 `docker-compose.prod.yml` runs that stack on the production server; deploy steps are in `HANDOFF.md`.
 
 Local development uses `bun`:
 
 ```bash
 bun install
-cd apps/sim && bun run type-check
+cd apps/labbai && bun run type-check
 ```
 
-Required server settings are listed in `apps/sim/.env.example`. The in-app agent needs
+Required server settings are listed in `apps/labbai/.env.example`. The in-app agent needs
 `OPENAI_API_KEY`.
 
 ## License

@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  */
-import { FILE_DOC_SEED } from '@sim/realtime-protocol/file-doc'
-import { sleep } from '@sim/utils/helpers'
+import { FILE_DOC_SEED } from '@labbai/realtime-protocol/file-doc'
+import { sleep } from '@labbai/utils/helpers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 

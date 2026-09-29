@@ -1,5 +1,5 @@
-import { getErrorMessage } from '@sim/utils/errors'
-import { generateNKeysBetween } from '@sim/utils/fractional-indexing'
+import { getErrorMessage } from '@labbai/utils/errors'
+import { generateNKeysBetween } from '@labbai/utils/fractional-indexing'
 import type { ScriptMigration } from './types'
 
 /**

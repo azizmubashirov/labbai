@@ -1,12 +1,12 @@
-import { db, workflowBlocks, workflowEdges, workflowSubflows } from '@sim/db'
-import { createLogger } from '@sim/logger'
-import { toError } from '@sim/utils/errors'
-import type { BlockState, WorkflowState } from '@sim/workflow-types/workflow'
+import { db, workflowBlocks, workflowEdges, workflowSubflows } from '@labbai/db'
+import { createLogger } from '@labbai/logger'
+import { toError } from '@labbai/utils/errors'
+import type { BlockState, WorkflowState } from '@labbai/workflow-types/workflow'
 import {
   normalizeWorkflowEdgeSourceHandle,
   normalizeWorkflowEdgeTargetHandle,
   SUBFLOW_TYPES,
-} from '@sim/workflow-types/workflow'
+} from '@labbai/workflow-types/workflow'
 import type { InferInsertModel } from 'drizzle-orm'
 import { eq } from 'drizzle-orm'
 import { generateLoopBlocks, generateParallelBlocks } from './subflow-helpers'

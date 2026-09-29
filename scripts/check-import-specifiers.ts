@@ -9,7 +9,7 @@
  *
  * Running real resolution rather than matching that one mistake covers the whole
  * "Module not found" class: bad extensions, typo'd paths, stale importers of moved files,
- * dead `@/` aliases, and `@sim/*` subpaths a package does not export.
+ * dead `@/` aliases, and `@labbai/*` subpaths a package does not export.
  *
  * Skipped: bare npm specifiers (node_modules' business, and flaky on install state),
  * type-only imports (erased before resolution), and tests plus `apps/*&#47;scripts/**`,
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const SCAN_DIRS = ['apps/sim', 'apps/realtime', 'packages']
+const SCAN_DIRS = ['apps/labbai', 'apps/realtime', 'packages']
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'build', '.turbo'])
 
 /**
@@ -41,10 +41,10 @@ const DYNAMIC_RE = /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
 const REQUIRE_RE = /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g
 
 /**
- * Subpath-only packages. Opt-in: `@sim/emcn` is barrel-first by
+ * Subpath-only packages. Opt-in: `@labbai/emcn` is barrel-first by
  * design, so flagging it would bury the one rule that matters.
  */
-const SUBPATH_REQUIRED = new Set(['@sim/utils'])
+const SUBPATH_REQUIRED = new Set(['@labbai/utils'])
 const repositoryFiles = new Set<string>()
 
 /** Repo-relative path, always `/`-separated — `relative()` yields `\` on Windows. */
@@ -57,7 +57,7 @@ function isCompiledSource(full: string, name: string): boolean {
   if (!/\.(ts|tsx)$/.test(name) || name.endsWith('.d.ts')) return false
   if (/\.(test|spec)\.tsx?$/.test(name)) return false
   const rel = repoPath(full)
-  return !rel.startsWith('apps/sim/scripts/') && !rel.startsWith('apps/realtime/scripts/')
+  return !rel.startsWith('apps/labbai/scripts/') && !rel.startsWith('apps/realtime/scripts/')
 }
 
 function walk(dir: string, acc: string[] = []): string[] {
@@ -115,7 +115,7 @@ function probe(base: string): string | null {
 
 /**
  * `paths` from the workspace owning a file. Per-workspace, not global: `@/*` differs between
- * apps/sim and apps/realtime, and apps/sim maps `@sim/db/*` straight at the package directory,
+ * apps/labbai and apps/realtime, and apps/labbai maps `@labbai/db/*` straight at the package directory,
  * bypassing its `exports` map.
  */
 interface PathRule {
@@ -210,7 +210,7 @@ function resolveViaPaths(
 const pkgExportCache = new Map<string, Map<string, string> | null>()
 function packageExports(pkg: string): Map<string, string> | null {
   if (pkgExportCache.has(pkg)) return pkgExportCache.get(pkg) as Map<string, string> | null
-  const dir = join(ROOT, 'packages', pkg.replace('@sim/', ''))
+  const dir = join(ROOT, 'packages', pkg.replace('@labbai/', ''))
   let map: Map<string, string> | null = null
   try {
     const json = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
@@ -250,9 +250,9 @@ function resolveSpecifier(spec: string, importer: string): Outcome | null {
     }
   }
 
-  if (spec.startsWith('@sim/')) {
+  if (spec.startsWith('@labbai/')) {
     const [, name, ...rest] = spec.split('/')
-    const pkg = `@sim/${name}`
+    const pkg = `@labbai/${name}`
     const exports = packageExports(pkg)
     if (!exports) return null // package not in packages/, or has no exports map
     const key = rest.length ? `./${rest.join('/')}` : '.'
@@ -263,7 +263,7 @@ function resolveSpecifier(spec: string, importer: string): Outcome | null {
       return probe(exact) ? { ok: true } : { ok: false, reason: `${key} points at a missing file` }
     }
 
-    // Wildcard subpaths, e.g. `"./*": "./src/*"` on @sim/emcn.
+    // Wildcard subpaths, e.g. `"./*": "./src/*"` on @labbai/emcn.
     for (const [pattern, target] of exports) {
       const star = pattern.indexOf('*')
       if (star === -1) continue

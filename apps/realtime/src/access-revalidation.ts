@@ -1,14 +1,14 @@
-import { createLogger } from '@sim/logger'
-import { ROOM_MEMBERSHIP_ACTIONS, satisfiesRoomMembership } from '@sim/platform-authz/room-policy'
-import type { AccessRevokedBroadcast } from '@sim/realtime-protocol/events'
+import { createLogger } from '@labbai/logger'
+import { ROOM_MEMBERSHIP_ACTIONS, satisfiesRoomMembership } from '@labbai/platform-authz/room-policy'
+import type { AccessRevokedBroadcast } from '@labbai/realtime-protocol/events'
 import {
   parseRoomName,
   ROOM_TYPES,
   type RoomRef,
   type RoomType,
   roomName,
-} from '@sim/realtime-protocol/rooms'
-import { sleep } from '@sim/utils/helpers'
+} from '@labbai/realtime-protocol/rooms'
+import { sleep } from '@labbai/utils/helpers'
 import {
   evictSocketFromRoom,
   runRoomEvictionHandler,

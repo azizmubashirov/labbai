@@ -1,14 +1,14 @@
 #!/usr/bin/env bun
 /**
- * Enforces use of shared @sim/utils helpers over inline implementations.
+ * Enforces use of shared @labbai/utils helpers over inline implementations.
  *
  * Biome's noRestrictedImports covers the import-based bans it lists — today `nanoid` and
  * `uuid`. It does NOT cover named crypto imports; `import { randomBytes } from 'node:crypto'`
  * passes both gates, and deliberately so, since server code building cipher IVs and tokens
- * wants node's crypto rather than the cross-context wrapper in `@sim/utils/random`.
+ * wants node's crypto rather than the cross-context wrapper in `@labbai/utils/random`.
  *
  * This script catches what static import analysis misses — global property access, inline
- * idioms, and reimplemented helpers that should live in @sim/utils.
+ * idioms, and reimplemented helpers that should live in @labbai/utils.
  *
  * Patterns are matched against the whole file, not line by line: every idiom banned here is a
  * multi-token expression that the formatter wraps at 100 columns, and a line-scoped scan sees
@@ -38,7 +38,7 @@ const ALLOWLISTED_FILES = new Set([
   'packages/utils/src/object.test.ts',
   'packages/utils/src/retry.test.ts',
   // CJS bundle — cannot use ES module imports
-  'apps/sim/lib/execution/isolated-vm-worker.cjs',
+  'apps/labbai/lib/execution/isolated-vm-worker.cjs',
   // Uses crypto.getRandomValues() directly (not crypto.randomUUID) — TSDoc comment triggers false positive
   'packages/testing/src/factories/id.ts',
 ])
@@ -52,17 +52,17 @@ const BANNED_PATTERNS: Array<{
   {
     pattern: /\bMath\.random\s*\(/g,
     description: 'Math.random()',
-    suggestion: 'randomInt / randomFloat / randomItem from @sim/utils/random',
+    suggestion: 'randomInt / randomFloat / randomItem from @labbai/utils/random',
   },
   {
     pattern: /\bcrypto\.randomUUID\s*\(/g,
     description: 'crypto.randomUUID()',
-    suggestion: 'generateId() or generateShortId() from @sim/utils/id',
+    suggestion: 'generateId() or generateShortId() from @labbai/utils/id',
   },
   {
     pattern: /\bcrypto\.randomBytes\s*\(/g,
     description: 'crypto.randomBytes()',
-    suggestion: 'generateRandomBytes() or generateRandomHex() from @sim/utils/random',
+    suggestion: 'generateRandomBytes() or generateRandomHex() from @labbai/utils/random',
   },
   // Deep clone idiom
   {
@@ -74,13 +74,13 @@ const BANNED_PATTERNS: Array<{
   {
     pattern: /instanceof Error\s*\?\s*\w+\.message\s*:\s*(?!\s*null\b|\s*undefined\b|\s*false\b)./g,
     description: 'e instanceof Error ? e.message : fallback',
-    suggestion: 'getErrorMessage(e, fallback?) from @sim/utils/errors',
+    suggestion: 'getErrorMessage(e, fallback?) from @labbai/utils/errors',
   },
   // Inline sleep
   {
     pattern: /new Promise\s*[(<]\s*(?:resolve|\(resolve\))\s*=>\s*setTimeout\s*\(\s*resolve/g,
     description: 'new Promise(resolve => setTimeout(resolve, ms))',
-    suggestion: 'sleep(ms) from @sim/utils/helpers',
+    suggestion: 'sleep(ms) from @labbai/utils/helpers',
   },
 ]
 

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { act, createRef, type ReactNode } from 'react'
-import { UploadPreviewButton } from '@sim/emcn'
+import { UploadPreviewButton } from '@labbai/emcn'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 

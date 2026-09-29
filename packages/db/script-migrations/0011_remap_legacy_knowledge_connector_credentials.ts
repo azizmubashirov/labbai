@@ -1,4 +1,4 @@
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@labbai/logger'
 import type { Sql } from 'postgres'
 import type { ScriptMigration } from './types'
 

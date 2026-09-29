@@ -1,6 +1,6 @@
 ---
 name: add-settings-page
-description: Add a new Sim settings page, or audit existing settings pages for design-system compliance with the shared SettingsPanel layout. Use when creating a settings tab, or when asked to check/clean up settings pages so they match the design system (consistent title, header, search, spacing).
+description: Add a new Labbai settings page, or audit existing settings pages for design-system compliance with the shared SettingsPanel layout. Use when creating a settings tab, or when asked to check/clean up settings pages so they match the design system (consistent title, header, search, spacing).
 ---
 
 # Settings Page (add / audit)
@@ -9,15 +9,15 @@ Settings page chrome (header bar, scroll region, content column, nav-driven
 title + description) is owned by the `settings/[section]/layout.tsx` shell. Each
 page renders through **`SettingsPanel`**, which registers the page's header data
 (actions, search, back) with that shell and renders only the body. The full
-convention lives in `.claude/rules/sim-settings-pages.md` — read it first; this
+convention lives in `.claude/rules/labbai-settings-pages.md` — read it first; this
 skill is the procedure.
 
 Key paths:
-- Chrome shell: `apps/sim/app/workspace/[workspaceId]/settings/[section]/layout.tsx` (`SettingsHeaderShell`)
-- `SettingsPanel` registrar: `apps/sim/components/settings/settings-panel.tsx`
-- Nav metadata (titles + descriptions): `apps/sim/components/settings/navigation.ts`
-- Section switch + provider: `apps/sim/app/workspace/[workspaceId]/settings/[section]/settings.tsx`
-- Pages: `apps/sim/app/workspace/[workspaceId]/settings/components/<name>/<name>.tsx` and EE pages under `apps/sim/ee/<feature>/components/`
+- Chrome shell: `apps/labbai/app/workspace/[workspaceId]/settings/[section]/layout.tsx` (`SettingsHeaderShell`)
+- `SettingsPanel` registrar: `apps/labbai/components/settings/settings-panel.tsx`
+- Nav metadata (titles + descriptions): `apps/labbai/components/settings/navigation.ts`
+- Section switch + provider: `apps/labbai/app/workspace/[workspaceId]/settings/[section]/settings.tsx`
+- Pages: `apps/labbai/app/workspace/[workspaceId]/settings/components/<name>/<name>.tsx` and EE pages under `apps/labbai/ee/<feature>/components/`
 
 ## Mode A — Add a new settings page
 
@@ -37,24 +37,24 @@ Key paths:
    `guard.guardBack(closeFn)` and render the shared `UnsavedChangesModal`. Never
    hand-roll a Save button, a `beforeunload`, or an "Unsaved changes" modal —
    they're centralized. See the "Save / Discard + unsaved-changes guard" section
-   in `.claude/rules/sim-settings-pages.md`.
-5. **Verify:** `cd apps/sim && bun run type-check`; `bunx biome check --write <file>`.
+   in `.claude/rules/labbai-settings-pages.md`.
+5. **Verify:** `cd apps/labbai && bun run type-check`; `bunx biome check --write <file>`.
 
 ## Mode B — Audit existing settings pages
 
-For each page component, confirm the checklist in `.claude/rules/sim-settings-pages.md`:
+For each page component, confirm the checklist in `.claude/rules/labbai-settings-pages.md`:
 
 1. Find hand-rolled shells that should be `SettingsPanel`:
-   `git grep -n "flex h-full flex-col bg-\[var(--bg)\]" -- 'apps/sim/**/settings/' 'apps/sim/ee/'`
+   `git grep -n "flex h-full flex-col bg-\[var(--bg)\]" -- 'apps/labbai/**/settings/' 'apps/labbai/ee/'`
    — every match should be either `settings-panel.tsx`, a **detail sub-view**
    (has a `<Chip leftIcon={ArrowLeft}>` back button), or an entitlement/loading
    **gate** early-return. Anything else is a page that still needs migrating.
 2. Find hand-rolled title blocks (should be 0 outside detail views):
-   `git grep -n "text-\[var(--text-body)\] text-lg" -- 'apps/sim/**/settings/' 'apps/sim/ee/'`
+   `git grep -n "text-\[var(--text-body)\] text-lg" -- 'apps/labbai/**/settings/' 'apps/labbai/ee/'`
 3. Find literal pixel text sizes (should be 0 — see "Text-scale tokens" in
-   `.claude/rules/sim-settings-pages.md` for the token map and the row
+   `.claude/rules/labbai-settings-pages.md` for the token map and the row
    title/subtitle pairing convention):
-   `git grep -nE "text-\[1[0-8]px\]" -- 'apps/sim/**/settings/' 'apps/sim/ee/'` — should
+   `git grep -nE "text-\[1[0-8]px\]" -- 'apps/labbai/**/settings/' 'apps/labbai/ee/'` — should
    be 0. Display type above the scale (`text-[40px]` hero headings, the `text-[8px]`
    member-avatar initial) is deliberate and out of scope.
 4. Confirm each page imports `SettingsPanel` and that its `NavigationItem` has an
@@ -62,7 +62,7 @@ For each page component, confirm the checklist in `.claude/rules/sim-settings-pa
    - Editable pages: confirm Save/Discard go through `SaveDiscardActions` and
      dirty is wired via `useSettingsUnsavedGuard` (called before early-return
      gates) — flag any hand-rolled Save button, `beforeunload`, or unsaved modal.
-     `git grep -n "beforeunload" -- 'apps/sim/**/settings/' 'apps/sim/ee/'`
+     `git grep -n "beforeunload" -- 'apps/labbai/**/settings/' 'apps/labbai/ee/'`
      should only hit the centralized `use-settings-before-unload.ts`.
 5. When migrating a page, change ONLY the structural shell→`SettingsPanel` swap:
    move header chips to `actions`, the standalone search to `search`, delete the
@@ -83,11 +83,11 @@ For each page component, confirm the checklist in `.claude/rules/sim-settings-pa
 
 ## Mode C — Migrate list rows to `SettingsResourceRow`
 
-Read "The resource row" in `.claude/rules/sim-settings-pages.md` first — it is the
+Read "The resource row" in `.claude/rules/labbai-settings-pages.md` first — it is the
 contract. Then, per page:
 
 1. Find hand-rolled rows:
-   `git grep -n "truncate text-\[var(--text-body)\] text-sm" -- 'apps/sim/app/workspace/' 'apps/sim/ee/'`
+   `git grep -n "truncate text-\[var(--text-body)\] text-sm" -- 'apps/labbai/app/workspace/' 'apps/labbai/ee/'`
    Every match outside `settings-resource-row.tsx` is either a row to migrate or a
    genuinely different shape (multi-line body, tabular columns, a grid) that stays
    bespoke — decide which, and say so.

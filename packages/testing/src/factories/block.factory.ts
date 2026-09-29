@@ -1,4 +1,4 @@
-import { generateRandomString } from '@sim/utils/random'
+import { generateRandomString } from '@labbai/utils/random'
 import type { BlockData, BlockOutput, Position } from '../types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

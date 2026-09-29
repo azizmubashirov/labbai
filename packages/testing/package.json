@@ -1,5 +1,5 @@
 {
-  "name": "@sim/testing",
+  "name": "@labbai/testing",
   "version": "0.1.0",
   "private": true,
   "sideEffects": [
@@ -62,12 +62,12 @@
     "vitest": "^3.0.0 || >=4.1.0 <5.0.0"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "next": "16.3.4",
     "typescript": "^7.0.2",
     "vitest": "^4.1.0"
   },
   "dependencies": {
-    "@sim/utils": "workspace:*"
+    "@labbai/utils": "workspace:*"
   }
 }

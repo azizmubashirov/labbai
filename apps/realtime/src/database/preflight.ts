@@ -1,9 +1,9 @@
-import { db } from '@sim/db'
-import { workflow } from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
+import { db } from '@labbai/db'
+import { workflow } from '@labbai/db/schema'
+import { createLogger } from '@labbai/logger'
+import { getErrorMessage } from '@labbai/utils/errors'
+import { sleep } from '@labbai/utils/helpers'
+import { backoffWithJitter } from '@labbai/utils/retry'
 
 const logger = createLogger('SocketPreflight')
 

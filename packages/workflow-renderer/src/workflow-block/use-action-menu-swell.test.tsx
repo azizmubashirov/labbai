@@ -9,7 +9,7 @@
  */
 
 import { act, useEffect } from 'react'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@labbai/utils/helpers'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { useActionMenuSwell } from './use-action-menu-swell'

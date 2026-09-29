@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
-import { AuditAction, AuditResourceType, recordAudit } from '@sim/audit'
-import * as schema from '@sim/db'
+import { AuditAction, AuditResourceType, recordAudit } from '@labbai/audit'
+import * as schema from '@labbai/db'
 import {
   instrumentPoolClient,
   resolveDbUrl,
@@ -8,10 +8,10 @@ import {
   workflowBlocks,
   workflowEdges,
   workflowSubflows,
-} from '@sim/db'
-import { withUtcTimestamps } from '@sim/db/timestamps'
-import { createLogger } from '@sim/logger'
-import { getActiveWorkflowContext } from '@sim/platform-authz/workflow'
+} from '@labbai/db'
+import { withUtcTimestamps } from '@labbai/db/timestamps'
+import { createLogger } from '@labbai/logger'
+import { getActiveWorkflowContext } from '@labbai/platform-authz/workflow'
 import {
   BLOCK_OPERATIONS,
   BLOCKS_OPERATIONS,
@@ -22,11 +22,11 @@ import {
   SUBFLOW_OPERATIONS,
   VARIABLE_OPERATIONS,
   WORKFLOW_OPERATIONS,
-} from '@sim/realtime-protocol/constants'
-import { randomFloat } from '@sim/utils/random'
-import { loadWorkflowFromNormalizedTablesRaw } from '@sim/workflow-persistence/load'
-import { mergeSubBlockValues } from '@sim/workflow-persistence/subblocks'
-import type { DbOrTx } from '@sim/workflow-persistence/types'
+} from '@labbai/realtime-protocol/constants'
+import { randomFloat } from '@labbai/utils/random'
+import { loadWorkflowFromNormalizedTablesRaw } from '@labbai/workflow-persistence/load'
+import { mergeSubBlockValues } from '@labbai/workflow-persistence/subblocks'
+import type { DbOrTx } from '@labbai/workflow-persistence/types'
 import {
   filterAcyclicEdges,
   filterUniqueWorkflowEdges,
@@ -37,7 +37,7 @@ import {
   isWorkflowBlockProtected,
   normalizeWorkflowEdgeSourceHandle,
   normalizeWorkflowEdgeTargetHandle,
-} from '@sim/workflow-types/workflow'
+} from '@labbai/workflow-types/workflow'
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
@@ -90,7 +90,7 @@ interface FilterEdgesForPersistResult<T> {
  * boundary, duplicate, cycle — against one or more candidate edges. Shared by
  * the single-edge `ADD` and `BATCH_ADD_EDGES` handlers so the two paths
  * can't drift out of sync with each other, the same way the client and
- * realtime layers already share these rules via `@sim/workflow-types`.
+ * realtime layers already share these rules via `@labbai/workflow-types`.
  */
 async function filterEdgesForPersist<T extends EdgeAddCandidate>(
   tx: any,
@@ -218,11 +218,11 @@ async function filterEdgesForPersist<T extends EdgeAddCandidate>(
   }
 }
 
-// Both realtime pools (this socketDb + the shared @sim/db pool) resolve the
+// Both realtime pools (this socketDb + the shared @labbai/db pool) resolve the
 // realtime-keyed URL when set, falling back to the shared DATABASE_URL.
 const connectionString =
   resolveDbUrl('DATABASE_URL', process.env.SIM_DB_ROLE ?? 'realtime') ?? env.DATABASE_URL
-// Realtime process footprint = this socketDb pool + the shared @sim/db pool.
+// Realtime process footprint = this socketDb pool + the shared @labbai/db pool.
 const socketDb = drizzle(
   instrumentPoolClient(
     postgres(

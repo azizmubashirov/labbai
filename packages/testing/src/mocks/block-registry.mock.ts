@@ -11,7 +11,7 @@
  * ```ts
  * vi.unmock('@/blocks/registry')
  * vi.mock('@/blocks/registry-maps', async () => {
- *   const { partialBlockRegistry } = await import('@sim/testing/mocks/block-registry.mock')
+ *   const { partialBlockRegistry } = await import('@labbai/testing/mocks/block-registry.mock')
  *   return partialBlockRegistry(await import('@/blocks/blocks/generic_webhook'))
  * })
  * ```

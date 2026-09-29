@@ -56,9 +56,9 @@ jobs:
           mkdir -p out
           bun install --frozen-lockfile 2>&1 | tee out/install.txt
 
-      - name: Type check (apps/sim)
+      - name: Type check (apps/labbai)
         id: tsc
-        working-directory: apps/sim
+        working-directory: apps/labbai
         run: |
           set -o pipefail
           NODE_OPTIONS=--max-old-space-size=12288 bunx tsc --noEmit --pretty false 2>&1 | tee ../../out/typecheck.txt
@@ -66,7 +66,7 @@ jobs:
       - name: Local copilot unit tests
         id: tests
         if: always()
-        working-directory: apps/sim
+        working-directory: apps/labbai
         run: |
           set -o pipefail
           bunx vitest run local-copilot lib/api-key lib/mothership/inbox --reporter=dot 2>&1 | tee ../../out/tests.txt
@@ -110,7 +110,7 @@ jobs:
 
       - name: Unit tests (shard ${{ matrix.shard }}/3)
         id: run
-        working-directory: apps/sim
+        working-directory: apps/labbai
         env:
           DATABASE_URL: postgresql://user:pass@localhost:5432/dummy
         run: |
@@ -153,9 +153,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Next build (apps/sim)
+      - name: Next build (apps/labbai)
         id: build
-        working-directory: apps/sim
+        working-directory: apps/labbai
         env:
           DATABASE_URL: postgresql://user:pass@localhost:5432/dummy
           NEXT_PUBLIC_APP_URL: http://localhost:3300
@@ -179,7 +179,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: simstudio
+          - name: app
             dockerfile: docker/app.Dockerfile
             needs_swap: true
           - name: realtime
@@ -216,7 +216,7 @@ jobs:
 
       - name: Image name
         id: img
-        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/labbai-sim-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/labbai-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
 
       - uses: docker/build-push-action@v6
         env:
@@ -248,8 +248,8 @@ jobs:
       - name: Tag :latest
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          for name in simstudio realtime migrations cron; do
-            ref="ghcr.io/${owner}/labbai-sim-${name}"
+          for name in app realtime migrations cron; do
+            ref="ghcr.io/${owner}/labbai-${name}"
             docker buildx imagetools create -t "${ref}:latest" "${ref}:${GITHUB_SHA}"
           done
 

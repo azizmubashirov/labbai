@@ -11,11 +11,11 @@ vi.mock('@aws-sdk/client-secrets-manager', () => ({
   },
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@labbai/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }))
 
-vi.mock('@sim/utils/helpers', () => ({
+vi.mock('@labbai/utils/helpers', () => ({
   sleep: vi.fn().mockResolvedValue(undefined),
 }))
 

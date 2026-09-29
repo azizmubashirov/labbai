@@ -74,7 +74,7 @@ import { fileURLToPath } from 'node:url'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
-const APP_ROOT = resolve(REPO_ROOT, 'apps/sim')
+const APP_ROOT = resolve(REPO_ROOT, 'apps/labbai')
 
 /**
  * Path prefixes no guarded root may reach at runtime, with the reason a reviewer
@@ -113,7 +113,7 @@ const ROUTE_WRAPPER_FORBIDDEN_PREFIXES: Record<string, string> = {
 }
 
 export interface GuardedRoot {
-  /** Path under `apps/sim`. */
+  /** Path under `apps/labbai`. */
   root: string
   forbidden: Record<string, string>
 }
@@ -181,7 +181,7 @@ const SIDE_EFFECT_IMPORT_PATTERN = /(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g
  */
 const DYNAMIC_IMPORT_PATTERN = /(?<!\btypeof\s{0,16})\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g
 
-/** Resolves an `@/`- or relative specifier to a file under `apps/sim`, or null. */
+/** Resolves an `@/`- or relative specifier to a file under `apps/labbai`, or null. */
 export function resolveSpecifier(specifier: string, fromFile: string): string | null {
   const base = specifier.startsWith('@/')
     ? resolve(APP_ROOT, specifier.slice(2))

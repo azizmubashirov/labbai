@@ -7,7 +7,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { knowledgeApiUtilsMockFns } from '@sim/testing'
+ * import { knowledgeApiUtilsMockFns } from '@labbai/testing'
  *
  * knowledgeApiUtilsMockFns.mockCheckKnowledgeBaseAccess.mockResolvedValue({
  *   hasAccess: true,

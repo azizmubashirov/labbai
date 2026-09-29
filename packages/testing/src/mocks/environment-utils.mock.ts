@@ -35,7 +35,7 @@ function emptyPersonalAndWorkspaceEnv(): {
  *
  * @example
  * ```ts
- * import { environmentUtilsMockFns } from '@sim/testing'
+ * import { environmentUtilsMockFns } from '@labbai/testing'
  *
  * environmentUtilsMockFns.mockGetEffectiveDecryptedEnv.mockResolvedValue({ API_KEY: 'k' })
  * ```
@@ -139,7 +139,7 @@ export function resetEnvironmentUtilsMock(): void {
 
 /**
  * Complete mock module for `@/lib/environment/utils`, installed globally in
- * `apps/sim/vitest.setup.ts`. Every export of the real module is present.
+ * `apps/labbai/vitest.setup.ts`. Every export of the real module is present.
  *
  * @example
  * ```ts

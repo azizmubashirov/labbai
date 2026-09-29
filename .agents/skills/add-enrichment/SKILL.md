@@ -1,14 +1,14 @@
 ---
 name: add-enrichment
-description: Add a code-defined table enrichment (registry entry) under `apps/sim/enrichments/` backed by an ordered provider cascade, ensuring every provider tool it calls has hosted-key support. Use when adding a per-row table enrichment that fills cells via existing Sim tools.
+description: Add a code-defined table enrichment (registry entry) under `apps/labbai/enrichments/` backed by an ordered provider cascade, ensuring every provider tool it calls has hosted-key support. Use when adding a per-row table enrichment that fills cells via existing Labbai tools.
 argument-hint: <enrichment-name>
 ---
 
 # Adding a Table Enrichment
 
-Enrichments are code-defined entries in `apps/sim/enrichments/` that run **directly per table row** (no workflow). Each enrichment declares inputs, outputs, and an ordered list of **providers**; the cascade runner tries providers in order and the first non-empty result fills the cell. Each provider calls one existing Sim tool via `executeTool`, which injects the workspace's BYOK key or a **hosted key** and bills usage automatically.
+Enrichments are code-defined entries in `apps/labbai/enrichments/` that run **directly per table row** (no workflow). Each enrichment declares inputs, outputs, and an ordered list of **providers**; the cascade runner tries providers in order and the first non-empty result fills the cell. Each provider calls one existing Labbai tool via `executeTool`, which injects the workspace's BYOK key or a **hosted key** and bills usage automatically.
 
-Because enrichments run on Sim's hosted keys by default, **every provider tool you reference must have hosted-key support** — otherwise it can only run when the workspace brings its own key. This command makes that check a required step.
+Because enrichments run on Labbai's hosted keys by default, **every provider tool you reference must have hosted-key support** — otherwise it can only run when the workspace brings its own key. This command makes that check a required step.
 
 ## Overview
 
@@ -31,9 +31,9 @@ Outputs automatically become table columns; billing, the catalog/sidebar UI, the
 
 ## Step 1: Pick the data-source tool(s)
 
-For each output the enrichment produces, decide which existing tool provides it. Look up the service's API and the tool in `apps/sim/tools/{service}/` (e.g. `hunter_email_finder`, `pdl_person_enrich`, `pdl_company_enrich`). Confirm:
+For each output the enrichment produces, decide which existing tool provides it. Look up the service's API and the tool in `apps/labbai/tools/{service}/` (e.g. `hunter_email_finder`, `pdl_person_enrich`, `pdl_company_enrich`). Confirm:
 
-- The tool id is registered in `apps/sim/tools/registry.ts`.
+- The tool id is registered in `apps/labbai/tools/registry.ts`.
 - Its `params` accept what you can derive from table columns (read the tool's `params`).
 - Its `outputs` / `transformResponse` actually expose the field you need (read the real output shape — don't assume).
 
@@ -41,7 +41,7 @@ Order providers **cheapest / most-likely-to-hit first**; the cascade stops at th
 
 ## Step 2: Verify hosted-key support — chain to `/add-hosted-key` if missing
 
-**This is the required gate.** For every tool a provider calls, open `apps/sim/tools/{service}/{action}.ts` and check for a `hosting` block:
+**This is the required gate.** For every tool a provider calls, open `apps/labbai/tools/{service}/{action}.ts` and check for a `hosting` block:
 
 ```typescript
 hosting: {
@@ -54,17 +54,17 @@ hosting: {
 ```
 
 - **If `hosting` is present** — good. Note the `envKeyPrefix`; the deployment needs `{PREFIX}_COUNT` + `{PREFIX}_1..N` env vars set for the hosted key to actually resolve at runtime (ops concern, not code). If those env vars aren't set in the target environment, the provider will only run with a workspace BYOK key.
-- **If `hosting` is absent** — the tool can't use a Sim-provided key, so the enrichment would silently produce blank cells on hosted Sim. **Stop and run `/add-hosted-key <service>`** to add hosted-key support to that tool first, then come back. Do this for every provider tool that lacks it.
+- **If `hosting` is absent** — the tool can't use a Labbai-provided key, so the enrichment would silently produce blank cells on hosted Labbai. **Stop and run `/add-hosted-key <service>`** to add hosted-key support to that tool first, then come back. Do this for every provider tool that lacks it.
 
 Why it matters: the cascade runner only bills (and only reads `output.cost.total`) when `executeTool` injected a hosted key, which requires the tool's `hosting` config. No `hosting` → no hosted key → the enrichment depends entirely on per-workspace BYOK.
 
 ## Step 3: Write the enrichment definition
 
-Create `apps/sim/enrichments/{name}/{name}.ts` and a barrel `index.ts`. Mirror the entries registered in `enrichments/registry.ts`.
+Create `apps/labbai/enrichments/{name}/{name}.ts` and a barrel `index.ts`. Mirror the entries registered in `enrichments/registry.ts`.
 
 ```typescript
-import { SomeIcon } from '@sim/emcn/icons'
-import { filterUndefined } from '@sim/utils/object'
+import { SomeIcon } from '@labbai/emcn/icons'
+import { filterUndefined } from '@labbai/utils/object'
 import { normalizeDomain, splitName, str, toolProvider } from '@/enrichments/providers'
 import type { EnrichmentConfig } from '@/enrichments/types'
 
@@ -104,18 +104,18 @@ export const myEnrichment: EnrichmentConfig = {
 ```
 
 ```typescript
-// apps/sim/enrichments/{name}/index.ts
+// apps/labbai/enrichments/{name}/index.ts
 export { myEnrichment } from './my-enrichment'
 ```
 
 Rules:
-- Keep the file **client-safe**: import only `@sim/emcn/icons`, `@sim/utils/*`, `@/enrichments/providers`, and the types. **Never import `@/tools`** here — the runner does the tool call.
+- Keep the file **client-safe**: import only `@labbai/emcn/icons`, `@labbai/utils/*`, `@/enrichments/providers`, and the types. **Never import `@/tools`** here — the runner does the tool call.
 - `buildParams` returns `null` when inputs are insufficient (provider skipped). `mapOutput` returns `null`/empty for a miss (falls through). Use `filterUndefined` when assembling optional tool params; coerce numbers explicitly (don't pass `''` to number outputs).
 - Output `id`s are the keys `mapOutput` returns; output `name`s are the default column names (the user can rename them in the config).
 
 ## Step 4: Register it
 
-In `apps/sim/enrichments/registry.ts`, import and add the entry (catalog order is registration order):
+In `apps/labbai/enrichments/registry.ts`, import and add the entry (catalog order is registration order):
 
 ```typescript
 import { myEnrichment } from '@/enrichments/my-enrichment'
@@ -128,7 +128,7 @@ export const ENRICHMENT_REGISTRY: EnrichmentRegistry = {
 
 ## Step 5: Verify
 
-1. `bun run type-check` (from `apps/sim`) and `bunx biome check` on the changed files.
+1. `bun run type-check` (from `apps/labbai`) and `bunx biome check` on the changed files.
 2. In a table → **+ New column → Enrichments** → pick the new enrichment, map its inputs to columns, name the output column(s), Save. Confirm it appears in the catalog with its icon/description.
 3. With hosted keys (or a workspace BYOK key) configured for each provider's service, run a row and confirm the cell fills; the dev-server log shows `Enrichment hit { provider }`. A row whose providers all miss completes blank; a row where every provider errored shows an error cell.
 

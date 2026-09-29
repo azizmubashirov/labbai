@@ -1,4 +1,4 @@
-import { createVerifyAuth } from '@sim/auth/verify'
+import { createVerifyAuth } from '@labbai/auth/verify'
 import { env } from '@/env'
 
 export const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000'

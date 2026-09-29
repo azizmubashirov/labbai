@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'http'
-import { FILE_DOC_EVENTS, type FileDocInvalidated } from '@sim/realtime-protocol/file-doc'
-import { ROOM_TYPES, roomName, WORKSPACE_LIST_ROOM_TYPES } from '@sim/realtime-protocol/rooms'
-import { safeCompare } from '@sim/security/compare'
+import { FILE_DOC_EVENTS, type FileDocInvalidated } from '@labbai/realtime-protocol/file-doc'
+import { ROOM_TYPES, roomName, WORKSPACE_LIST_ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
+import { safeCompare } from '@labbai/security/compare'
 import { env } from '@/env'
 import {
   applyMarkdownToLiveFileDoc,

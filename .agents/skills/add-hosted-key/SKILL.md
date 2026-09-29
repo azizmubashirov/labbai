@@ -1,12 +1,12 @@
 ---
 name: add-hosted-key
-description: Add hosted API key support to a tool so Sim provides the key (metered and billed to the workspace) when a user has not brought their own. Use when adding a `hosting` config to a tool under `apps/sim/tools/{service}/`.
+description: Add hosted API key support to a tool so Labbai provides the key (metered and billed to the workspace) when a user has not brought their own. Use when adding a `hosting` config to a tool under `apps/labbai/tools/{service}/`.
 argument-hint: <service-name>
 ---
 
 # Adding Hosted Key Support to a Tool
 
-When a tool has hosted key support, Sim provides its own API key if the user hasn't configured one (via BYOK or env var). Usage is metered and billed to the workspace.
+When a tool has hosted key support, Labbai provides its own API key if the user hasn't configured one (via BYOK or env var). Usage is metered and billed to the workspace.
 
 ## Overview
 
@@ -184,7 +184,7 @@ if (jobData.status === 'completed') {
 
 ## Step 4: Hide the API Key Field When Hosted
 
-In the block config (`blocks/blocks/{service}.ts`), add `hideWhenHosted: true` to the API key subblock. This hides the field on hosted Sim since the platform provides the key:
+In the block config (`blocks/blocks/{service}.ts`), add `hideWhenHosted: true` to the API key subblock. This hides the field on hosted Labbai since the platform provides the key:
 
 ```typescript
 {

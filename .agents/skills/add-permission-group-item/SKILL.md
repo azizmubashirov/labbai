@@ -1,12 +1,12 @@
 ---
 name: add-permission-group-item
-description: Add a new governed item to Sim's enterprise permission groups — a boolean restriction, an allowlist, or a denylist — wired end-to-end from the field registry through the capability rule to the server gate that actually refuses. Use when adding a key to `PERMISSION_GROUP_FIELDS` or a capability to `CAPABILITY_RULES`.
+description: Add a new governed item to Labbai's enterprise permission groups — a boolean restriction, an allowlist, or a denylist — wired end-to-end from the field registry through the capability rule to the server gate that actually refuses. Use when adding a key to `PERMISSION_GROUP_FIELDS` or a capability to `CAPABILITY_RULES`.
 argument-hint: <what-to-restrict>
 ---
 
 # Add Permission Group Item Skill
 
-You are adding one governed item an organization admin can withhold from a cohort of members. One entry in `apps/sim/lib/permission-groups/fields.ts` produces the write schema, the read schema, the `PermissionGroupConfig` type, the defaults, the tolerant parser, and (for a boolean) the admin editor row.
+You are adding one governed item an organization admin can withhold from a cohort of members. One entry in `apps/labbai/lib/permission-groups/fields.ts` produces the write schema, the read schema, the `PermissionGroupConfig` type, the defaults, the tolerant parser, and (for a boolean) the admin editor row.
 
 **The registry does not produce enforcement.** Twelve keys once shipped with a checkbox, a hint, and no server check — an organization that ticked `hideCopilot` believed it had withheld a capability while every route still answered. Hence the `enforcement` field, the required `capability` field on every operation, and `scripts/check-permission-group-enforcement.ts`. You are done when something *refuses*, not when the key parses.
 
@@ -21,7 +21,7 @@ You are adding one governed item an organization admin can withhold from a cohor
 - `lib/core/application/workspace-operation.ts` and `workspace-authorization.ts` — the required `capability` field, and the funnel
 - `scripts/check-permission-group-enforcement.ts`, `check-application-graph.ts`, `check-capability-subject.ts`
 
-(Paths are under `apps/sim/` unless noted.)
+(Paths are under `apps/labbai/` unless noted.)
 
 ## Step 0: Decide what kind of thing it is
 
@@ -113,7 +113,7 @@ A **parameterized** rule is the same shape with `kind: 'parameterized'` and a `d
 
 ## Step 4: Declare it on the operations it governs, or assert it at the call site
 
-`capability` is **required on the `ApplicationOperation` base type** (the `capability` field in `lib/core/application/operation.ts`), typed `StaticPermissionGroupCapability | 'none'` — required there, not only on `defineWorkspaceOperation`, so a bare object literal minted by a domain factory does not compile without it — *and* guarded at definition time (`Operation <id> declares no capability; name one, or 'none' with a reason`). The guard is not redundant: **`apps/sim/tsconfig.json` excludes `*.test.ts` / `*.test.tsx` from type-checking** and the enforcement audit walks past test files, so a fixture is the one construction site no static check reads. An absent capability does not deny — it throws `Cannot read properties of undefined` inside `capabilityDeniedBy`, and **only for a caller whose organization actually has a permission group**. It passes CI and every personal workspace, then fails in the tenants that bought the feature.
+`capability` is **required on the `ApplicationOperation` base type** (the `capability` field in `lib/core/application/operation.ts`), typed `StaticPermissionGroupCapability | 'none'` — required there, not only on `defineWorkspaceOperation`, so a bare object literal minted by a domain factory does not compile without it — *and* guarded at definition time (`Operation <id> declares no capability; name one, or 'none' with a reason`). The guard is not redundant: **`apps/labbai/tsconfig.json` excludes `*.test.ts` / `*.test.tsx` from type-checking** and the enforcement audit walks past test files, so a fixture is the one construction site no static check reads. An absent capability does not deny — it throws `Cannot read properties of undefined` inside `capabilityDeniedBy`, and **only for a caller whose organization actually has a permission group**. It passes CI and every personal workspace, then fails in the tenants that bought the feature.
 
 **Static, and the operation is the whole decision** — set `capability` and write no gate code:
 
@@ -209,8 +209,8 @@ Breaking this never announces itself — past regressions surfaced only as unrel
 bun run check:permission-group-enforcement
 bun run check:application-graph
 bun run check:capability-subject
-cd apps/sim && bun run type-check
-cd apps/sim && bunx vitest run lib/permission-groups
+cd apps/labbai && bun run type-check
+cd apps/labbai && bunx vitest run lib/permission-groups
 ```
 
 Also `bun run check:api-validation` if you touched a contract or the group routes. `bun run check:audits` runs all of these; it derives its list from the `check:*` scripts in `package.json`, so a new audit is opted *out* deliberately rather than opted in.

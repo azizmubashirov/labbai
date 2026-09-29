@@ -52,7 +52,7 @@ workspaceId: text('workspace_id'),
 
 Format: `contract-pending(<precondition>): <what to drop> — <why it's safe once the precondition holds>`. The precondition names the PR/release that removes the last reader and **must be fully deployed** before the contract ships.
 
-- **The TODO list is a grep** — always accurate, never drifts: `grep -rn "contract-pending" packages/db apps/sim`. Run it when starting migration work to see what is owed.
+- **The TODO list is a grep** — always accurate, never drifts: `grep -rn "contract-pending" packages/db apps/labbai`. Run it when starting migration work to see what is owed.
 - For anything with a real owner or schedule, also open a tracking issue and put its number in the marker.
 - **Close the loop in the contract PR:** the contract migration's `-- migration-safe:` annotation references the expand, and you **delete the `contract-pending` marker** in the same PR:
   ```sql
@@ -65,7 +65,7 @@ Format: `contract-pending(<precondition>): <what to drop> — <why it's safe onc
 
 The lint flags risky *shapes*; it cannot know whether a given drop is *safe right now*. For each flagged statement, do the work it can't:
 
-1. **Is the dependency gone?** Grep the app for the table/column: search `apps/sim` and `packages` for the column name, the Drizzle field (camelCase), and the table object. If any live read/write remains, it is **not** safe — fix the code first.
+1. **Is the dependency gone?** Grep the app for the table/column: search `apps/labbai` and `packages` for the column name, the Drizzle field (camelCase), and the table object. If any live read/write remains, it is **not** safe — fix the code first.
 2. **Did the expand already ship?** The removal of that read/write must be in a deploy that is *already out*, not this same PR. If it's in this PR, split: land the code change now, do the destructive migration in a follow-up after it deploys.
 3. **Backfills:** confirm the `UPDATE`/`DELETE` is batched (bounded `WHERE`/keyset, not a single whole-table statement), idempotent (safe to replay — a failed migration re-runs unjournaled files from the top), and safe under concurrent writes from the still-live old app.
 

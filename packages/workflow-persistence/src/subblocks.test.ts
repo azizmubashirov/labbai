@@ -1,4 +1,4 @@
-import type { BlockState } from '@sim/workflow-types/workflow'
+import type { BlockState } from '@labbai/workflow-types/workflow'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SUBBLOCK_TYPE, mergeSubblockStateWithValues } from './subblocks'
 

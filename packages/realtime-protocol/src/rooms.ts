@@ -2,13 +2,13 @@
  * Room identity for the realtime layer.
  *
  * A {@link RoomRef} is the universal address shared by every realtime mechanism
- * in Sim — the Socket.IO presence server (`apps/realtime`), the durable SSE
+ * in Labbai — the Socket.IO presence server (`apps/realtime`), the durable SSE
  * event log, and the ephemeral pub/sub fanout. Each mechanism encodes a room
  * differently on the wire, but they all agree on this `{ type, id }` identity
  * and authorize it through the same workspace-permission resolver
- * (`@sim/platform-authz/rooms`).
+ * (`@labbai/platform-authz/rooms`).
  *
- * This module is pure (no runtime dependencies) so both `apps/sim` and
+ * This module is pure (no runtime dependencies) so both `apps/labbai` and
  * `apps/realtime` can import it.
  */
 
@@ -107,7 +107,7 @@ export function isRoomType(value: string): value is RoomType {
  * workflow, a prefixed name splits on the first `:`.
  *
  * Precondition: room ids are opaque tokens that never contain `:` — satisfied by
- * every id in Sim (`generateId()` UUIDs, `generateShortId()` URL-safe tokens,
+ * every id in Labbai (`generateId()` UUIDs, `generateShortId()` URL-safe tokens,
  * workspace ids). This is what makes a bare workflow id unambiguous against a
  * `${type}:${id}` namespace and keeps {@link parseRoomName} lossless.
  */

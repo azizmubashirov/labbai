@@ -20,7 +20,7 @@ vi.mock('@/handlers/avatar', () => ({
   resolveAvatarUrl: mockResolveAvatarUrl,
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@labbai/db', () => ({
   db: { select: vi.fn() },
   user: { image: 'image' },
 }))

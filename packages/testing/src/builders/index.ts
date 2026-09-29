@@ -5,7 +5,7 @@
  *
  * @example
  * ```ts
- * import { WorkflowBuilder, ExecutionContextBuilder } from '@sim/testing/builders'
+ * import { WorkflowBuilder, ExecutionContextBuilder } from '@labbai/testing/builders'
  *
  * // Build a workflow
  * const workflow = WorkflowBuilder.linear(3).build()

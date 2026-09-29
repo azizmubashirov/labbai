@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { splitWorkflowReferenceSegment } from '@sim/utils/workflow-references'
-import { normalizeWorkflowBlockName } from '@sim/workflow-types/workflow'
+import { splitWorkflowReferenceSegment } from '@labbai/utils/workflow-references'
+import { normalizeWorkflowBlockName } from '@labbai/workflow-types/workflow'
 
 interface WorkflowTextRange {
   start: number

@@ -19,7 +19,7 @@ function operation(method: string, path: string, mode = 'json'): Operation {
 const routeSource = (method: string, builder: string) =>
   `export const dynamic = 'force-dynamic'\nexport const ${method} = ${builder}({\n  contract,\n})\n`
 
-describe('the Sim MCP operation table', () => {
+describe('the Labbai MCP operation table', () => {
   it('finds a route module by its contract path', () => {
     expect(routeModulePath('/api/v2/tables/[tableId]/rows')).toBe(
       'app/api/v2/tables/[tableId]/rows/route.ts'

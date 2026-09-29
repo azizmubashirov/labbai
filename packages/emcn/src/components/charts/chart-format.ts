@@ -1,4 +1,4 @@
-import { formatDuration } from '@sim/utils/formatting'
+import { formatDuration } from '@labbai/utils/formatting'
 
 /** Duration for an axis tick or tooltip. `—` for a missing or non-positive value. */
 export function formatChartLatency(ms: number): string {

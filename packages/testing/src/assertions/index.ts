@@ -9,7 +9,7 @@
  *   expectBlockExists,
  *   expectEdgeConnects,
  *   expectExecutionOrder,
- * } from '@sim/testing/assertions'
+ * } from '@labbai/testing/assertions'
  *
  * // Workflow assertions
  * expectBlockExists(workflow.blocks, 'agent-1', 'agent')

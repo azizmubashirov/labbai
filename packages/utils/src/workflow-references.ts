@@ -30,7 +30,7 @@ export function splitWorkflowReferenceSegment(
   return { leading, reference }
 }
 
-/** Distinguishes Sim workflow references from comparison expressions and stray angle brackets. */
+/** Distinguishes Labbai workflow references from comparison expressions and stray angle brackets. */
 export function isLikelyWorkflowReferenceSegment(segment: string): boolean {
   const split = splitWorkflowReferenceSegment(segment)
   if (!split) return false

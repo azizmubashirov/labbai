@@ -23,8 +23,8 @@
  *
  * @module
  */
-import { createLogger } from '@sim/logger'
-import { ROOM_MEMBERSHIP_ACTIONS, satisfiesRoomMembership } from '@sim/platform-authz/room-policy'
+import { createLogger } from '@labbai/logger'
+import { ROOM_MEMBERSHIP_ACTIONS, satisfiesRoomMembership } from '@labbai/platform-authz/room-policy'
 import {
   FILE_DOC_EVENTS,
   FILE_DOC_LEGACY_SCHEMA_VERSION,
@@ -39,10 +39,10 @@ import {
   type JoinFileDocPayload,
   type LeaveFileDocPayload,
   toFileDocBytes,
-} from '@sim/realtime-protocol/file-doc'
-import { ROOM_TYPES, type RoomRef, roomName } from '@sim/realtime-protocol/rooms'
-import { getErrorMessage } from '@sim/utils/errors'
-import { sleep } from '@sim/utils/helpers'
+} from '@labbai/realtime-protocol/file-doc'
+import { ROOM_TYPES, type RoomRef, roomName } from '@labbai/realtime-protocol/rooms'
+import { getErrorMessage } from '@labbai/utils/errors'
+import { sleep } from '@labbai/utils/helpers'
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import type { Server } from 'socket.io'

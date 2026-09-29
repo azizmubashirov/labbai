@@ -21,7 +21,7 @@ import { parse } from '@babel/parser'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const EMCN_ICONS_DIRECTORY = path.join(ROOT, 'packages/emcn/src/icons')
 const STATIC_ICON_FILES = [
-  path.join(ROOT, 'apps/sim/components/icons.tsx'),
+  path.join(ROOT, 'apps/labbai/components/icons.tsx'),
 ]
 const SVG_NUMBER_PATTERN = /[+-]?(?:(?:\d+\.\d*)|(?:\.\d+)|(?:\d+))(?:[eE][+-]?\d+)?/g
 const PRECISION_EXCEPTION_DIRECTIVE = 'svg-path-precision-exception:'

@@ -1,4 +1,4 @@
-import type { BlockState, Loop, Parallel } from '@sim/workflow-types/workflow'
+import type { BlockState, Loop, Parallel } from '@labbai/workflow-types/workflow'
 
 const DEFAULT_LOOP_ITERATIONS = 5
 const DEFAULT_PARALLEL_BATCH_SIZE = 20

@@ -43,7 +43,7 @@ export interface ToolResponse {
  */
 const createMockHeaders = (customHeaders: Record<string, string> = {}) => {
   return {
-    'User-Agent': 'Sim/1.0 (+https://sim.ai)',
+    'User-Agent': 'Labbai/1.0',
     Accept: '*/*',
     'Accept-Encoding': 'gzip, deflate, br',
     'Cache-Control': 'no-cache',
@@ -54,7 +54,7 @@ const createMockHeaders = (customHeaders: Record<string, string> = {}) => {
 
 /**
  * Creates a mock fetch function with Next.js preconnect support.
- * Wraps the @sim/testing createMockFetch with tool-specific additions.
+ * Wraps the @labbai/testing createMockFetch with tool-specific additions.
  */
 export function createToolMockFetch(
   responseData: unknown,

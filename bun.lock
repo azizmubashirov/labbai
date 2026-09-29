@@ -3,11 +3,11 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "simstudio",
+      "name": "labbai",
       "devDependencies": {
         "@babel/parser": "7.29.2",
         "@biomejs/biome": "2.0.6",
-        "@sim/utils": "workspace:*",
+        "@labbai/utils": "workspace:*",
         "@typescript/native": "npm:typescript@^7.0.2",
         "@typescript/typescript6": "^6.0.2",
         "ajv": "8.18.0",
@@ -28,42 +28,8 @@
         "@next/swc-linux-x64-gnu": "16.3.4",
       },
     },
-    "apps/realtime": {
-      "name": "@sim/realtime",
-      "version": "0.1.0",
-      "dependencies": {
-        "@sim/audit": "workspace:*",
-        "@sim/auth": "workspace:*",
-        "@sim/db": "workspace:*",
-        "@sim/logger": "workspace:*",
-        "@sim/platform-authz": "workspace:*",
-        "@sim/realtime-protocol": "workspace:*",
-        "@sim/runtime-secrets": "workspace:*",
-        "@sim/security": "workspace:*",
-        "@sim/utils": "workspace:*",
-        "@sim/workflow-persistence": "workspace:*",
-        "@sim/workflow-types": "workspace:*",
-        "@socket.io/redis-adapter": "8.3.0",
-        "drizzle-orm": "^0.45.2",
-        "lib0": "0.2.117",
-        "postgres": "^3.4.5",
-        "redis": "5.10.0",
-        "socket.io": "^4.8.1",
-        "y-protocols": "1.0.7",
-        "yjs": "13.6.31",
-        "zod": "4.3.6",
-      },
-      "devDependencies": {
-        "@sim/testing": "workspace:*",
-        "@sim/tsconfig": "workspace:*",
-        "@types/node": "24.2.1",
-        "socket.io-client": "4.8.1",
-        "typescript": "^7.0.2",
-        "vitest": "^4.1.0",
-      },
-    },
-    "apps/sim": {
-      "name": "@sim/app",
+    "apps/labbai": {
+      "name": "@labbai/app",
       "version": "0.1.0",
       "dependencies": {
         "@aws-sdk/client-appconfigdata": "3.1117.0",
@@ -80,6 +46,20 @@
         "@floating-ui/dom": "1.7.6",
         "@google-cloud/storage": "7.21.0",
         "@hookform/resolvers": "5.2.2",
+        "@labbai/audit": "workspace:*",
+        "@labbai/auth": "workspace:*",
+        "@labbai/db": "workspace:*",
+        "@labbai/deployment-config": "workspace:*",
+        "@labbai/emcn": "workspace:*",
+        "@labbai/logger": "workspace:*",
+        "@labbai/platform-authz": "workspace:*",
+        "@labbai/realtime-protocol": "workspace:*",
+        "@labbai/runtime-secrets": "workspace:*",
+        "@labbai/security": "workspace:*",
+        "@labbai/utils": "workspace:*",
+        "@labbai/workflow-persistence": "workspace:*",
+        "@labbai/workflow-renderer": "workspace:*",
+        "@labbai/workflow-types": "workspace:*",
         "@marsidev/react-turnstile": "1.4.2",
         "@modelcontextprotocol/sdk": "1.29.0",
         "@monaco-editor/react": "4.7.0",
@@ -112,20 +92,6 @@
         "@radix-ui/react-tabs": "1.1.21",
         "@react-email/components": "1.0.12",
         "@react-email/render": "2.1.0",
-        "@sim/audit": "workspace:*",
-        "@sim/auth": "workspace:*",
-        "@sim/db": "workspace:*",
-        "@sim/deployment-config": "workspace:*",
-        "@sim/emcn": "workspace:*",
-        "@sim/logger": "workspace:*",
-        "@sim/platform-authz": "workspace:*",
-        "@sim/realtime-protocol": "workspace:*",
-        "@sim/runtime-secrets": "workspace:*",
-        "@sim/security": "workspace:*",
-        "@sim/utils": "workspace:*",
-        "@sim/workflow-persistence": "workspace:*",
-        "@sim/workflow-renderer": "workspace:*",
-        "@sim/workflow-types": "workspace:*",
         "@t3-oss/env-nextjs": "0.13.4",
         "@tanstack/react-query": "5.90.8",
         "@tanstack/react-virtual": "3.13.24",
@@ -236,9 +202,9 @@
         "zustand": "^5.0.13",
       },
       "devDependencies": {
+        "@labbai/testing": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@next/env": "16.3.4",
-        "@sim/testing": "workspace:*",
-        "@sim/tsconfig": "workspace:*",
         "@tailwindcss/postcss": "^4.3.3",
         "@tailwindcss/typography": "0.5.19",
         "@testing-library/jest-dom": "^6.6.3",
@@ -270,48 +236,82 @@
         "vitest": "^4.1.0",
       },
     },
-    "packages/audit": {
-      "name": "@sim/audit",
+    "apps/realtime": {
+      "name": "@labbai/realtime",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/db": "workspace:*",
-        "@sim/logger": "workspace:*",
-        "@sim/security": "workspace:*",
-        "@sim/utils": "workspace:*",
+        "@labbai/audit": "workspace:*",
+        "@labbai/auth": "workspace:*",
+        "@labbai/db": "workspace:*",
+        "@labbai/logger": "workspace:*",
+        "@labbai/platform-authz": "workspace:*",
+        "@labbai/realtime-protocol": "workspace:*",
+        "@labbai/runtime-secrets": "workspace:*",
+        "@labbai/security": "workspace:*",
+        "@labbai/utils": "workspace:*",
+        "@labbai/workflow-persistence": "workspace:*",
+        "@labbai/workflow-types": "workspace:*",
+        "@socket.io/redis-adapter": "8.3.0",
+        "drizzle-orm": "^0.45.2",
+        "lib0": "0.2.117",
+        "postgres": "^3.4.5",
+        "redis": "5.10.0",
+        "socket.io": "^4.8.1",
+        "y-protocols": "1.0.7",
+        "yjs": "13.6.31",
+        "zod": "4.3.6",
+      },
+      "devDependencies": {
+        "@labbai/testing": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
+        "@types/node": "24.2.1",
+        "socket.io-client": "4.8.1",
+        "typescript": "^7.0.2",
+        "vitest": "^4.1.0",
+      },
+    },
+    "packages/audit": {
+      "name": "@labbai/audit",
+      "version": "0.1.0",
+      "dependencies": {
+        "@labbai/db": "workspace:*",
+        "@labbai/logger": "workspace:*",
+        "@labbai/security": "workspace:*",
+        "@labbai/utils": "workspace:*",
         "drizzle-orm": "^0.45.2",
       },
       "devDependencies": {
-        "@sim/testing": "workspace:*",
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/testing": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
       },
     },
     "packages/auth": {
-      "name": "@sim/auth",
+      "name": "@labbai/auth",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/db": "workspace:*",
+        "@labbai/db": "workspace:*",
         "better-auth": "1.6.27",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "typescript": "^7.0.2",
       },
     },
     "packages/db": {
-      "name": "@sim/db",
+      "name": "@labbai/db",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/logger": "workspace:*",
-        "@sim/utils": "workspace:*",
+        "@labbai/logger": "workspace:*",
+        "@labbai/utils": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "postgres": "^3.4.5",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "drizzle-kit": "^0.31.4",
         "typescript": "^7.0.2",
@@ -319,26 +319,27 @@
       },
     },
     "packages/deployment-config": {
-      "name": "@sim/deployment-config",
+      "name": "@labbai/deployment-config",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/utils": "workspace:*",
+        "@labbai/utils": "workspace:*",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "typescript": "^7.0.2",
       },
     },
     "packages/emcn": {
-      "name": "@sim/emcn",
+      "name": "@labbai/emcn",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/utils": "workspace:*",
+        "@labbai/utils": "workspace:*",
         "clsx": "^2.1.1",
         "tailwind-merge": "3.6.0",
         "zod": "4.3.6",
       },
       "devDependencies": {
+        "@labbai/tsconfig": "workspace:*",
         "@radix-ui/react-avatar": "1.1.10",
         "@radix-ui/react-checkbox": "^1.1.3",
         "@radix-ui/react-collapsible": "^1.1.3",
@@ -352,7 +353,6 @@
         "@radix-ui/react-slot": "1.2.2",
         "@radix-ui/react-switch": "^1.1.2",
         "@radix-ui/react-tabs": "^1.1.2",
-        "@sim/tsconfig": "workspace:*",
         "@tanstack/react-virtual": "3.13.24",
         "@types/prismjs": "^1.26.5",
         "@types/react": "^19",
@@ -392,82 +392,82 @@
       },
     },
     "packages/logger": {
-      "name": "@sim/logger",
+      "name": "@labbai/logger",
       "version": "0.1.0",
       "dependencies": {
+        "@labbai/utils": "workspace:*",
         "@opentelemetry/api-logs": "0.221.0",
-        "@sim/utils": "workspace:*",
         "chalk": "5.6.2",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
       },
     },
     "packages/platform-authz": {
-      "name": "@sim/platform-authz",
+      "name": "@labbai/platform-authz",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/db": "workspace:*",
-        "@sim/realtime-protocol": "workspace:*",
+        "@labbai/db": "workspace:*",
+        "@labbai/realtime-protocol": "workspace:*",
         "drizzle-orm": "^0.45.2",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "typescript": "^7.0.2",
       },
     },
     "packages/realtime-protocol": {
-      "name": "@sim/realtime-protocol",
+      "name": "@labbai/realtime-protocol",
       "version": "0.1.0",
       "dependencies": {
         "zod": "4.3.6",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
       },
     },
     "packages/runtime-secrets": {
-      "name": "@sim/runtime-secrets",
+      "name": "@labbai/runtime-secrets",
       "version": "0.1.0",
       "dependencies": {
         "@aws-sdk/client-secrets-manager": "3.1117.0",
-        "@sim/logger": "workspace:*",
-        "@sim/utils": "workspace:*",
+        "@labbai/logger": "workspace:*",
+        "@labbai/utils": "workspace:*",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
       },
     },
     "packages/security": {
-      "name": "@sim/security",
+      "name": "@labbai/security",
       "version": "0.1.0",
       "dependencies": {
         "ipaddr.js": "2.3.0",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
       },
     },
     "packages/testing": {
-      "name": "@sim/testing",
+      "name": "@labbai/testing",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/utils": "workspace:*",
+        "@labbai/utils": "workspace:*",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "next": "16.3.4",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
@@ -478,44 +478,44 @@
       },
     },
     "packages/tsconfig": {
-      "name": "@sim/tsconfig",
+      "name": "@labbai/tsconfig",
       "version": "0.0.0",
     },
     "packages/utils": {
-      "name": "@sim/utils",
+      "name": "@labbai/utils",
       "version": "0.1.0",
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
       },
     },
     "packages/workflow-persistence": {
-      "name": "@sim/workflow-persistence",
+      "name": "@labbai/workflow-persistence",
       "version": "0.1.0",
       "dependencies": {
-        "@sim/db": "workspace:*",
-        "@sim/logger": "workspace:*",
-        "@sim/utils": "workspace:*",
-        "@sim/workflow-types": "workspace:*",
+        "@labbai/db": "workspace:*",
+        "@labbai/logger": "workspace:*",
+        "@labbai/utils": "workspace:*",
+        "@labbai/workflow-types": "workspace:*",
         "@xyflow/react": "12.11.3",
         "drizzle-orm": "^0.45.2",
       },
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@types/node": "24.2.1",
         "typescript": "^7.0.2",
         "vitest": "^4.1.0",
       },
     },
     "packages/workflow-renderer": {
-      "name": "@sim/workflow-renderer",
+      "name": "@labbai/workflow-renderer",
       "version": "0.1.0",
       "devDependencies": {
-        "@sim/emcn": "workspace:*",
-        "@sim/tsconfig": "workspace:*",
-        "@sim/utils": "workspace:*",
-        "@sim/workflow-types": "workspace:*",
+        "@labbai/emcn": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
+        "@labbai/utils": "workspace:*",
+        "@labbai/workflow-types": "workspace:*",
         "@testing-library/jest-dom": "^6.6.3",
         "@types/hast": "^3.0.4",
         "@types/react": "^19",
@@ -531,9 +531,9 @@
         "vitest": "^4.1.0",
       },
       "peerDependencies": {
-        "@sim/emcn": "workspace:*",
-        "@sim/utils": "workspace:*",
-        "@sim/workflow-types": "workspace:*",
+        "@labbai/emcn": "workspace:*",
+        "@labbai/utils": "workspace:*",
+        "@labbai/workflow-types": "workspace:*",
         "@xyflow/react": "^12.11.3",
         "react": "^19",
         "remark-breaks": "^4.0.0",
@@ -542,10 +542,10 @@
       },
     },
     "packages/workflow-types": {
-      "name": "@sim/workflow-types",
+      "name": "@labbai/workflow-types",
       "version": "0.1.0",
       "devDependencies": {
-        "@sim/tsconfig": "workspace:*",
+        "@labbai/tsconfig": "workspace:*",
         "@xyflow/react": "12.11.3",
         "typescript": "^7.0.2",
       },
@@ -1024,6 +1024,42 @@
 
     "@keyv/serialize": ["@keyv/serialize@1.1.1", "", {}, "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA=="],
 
+    "@labbai/app": ["@labbai/app@workspace:apps/labbai"],
+
+    "@labbai/audit": ["@labbai/audit@workspace:packages/audit"],
+
+    "@labbai/auth": ["@labbai/auth@workspace:packages/auth"],
+
+    "@labbai/db": ["@labbai/db@workspace:packages/db"],
+
+    "@labbai/deployment-config": ["@labbai/deployment-config@workspace:packages/deployment-config"],
+
+    "@labbai/emcn": ["@labbai/emcn@workspace:packages/emcn"],
+
+    "@labbai/logger": ["@labbai/logger@workspace:packages/logger"],
+
+    "@labbai/platform-authz": ["@labbai/platform-authz@workspace:packages/platform-authz"],
+
+    "@labbai/realtime": ["@labbai/realtime@workspace:apps/realtime"],
+
+    "@labbai/realtime-protocol": ["@labbai/realtime-protocol@workspace:packages/realtime-protocol"],
+
+    "@labbai/runtime-secrets": ["@labbai/runtime-secrets@workspace:packages/runtime-secrets"],
+
+    "@labbai/security": ["@labbai/security@workspace:packages/security"],
+
+    "@labbai/testing": ["@labbai/testing@workspace:packages/testing"],
+
+    "@labbai/tsconfig": ["@labbai/tsconfig@workspace:packages/tsconfig"],
+
+    "@labbai/utils": ["@labbai/utils@workspace:packages/utils"],
+
+    "@labbai/workflow-persistence": ["@labbai/workflow-persistence@workspace:packages/workflow-persistence"],
+
+    "@labbai/workflow-renderer": ["@labbai/workflow-renderer@workspace:packages/workflow-renderer"],
+
+    "@labbai/workflow-types": ["@labbai/workflow-types@workspace:packages/workflow-types"],
+
     "@marsidev/react-turnstile": ["@marsidev/react-turnstile@1.4.2", "", { "peerDependencies": { "react": "^17.0.2 || ^18.0.0 || ^19.0", "react-dom": "^17.0.2 || ^18.0.0 || ^19.0" } }, "sha512-xs1qOuyeMOz6t9BXXCXWiukC0/0+48vR08B7uwNdG05wCMnbcNgxiFmdFKDOFbM76qFYFRYlGeRfhfq1U/iZmA=="],
 
     "@mermaid-js/parser": ["@mermaid-js/parser@1.2.0", "", { "dependencies": { "@chevrotain/types": "~11.1.2" } }, "sha512-oYPyv8A4As1yH5Bx+04iQEQxXuIQDe0GKCNSRgao6z8AM9jixXIfP0vsppRLvGf+nKIOb9/LdpWA4YuJiVvESA=="],
@@ -1377,42 +1413,6 @@
     "@sideway/formula": ["@sideway/formula@3.0.1", "", {}, "sha512-/poHZJJVjx3L+zVD6g9KgHfYnb443oi7wLu/XKojDviHy6HOEOA6z1Trk5aR1dGcmPenJEgb2sK2I80LeS3MIg=="],
 
     "@sideway/pinpoint": ["@sideway/pinpoint@2.0.0", "", {}, "sha512-RNiOoTPkptFtSVzQevY/yWtZwf/RxyVnPy/OcA9HBM3MlGDnBEYL5B41H0MTn0Uec8Hi+2qUtTfG2WWZBmMejQ=="],
-
-    "@sim/app": ["@sim/app@workspace:apps/sim"],
-
-    "@sim/audit": ["@sim/audit@workspace:packages/audit"],
-
-    "@sim/auth": ["@sim/auth@workspace:packages/auth"],
-
-    "@sim/db": ["@sim/db@workspace:packages/db"],
-
-    "@sim/deployment-config": ["@sim/deployment-config@workspace:packages/deployment-config"],
-
-    "@sim/emcn": ["@sim/emcn@workspace:packages/emcn"],
-
-    "@sim/logger": ["@sim/logger@workspace:packages/logger"],
-
-    "@sim/platform-authz": ["@sim/platform-authz@workspace:packages/platform-authz"],
-
-    "@sim/realtime": ["@sim/realtime@workspace:apps/realtime"],
-
-    "@sim/realtime-protocol": ["@sim/realtime-protocol@workspace:packages/realtime-protocol"],
-
-    "@sim/runtime-secrets": ["@sim/runtime-secrets@workspace:packages/runtime-secrets"],
-
-    "@sim/security": ["@sim/security@workspace:packages/security"],
-
-    "@sim/testing": ["@sim/testing@workspace:packages/testing"],
-
-    "@sim/tsconfig": ["@sim/tsconfig@workspace:packages/tsconfig"],
-
-    "@sim/utils": ["@sim/utils@workspace:packages/utils"],
-
-    "@sim/workflow-persistence": ["@sim/workflow-persistence@workspace:packages/workflow-persistence"],
-
-    "@sim/workflow-renderer": ["@sim/workflow-renderer@workspace:packages/workflow-renderer"],
-
-    "@sim/workflow-types": ["@sim/workflow-types@workspace:packages/workflow-types"],
 
     "@sindresorhus/is": ["@sindresorhus/is@7.2.0", "", {}, "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="],
 
@@ -3694,6 +3694,10 @@
 
     "@isaacs/cliui/wrap-ansi": ["wrap-ansi@8.1.0", "", { "dependencies": { "ansi-styles": "^6.1.0", "string-width": "^5.0.1", "strip-ansi": "^7.0.1" } }, "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ=="],
 
+    "@labbai/emcn/@radix-ui/react-avatar": ["@radix-ui/react-avatar@1.1.10", "", { "dependencies": { "@radix-ui/react-context": "1.1.2", "@radix-ui/react-primitive": "2.1.3", "@radix-ui/react-use-callback-ref": "1.1.1", "@radix-ui/react-use-is-hydrated": "0.1.0", "@radix-ui/react-use-layout-effect": "1.1.1" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-V8piFfWapM5OmNCXTzVQY+E1rDa53zY+MQ4Y7356v4fFz6vqCyUtIz2rUD44ZEdwg78/jKmMJHj07+C/Z/rcog=="],
+
+    "@labbai/emcn/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.2", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-y7TBO4xN4Y94FvcWIOIh18fM4R1A8S4q1jhoz4PNzOoHsFcN8pogcFmZrTYAm4F9VRUrWP/Mw7xSKybIeRI+CQ=="],
+
     "@modelcontextprotocol/sdk/ajv": ["ajv@8.20.0", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "fast-uri": "^3.0.1", "json-schema-traverse": "^1.0.0", "require-from-string": "^2.0.2" } }, "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA=="],
 
     "@modelcontextprotocol/sdk/jose": ["jose@6.2.3", "", {}, "sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw=="],
@@ -3713,10 +3717,6 @@
     "@redis/client/cluster-key-slot": ["cluster-key-slot@1.1.2", "", {}, "sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA=="],
 
     "@rolldown/binding-wasm32-wasi/@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
-
-    "@sim/emcn/@radix-ui/react-avatar": ["@radix-ui/react-avatar@1.1.10", "", { "dependencies": { "@radix-ui/react-context": "1.1.2", "@radix-ui/react-primitive": "2.1.3", "@radix-ui/react-use-callback-ref": "1.1.1", "@radix-ui/react-use-is-hydrated": "0.1.0", "@radix-ui/react-use-layout-effect": "1.1.1" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-V8piFfWapM5OmNCXTzVQY+E1rDa53zY+MQ4Y7356v4fFz6vqCyUtIz2rUD44ZEdwg78/jKmMJHj07+C/Z/rcog=="],
-
-    "@sim/emcn/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.2", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-y7TBO4xN4Y94FvcWIOIh18fM4R1A8S4q1jhoz4PNzOoHsFcN8pogcFmZrTYAm4F9VRUrWP/Mw7xSKybIeRI+CQ=="],
 
     "@smithy/middleware-compression/fflate": ["fflate@0.8.3", "", {}, "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA=="],
 
@@ -4096,19 +4096,19 @@
 
     "@isaacs/cliui/wrap-ansi/ansi-styles": ["ansi-styles@6.2.3", "", {}, "sha512-4Dj6M28JB+oAH8kFkTLUo+a2jwOFkuqb3yucU0CANcRRUbxS0cP0nZYCGjcc3BNXwRIsUVmDGgzawme7zvJHvg=="],
 
+    "@labbai/emcn/@radix-ui/react-avatar/@radix-ui/react-context": ["@radix-ui/react-context@1.1.2", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-jCi/QKUM2r1Ju5a3J64TH2A5SpKAgh0LpknyqdQ4m6DCV0xJ2HG1xARRwNGPQfi1SLdLWZ1OJz6F4OMBBNiGJA=="],
+
+    "@labbai/emcn/@radix-ui/react-avatar/@radix-ui/react-primitive": ["@radix-ui/react-primitive@2.1.3", "", { "dependencies": { "@radix-ui/react-slot": "1.2.3" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-m9gTwRkhy2lvCPe6QJp4d3G1TYEUHn/FzJUtq9MjH46an1wJU+GdoGC5VLof8RX8Ft/DlpshApkhswDLZzHIcQ=="],
+
+    "@labbai/emcn/@radix-ui/react-avatar/@radix-ui/react-use-callback-ref": ["@radix-ui/react-use-callback-ref@1.1.1", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-FkBMwD+qbGQeMu1cOHnuGB6x4yzPjho8ap5WtbEJ26umhgqVXbhekKUQO+hZEL1vU92a3wHwdp0HAcqAUF5iDg=="],
+
+    "@labbai/emcn/@radix-ui/react-avatar/@radix-ui/react-use-is-hydrated": ["@radix-ui/react-use-is-hydrated@0.1.0", "", { "dependencies": { "use-sync-external-store": "^1.5.0" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-U+UORVEq+cTnRIaostJv9AGdV3G6Y+zbVd+12e18jQ5A3c0xL03IhnHuiU4UV69wolOQp5GfR58NW/EgdQhwOA=="],
+
+    "@labbai/emcn/@radix-ui/react-avatar/@radix-ui/react-use-layout-effect": ["@radix-ui/react-use-layout-effect@1.1.1", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-RbJRS4UWQFkzHTTwVymMTUv8EqYhOp8dOOviLj2ugtTiXRaRQS7GLGxZTLL1jWhMeoSCf5zmcZkqTl9IiYfXcQ=="],
+
+    "@labbai/emcn/@radix-ui/react-slot/@radix-ui/react-compose-refs": ["@radix-ui/react-compose-refs@1.1.2", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-z4eqJvfiNnFMHIIvXP3CY57y2WJs5g2v3X0zm9mEJkrkNv4rDxu+sg9Jh8EkXyeqBkB7SOcboo9dMVqhyrACIg=="],
+
     "@oclif/core/string-width/emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
-
-    "@sim/emcn/@radix-ui/react-avatar/@radix-ui/react-context": ["@radix-ui/react-context@1.1.2", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-jCi/QKUM2r1Ju5a3J64TH2A5SpKAgh0LpknyqdQ4m6DCV0xJ2HG1xARRwNGPQfi1SLdLWZ1OJz6F4OMBBNiGJA=="],
-
-    "@sim/emcn/@radix-ui/react-avatar/@radix-ui/react-primitive": ["@radix-ui/react-primitive@2.1.3", "", { "dependencies": { "@radix-ui/react-slot": "1.2.3" }, "peerDependencies": { "@types/react": "*", "@types/react-dom": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc", "react-dom": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-m9gTwRkhy2lvCPe6QJp4d3G1TYEUHn/FzJUtq9MjH46an1wJU+GdoGC5VLof8RX8Ft/DlpshApkhswDLZzHIcQ=="],
-
-    "@sim/emcn/@radix-ui/react-avatar/@radix-ui/react-use-callback-ref": ["@radix-ui/react-use-callback-ref@1.1.1", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-FkBMwD+qbGQeMu1cOHnuGB6x4yzPjho8ap5WtbEJ26umhgqVXbhekKUQO+hZEL1vU92a3wHwdp0HAcqAUF5iDg=="],
-
-    "@sim/emcn/@radix-ui/react-avatar/@radix-ui/react-use-is-hydrated": ["@radix-ui/react-use-is-hydrated@0.1.0", "", { "dependencies": { "use-sync-external-store": "^1.5.0" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-U+UORVEq+cTnRIaostJv9AGdV3G6Y+zbVd+12e18jQ5A3c0xL03IhnHuiU4UV69wolOQp5GfR58NW/EgdQhwOA=="],
-
-    "@sim/emcn/@radix-ui/react-avatar/@radix-ui/react-use-layout-effect": ["@radix-ui/react-use-layout-effect@1.1.1", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-RbJRS4UWQFkzHTTwVymMTUv8EqYhOp8dOOviLj2ugtTiXRaRQS7GLGxZTLL1jWhMeoSCf5zmcZkqTl9IiYfXcQ=="],
-
-    "@sim/emcn/@radix-ui/react-slot/@radix-ui/react-compose-refs": ["@radix-ui/react-compose-refs@1.1.2", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-z4eqJvfiNnFMHIIvXP3CY57y2WJs5g2v3X0zm9mEJkrkNv4rDxu+sg9Jh8EkXyeqBkB7SOcboo9dMVqhyrACIg=="],
 
     "@trigger.dev/core/@opentelemetry/core/@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.41.1", "", {}, "sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA=="],
 
@@ -4330,7 +4330,7 @@
 
     "@inquirer/core/wrap-ansi/string-width/emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 
-    "@sim/emcn/@radix-ui/react-avatar/@radix-ui/react-primitive/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
+    "@labbai/emcn/@radix-ui/react-avatar/@radix-ui/react-primitive/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
 
     "@trigger.dev/core/socket.io-client/engine.io-client/xmlhttprequest-ssl": ["xmlhttprequest-ssl@2.0.0", "", {}, "sha512-QKxVRxiRACQcVuQEYFsI1hhkrMlrXHPegbbd1yn9UHOmRxY+si12nQYzri3vbzt8VdTTRviqcKxcyllFas5z2A=="],
 
@@ -4362,7 +4362,7 @@
 
     "rimraf/glob/path-scurry/lru-cache": ["lru-cache@10.4.3", "", {}, "sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ=="],
 
-    "@sim/emcn/@radix-ui/react-avatar/@radix-ui/react-primitive/@radix-ui/react-slot/@radix-ui/react-compose-refs": ["@radix-ui/react-compose-refs@1.1.2", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-z4eqJvfiNnFMHIIvXP3CY57y2WJs5g2v3X0zm9mEJkrkNv4rDxu+sg9Jh8EkXyeqBkB7SOcboo9dMVqhyrACIg=="],
+    "@labbai/emcn/@radix-ui/react-avatar/@radix-ui/react-primitive/@radix-ui/react-slot/@radix-ui/react-compose-refs": ["@radix-ui/react-compose-refs@1.1.2", "", { "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-z4eqJvfiNnFMHIIvXP3CY57y2WJs5g2v3X0zm9mEJkrkNv4rDxu+sg9Jh8EkXyeqBkB7SOcboo9dMVqhyrACIg=="],
 
     "ora/log-symbols/chalk/ansi-styles/color-convert": ["color-convert@1.9.3", "", { "dependencies": { "color-name": "1.1.3" } }, "sha512-QfAUtd+vFdAtFQcC8CCyYt1fYWxSqAiK2cSD6zDB8N3cpsEBAvRxp9zOGg6G/SHHJYAT88/az/IuDGALsNVbGg=="],
 

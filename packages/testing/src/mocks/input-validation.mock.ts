@@ -5,7 +5,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { inputValidationMockFns } from '@sim/testing'
+ * import { inputValidationMockFns } from '@labbai/testing'
  *
  * inputValidationMockFns.mockValidateUrlWithDNS.mockResolvedValue({ valid: true })
  * inputValidationMockFns.mockSecureFetchWithPinnedIP.mockResolvedValue({ response: new Response() })

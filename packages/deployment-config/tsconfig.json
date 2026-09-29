@@ -1,5 +1,5 @@
 {
-  "extends": "@sim/tsconfig/base.json",
+  "extends": "@labbai/tsconfig/base.json",
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
 }

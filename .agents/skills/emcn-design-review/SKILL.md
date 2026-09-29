@@ -19,7 +19,7 @@ This codebase uses **emcn**, a custom component library built on Radix UI primit
 ## Steps
 
 1. Read the emcn public barrel at `packages/emcn/src/index.ts` (re-exports components, Calendar, Table*, and icons) to know what's available; for the full icon set read `packages/emcn/src/icons/index.ts`
-2. Read `apps/sim/app/_styles/globals.css` for CSS variable tokens
+2. Read `apps/labbai/app/_styles/globals.css` for CSS variable tokens
 3. Analyze the specified scope against every rule below
 4. If fix=true, apply the fixes. If fix=false, propose the fixes without applying.
 
@@ -27,8 +27,8 @@ This codebase uses **emcn**, a custom component library built on Radix UI primit
 
 ## Imports
 
-- Components, `cn`, and tokens from the `@sim/emcn` barrel, never component subpaths
-- Icons from `@sim/emcn/icons`
+- Components, `cn`, and tokens from the `@labbai/emcn` barrel, never component subpaths
+- Icons from `@labbai/emcn/icons`
 
 ## Design Tokens
 
@@ -61,7 +61,7 @@ Intent-to-variant mapping (read the actual `buttonVariants` in `packages/emcn/sr
 
 ## Toast
 
-`toast.success()`, `toast.error()`, `toast()` from `@sim/emcn`. Never custom notification UI.
+`toast.success()`, `toast.error()`, `toast()` from `@labbai/emcn`. Never custom notification UI.
 
 ## Badges
 

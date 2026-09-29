@@ -2,7 +2,7 @@ import {
   findWorkflowReferenceTokens,
   isLikelyWorkflowReferenceSegment,
   splitWorkflowReferenceSegment,
-} from '@sim/utils/workflow-references'
+} from '@labbai/utils/workflow-references'
 import { describe, expect, it } from 'vitest'
 
 describe('workflow references', () => {

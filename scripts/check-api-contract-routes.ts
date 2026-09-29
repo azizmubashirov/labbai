@@ -23,7 +23,7 @@
  * template literal, regex or comment, and it could only ever see contracts whose
  * `method`/`path` are inline literals — helper-built contracts such as
  * `defineJsmToolContract(path, …)` would be invisible. Route files stay a
- * static scan on purpose: importing one drags in `@sim/db`, auth and `next/server`,
+ * static scan on purpose: importing one drags in `@labbai/db`, auth and `next/server`,
  * whereas contract modules are pure Zod.
  */
 import { existsSync } from 'node:fs'
@@ -31,8 +31,8 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const CONTRACTS_DIR = path.join(ROOT, 'apps/sim/lib/api/contracts')
-const APP_API_DIR = path.join(ROOT, 'apps/sim/app/api')
+const CONTRACTS_DIR = path.join(ROOT, 'apps/labbai/lib/api/contracts')
+const APP_API_DIR = path.join(ROOT, 'apps/labbai/app/api')
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.next', '.turbo', 'coverage', '__tests__'])
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
 

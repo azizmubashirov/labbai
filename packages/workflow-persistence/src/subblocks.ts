@@ -1,5 +1,5 @@
-import { filterUndefined } from '@sim/utils/object'
-import type { BlockState, SubBlockState } from '@sim/workflow-types/workflow'
+import { filterUndefined } from '@labbai/utils/object'
+import type { BlockState, SubBlockState } from '@labbai/workflow-types/workflow'
 
 export const DEFAULT_SUBBLOCK_TYPE = 'short-input'
 

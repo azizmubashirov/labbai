@@ -15,7 +15,7 @@
  * of a `'use server'` module is also a remotely invocable, unauthenticated
  * endpoint.
  *
- * Sim has no Server Actions — server-only modules use the `.server.ts` suffix
+ * Labbai has no Server Actions — server-only modules use the `.server.ts` suffix
  * and are called directly from route handlers. If you genuinely need a Server
  * Action, remove this check deliberately and wrap every export in auth.
  *
@@ -33,15 +33,15 @@
  * that never legitimately render a client component and so only ever import a
  * client module to (illegally) call its values:
  *
- *   - `apps/sim/app/** /prefetch*.ts`      (RSC server prefetch)
- *   - `apps/sim/app/api/** /route.ts(x)`   (route handlers)
- *   - `apps/sim/triggers/**`               (trigger.dev tasks/pollers/webhooks)
- *   - `apps/sim/blocks/**`                  (block definitions — evaluated server-side)
+ *   - `apps/labbai/app/** /prefetch*.ts`      (RSC server prefetch)
+ *   - `apps/labbai/app/api/** /route.ts(x)`   (route handlers)
+ *   - `apps/labbai/triggers/**`               (trigger.dev tasks/pollers/webhooks)
+ *   - `apps/labbai/blocks/**`                  (block definitions — evaluated server-side)
  *
  * Fix: move the imported query-key factory / standalone fetcher / mapper /
  * constant into a non-`'use client'` module (e.g. `hooks/queries/utils/*-keys.ts`
  * or `hooks/queries/utils/fetch-*.ts`) and import it from there. See the rule in
- * `.claude/rules/sim-queries.md`.
+ * `.claude/rules/labbai-queries.md`.
  *
  * Escape hatch: `// client-boundary-allow: <reason>` on the line directly above
  * the import (reason required). Use only for a genuinely browser-only code path.
@@ -54,7 +54,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const APP_DIR = path.join(ROOT, 'apps/sim')
+const APP_DIR = path.join(ROOT, 'apps/labbai')
 /** Everything Next compiles into the app's module graph. */
 const DIRECTIVE_SCAN_DIRS = [path.join(ROOT, 'apps'), path.join(ROOT, 'packages')]
 
@@ -303,7 +303,7 @@ async function main() {
       `\n✗ ${violations.length} server file(s) import a runtime value from a 'use client' module.\n` +
         `  On the server these resolve to client-reference stubs and throw when called (e.g. 'X.list is not a function').\n` +
         `  Move the imported factory/fetcher/constant into a non-'use client' module (hooks/queries/utils/*-keys.ts or fetch-*.ts).\n` +
-        `  See .claude/rules/sim-queries.md. Escape hatch: // ${ALLOW_DIRECTIVE}: <reason> above the import.\n`
+        `  See .claude/rules/labbai-queries.md. Escape hatch: // ${ALLOW_DIRECTIVE}: <reason> above the import.\n`
     )
     for (const v of violations) {
       console.error(`  ${v.file}:${v.line}  imports from '${v.specifier}'`)

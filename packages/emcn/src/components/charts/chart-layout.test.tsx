@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act } from 'react'
-import { BarChart, CHART_PADDING, ChartFrame, LineChart, RadarChart } from '@sim/emcn'
+import { BarChart, CHART_PADDING, ChartFrame, LineChart, RadarChart } from '@labbai/emcn'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -442,11 +442,11 @@ describe('BarChart stacked mode', () => {
       <BarChart
         label='Credits'
         height={200}
-        series={[layer('Workflow', 'red', [1, 2, 3]), layer('Sim Chat', 'blue', [4, 5, 6])]}
+        series={[layer('Workflow', 'red', [1, 2, 3]), layer('Labbai Chat', 'blue', [4, 5, 6])]}
       />
     )
     const headers = [...container.querySelectorAll('thead th')].map((th) => th.textContent)
-    expect(headers).toEqual(['Date', 'Workflow', 'Sim Chat'])
+    expect(headers).toEqual(['Date', 'Workflow', 'Labbai Chat'])
   })
 })
 

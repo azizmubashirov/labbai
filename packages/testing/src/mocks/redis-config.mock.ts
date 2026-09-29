@@ -77,7 +77,7 @@ function describeRedisConnectionImpl() {
  *
  * @example
  * ```ts
- * import { redisConfigMockFns } from '@sim/testing'
+ * import { redisConfigMockFns } from '@labbai/testing'
  *
  * redisConfigMockFns.mockGetRedisClient.mockReturnValue(myFakeRedis)
  * ```
@@ -121,7 +121,7 @@ export function resetRedisConfigMock(): void {
 
 /**
  * Complete mock module for `@/lib/core/config/redis`, installed globally in
- * `apps/sim/vitest.setup.ts`. Every export of the real module is present.
+ * `apps/labbai/vitest.setup.ts`. Every export of the real module is present.
  *
  * @example
  * ```ts

@@ -6,19 +6,19 @@
 set -eu
 
 if [ -z "${CRON_SECRET:-}" ]; then
-  echo "sim-cron: CRON_SECRET is not set — background jobs are disabled." >&2
-  echo "sim-cron:" >&2
-  echo "sim-cron: Scheduled workflows, polling triggers (Gmail, Outlook, IMAP," >&2
-  echo "sim-cron: RSS, Drive, Sheets, Calendar, HubSpot), knowledge base connector" >&2
-  echo "sim-cron: syncs, and data drains will not run until it is configured." >&2
-  echo "sim-cron:" >&2
-  echo "sim-cron: Add this to the .env file next to docker-compose.prod.yml," >&2
-  echo "sim-cron: then run: docker compose -f docker-compose.prod.yml up -d" >&2
-  echo "sim-cron:" >&2
-  echo "sim-cron:   CRON_SECRET=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" >&2
-  echo "sim-cron:" >&2
-  echo "sim-cron: The app container must receive the same value." >&2
+  echo "labbai-cron: CRON_SECRET is not set — background jobs are disabled." >&2
+  echo "labbai-cron:" >&2
+  echo "labbai-cron: Scheduled workflows, polling triggers (Gmail, Outlook, IMAP," >&2
+  echo "labbai-cron: RSS, Drive, Sheets, Calendar, HubSpot), knowledge base connector" >&2
+  echo "labbai-cron: syncs, and data drains will not run until it is configured." >&2
+  echo "labbai-cron:" >&2
+  echo "labbai-cron: Add this to the .env file next to docker-compose.prod.yml," >&2
+  echo "labbai-cron: then run: docker compose -f docker-compose.prod.yml up -d" >&2
+  echo "labbai-cron:" >&2
+  echo "labbai-cron:   CRON_SECRET=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')" >&2
+  echo "labbai-cron:" >&2
+  echo "labbai-cron: The app container must receive the same value." >&2
   exit 0
 fi
 
-exec /usr/local/bin/supercronic -passthrough-logs /etc/sim/crontab
+exec /usr/local/bin/supercronic -passthrough-logs /etc/labbai/crontab

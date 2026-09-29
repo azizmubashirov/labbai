@@ -1,6 +1,6 @@
 'use client'
 
-import { Chip, cn } from '@sim/emcn'
+import { Chip, cn } from '@labbai/emcn'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 export const chartLegendVariants = cva('flex min-w-0 flex-1 gap-0.5', {

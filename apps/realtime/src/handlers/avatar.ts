@@ -1,5 +1,5 @@
-import { db, user } from '@sim/db'
-import { createLogger } from '@sim/logger'
+import { db, user } from '@labbai/db'
+import { createLogger } from '@labbai/logger'
 import { eq } from 'drizzle-orm'
 import type { AuthenticatedSocket } from '@/middleware/auth'
 

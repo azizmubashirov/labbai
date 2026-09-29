@@ -25,14 +25,14 @@ Read these when doing a deeper pass:
 - Keyset/cursor pagination over offset scans: https://blog.sequinstream.com/keyset-cursors-not-offsets-for-postgres-pagination/
 - Postgres pagination tradeoffs: https://www.citusdata.com/blog/2016/03/30/five-ways-to-paginate/
 
-## Sim Helpers To Prefer
+## Labbai Helpers To Prefer
 
-- `apps/sim/lib/cleanup/batch-delete.ts`
+- `apps/labbai/lib/cleanup/batch-delete.ts`
   - `chunkedBatchDelete`: bounded SELECT -> optional side effect -> DELETE loop.
   - `batchDeleteByWorkspaceAndTimestamp`: common workspace/timestamp cleanup wrapper.
   - `selectRowsByIdChunks`: chunks large ID sets and enforces an overall row cap.
-- `chunkArray` from `@sim/utils/helpers`: use only after the input set itself is already bounded.
-- `apps/sim/lib/core/utils/stream-limits.ts`
+- `chunkArray` from `@labbai/utils/helpers`: use only after the input set itself is already bounded.
+- `apps/labbai/lib/core/utils/stream-limits.ts`
   - `PayloadSizeLimitError`
   - `assertKnownSizeWithinLimit`
   - `assertContentLengthWithinLimit`
@@ -40,16 +40,16 @@ Read these when doing a deeper pass:
   - `readNodeStreamToBufferWithLimit`
   - `readResponseToBufferWithLimit`
   - `readResponseTextWithLimit`
-- Cleanup dispatcher pattern in `apps/sim/lib/billing/cleanup-dispatcher.ts`
+- Cleanup dispatcher pattern in `apps/labbai/lib/billing/cleanup-dispatcher.ts`
   - page active workspaces with `WHERE id > afterId ORDER BY id LIMIT N`
   - dispatch concrete chunks (`workspaceIds`, retention, label) instead of one giant scope
   - prefer Trigger.dev queue/concurrency keys when available
   - execute inline fallback chunks sequentially, not with unbounded `Promise.all`
-- File parse pattern in `apps/sim/lib/internal/file/parser.ts` and `apps/sim/lib/uploads/contexts/workspace/fetch-external-url.ts`
+- File parse pattern in `apps/labbai/lib/internal/file/parser.ts` and `apps/labbai/lib/uploads/contexts/workspace/fetch-external-url.ts`
   - cap downloads and parsed output separately
   - preserve partial results when a later item exceeds the cap
   - never read untrusted response bodies without a byte cap
-- KB connector file downloads in `apps/sim/connectors/utils.ts`
+- KB connector file downloads in `apps/labbai/connectors/utils.ts`
   - `CONNECTOR_MAX_FILE_BYTES`: shared per-file cap (aligned with the manual KB upload limit)
   - `readBodyWithLimit`: stream a download body to a Buffer with a hard byte cap (null on overflow)
   - `stubOrSkipBySize`: listing-time skip when the reported size exceeds the cap
@@ -61,7 +61,7 @@ Read these when doing a deeper pass:
 
 ## KB Connector File Size Handling
 
-The connector size pattern in `apps/sim/connectors/utils.ts` (`CONNECTOR_MAX_FILE_BYTES` + `readBodyWithLimit` + `stubOrSkipBySize`/`markSkipped`) exists for one risk: a knowledge-base connector downloading **arbitrary, user-controlled file bytes** that the source does not hard-cap. Apply it by that risk, not by the connector's name.
+The connector size pattern in `apps/labbai/connectors/utils.ts` (`CONNECTOR_MAX_FILE_BYTES` + `readBodyWithLimit` + `stubOrSkipBySize`/`markSkipped`) exists for one risk: a knowledge-base connector downloading **arbitrary, user-controlled file bytes** that the source does not hard-cap. Apply it by that risk, not by the connector's name.
 
 Use the pattern when the connector downloads file content via a stream/`download_url` where the user controls the size:
 - file-storage connectors: Dropbox, OneDrive, SharePoint, Google Drive, S3, GitHub, GitLab, Azure DevOps

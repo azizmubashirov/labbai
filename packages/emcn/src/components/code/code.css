@@ -1,7 +1,7 @@
 /**
  * Code editor syntax token theme.
- * Cursor/VS Code base colors with Sim's vibrant saturation.
- * Colors aligned to Sim brand where applicable.
+ * Cursor/VS Code base colors with Labbai's vibrant saturation.
+ * Colors aligned to Labbai brand where applicable.
  * Applied to elements with .code-editor-theme class.
  *
  * Uses double-class specificity (.code-editor-theme.code-editor-theme)
@@ -17,7 +17,7 @@
 }
 
 /**
- * Light mode token colors - Cursor style with Sim vibrancy
+ * Light mode token colors - Cursor style with Labbai vibrancy
  */
 .code-editor-theme.code-editor-theme .token.comment,
 .code-editor-theme.code-editor-theme .token.block-comment,
@@ -88,7 +88,7 @@
 }
 
 /**
- * Dark mode token colors - Cursor style with Sim vibrancy
+ * Dark mode token colors - Cursor style with Labbai vibrancy
  */
 .dark .code-editor-theme.code-editor-theme .token.comment,
 .dark .code-editor-theme.code-editor-theme .token.block-comment,

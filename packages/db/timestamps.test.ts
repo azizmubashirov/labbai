@@ -18,7 +18,7 @@ import {
   UTC_CONNECTION_PARAMETERS,
   UTC_TIMESTAMP_TYPES,
   withUtcTimestamps,
-} from '@sim/db/timestamps'
+} from '@labbai/db/timestamps'
 import { pgTable, timestamp } from 'drizzle-orm/pg-core'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'

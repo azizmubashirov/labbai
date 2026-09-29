@@ -99,7 +99,7 @@ export const envFlagsMockFns = {
    * mutable state here so a test can still write
    * `envFlagsMock.egressAllowedHosts = '...'` and have the read observe it.
    *
-   * The hosted gate is mirrored from production: a deployment on sim.ai ignores
+   * The hosted gate is mirrored from production: a hosted deployment ignores
    * these entirely, so a test that sets both must see the same thing.
    */
   getEgressAllowedHosts: vi.fn<() => string | undefined>(() =>
@@ -177,7 +177,7 @@ function flagAccessor<K extends keyof EnvFlagsMockState>(key: K): PropertyDescri
 
 /**
  * Complete, stateful mock module for `@/lib/core/config/env-flags`, installed
- * globally in `apps/sim/vitest.setup.ts`. Every export of the real module is
+ * globally in `apps/labbai/vitest.setup.ts`. Every export of the real module is
  * present. Flag reads are live: override via {@link setEnvFlags} (or direct
  * property assignment) and restore with {@link resetEnvFlagsMock}.
  */

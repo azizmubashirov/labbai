@@ -36,12 +36,12 @@
  */
 
 import { createHash } from 'node:crypto'
-import { createLogger } from '@sim/logger'
-import { FILE_DOC_LIMITS, FILE_DOC_SEED, FILE_DOC_TIMEOUTS } from '@sim/realtime-protocol/file-doc'
-import { getErrorMessage } from '@sim/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@sim/utils/id'
-import { backoffWithJitter } from '@sim/utils/retry'
+import { createLogger } from '@labbai/logger'
+import { FILE_DOC_LIMITS, FILE_DOC_SEED, FILE_DOC_TIMEOUTS } from '@labbai/realtime-protocol/file-doc'
+import { getErrorMessage } from '@labbai/utils/errors'
+import { sleep } from '@labbai/utils/helpers'
+import { generateId } from '@labbai/utils/id'
+import { backoffWithJitter } from '@labbai/utils/retry'
 import { createClient, type RedisClientType } from 'redis'
 import * as Y from 'yjs'
 

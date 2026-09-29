@@ -1,5 +1,5 @@
 import { logs } from '@opentelemetry/api-logs'
-import { createLogger, Logger, LogLevel, runWithRequestContext, setRequestAuth } from '@sim/logger'
+import { createLogger, Logger, LogLevel, runWithRequestContext, setRequestAuth } from '@labbai/logger'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 /**

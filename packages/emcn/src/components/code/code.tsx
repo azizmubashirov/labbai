@@ -10,8 +10,8 @@ import {
   useRef,
   useState,
 } from 'react'
-import { escapeRegExp } from '@sim/utils/string'
-import { findWorkflowReferenceTokens } from '@sim/utils/workflow-references'
+import { escapeRegExp } from '@labbai/utils/string'
+import { findWorkflowReferenceTokens } from '@labbai/utils/workflow-references'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronRight } from '../../icons'
 import { cn } from '../../lib/cn'
@@ -28,7 +28,7 @@ type PrismModule = typeof import('./prism')
  *
  * Prism (core + the side-effectful JS/Python/JSON/Bash/TOML grammar registrations) is kept
  * out of this module's static import graph so it never lands in bundles that only
- * pull `Code` through the shared `@sim/emcn` barrel. It is loaded once per
+ * pull `Code` through the shared `@labbai/emcn` barrel. It is loaded once per
  * session on the first highlight and cached here for all subsequent viewers.
  */
 let prismModulePromise: Promise<PrismModule> | null = null
@@ -867,7 +867,7 @@ interface CodeViewerProps {
   className?: string
   /** Visual density for read-only code. */
   density?: CodeViewerDensity
-  /** Highlight Sim `{{ENV}}` and `<block.output>` references with the platform accent. */
+  /** Highlight Labbai `{{ENV}}` and `<block.output>` references with the platform accent. */
   highlightWorkflowReferences?: boolean
   /** Left padding offset (useful for terminal alignment) */
   paddingLeft?: number

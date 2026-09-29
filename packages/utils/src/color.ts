@@ -13,7 +13,7 @@
  * gradients, `currentColor`, malformed input) so callers can treat unknown
  * values explicitly instead of guessing.
  *
- * Lives here rather than in `apps/sim` because the canvas renderer package needs
+ * Lives here rather than in `apps/labbai` because the canvas renderer package needs
  * the same answer and may not import app code. A second copy there drifted on
  * the `white`/`black` keywords, which is invisible until a block ships one as
  * its tile color and its icon renders white-on-white on the canvas only.

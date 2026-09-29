@@ -13,7 +13,7 @@
  */
 
 import { act } from 'react'
-import { forEachSearchOccurrence } from '@sim/utils/string'
+import { forEachSearchOccurrence } from '@labbai/utils/string'
 import type { Element, ElementContent, Root, RootContent } from 'hast'
 import { createRoot, type Root as ReactRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'

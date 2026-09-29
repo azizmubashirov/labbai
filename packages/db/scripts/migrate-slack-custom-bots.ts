@@ -43,14 +43,14 @@ import {
   workflowBlocks,
   workspace,
   workspaceEnvironment,
-} from '@sim/db/schema'
-import { createLogger } from '@sim/logger'
-import { describeError, getErrorMessage, getPostgresErrorCode } from '@sim/utils/errors'
-import { chunkArray, sleep } from '@sim/utils/helpers'
-import { generateId } from '@sim/utils/id'
-import { isRecordLike, toRecord } from '@sim/utils/object'
-import { type BackoffOptions, backoffWithJitter } from '@sim/utils/retry'
-import { truncate } from '@sim/utils/string'
+} from '@labbai/db/schema'
+import { createLogger } from '@labbai/logger'
+import { describeError, getErrorMessage, getPostgresErrorCode } from '@labbai/utils/errors'
+import { chunkArray, sleep } from '@labbai/utils/helpers'
+import { generateId } from '@labbai/utils/id'
+import { isRecordLike, toRecord } from '@labbai/utils/object'
+import { type BackoffOptions, backoffWithJitter } from '@labbai/utils/retry'
+import { truncate } from '@labbai/utils/string'
 import { and, asc, eq, gt, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'

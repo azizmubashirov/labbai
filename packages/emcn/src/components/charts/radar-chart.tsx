@@ -13,8 +13,8 @@ import {
   positionChartTooltip,
   useChartWidth,
   useIsDarkTheme,
-} from '@sim/emcn'
-import { truncate } from '@sim/utils/string'
+} from '@labbai/emcn'
+import { truncate } from '@labbai/utils/string'
 
 export interface RadarChartAxis {
   label: string

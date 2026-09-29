@@ -10,15 +10,15 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Badge, ChipTag, cn, handleKeyboardActivation, Switch, Tooltip } from '@sim/emcn'
-import { Ban, Lock } from '@sim/emcn/icons'
-import { WorkflowTypeTag } from '@sim/workflow-renderer/workflow-type'
+import { Badge, ChipTag, cn, handleKeyboardActivation, Switch, Tooltip } from '@labbai/emcn'
+import { Ban, Lock } from '@labbai/emcn/icons'
+import { WorkflowTypeTag } from '@labbai/workflow-renderer/workflow-type'
 import {
   isWorkflowAnnotationOnlyBlockType,
   WORKFLOW_SOURCE_HANDLE_ID,
   WORKFLOW_TARGET_HANDLE_ID,
   type WorkflowConnectionSide,
-} from '@sim/workflow-types/workflow'
+} from '@labbai/workflow-types/workflow'
 import {
   Handle,
   Position,

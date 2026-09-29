@@ -1,7 +1,7 @@
-import { createLogger } from '@sim/logger'
-import { getPostgresErrorCode, getTransientDatabaseFailure } from '@sim/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
+import { createLogger } from '@labbai/logger'
+import { getPostgresErrorCode, getTransientDatabaseFailure } from '@labbai/utils/errors'
+import { sleep } from '@labbai/utils/helpers'
+import { backoffWithJitter } from '@labbai/utils/retry'
 import postgres, { type Sql, type TransactionSql } from 'postgres'
 
 const logger = createLogger('ProjectionSourceAcl')

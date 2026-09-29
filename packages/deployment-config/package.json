@@ -1,5 +1,5 @@
 {
-  "name": "@sim/deployment-config",
+  "name": "@labbai/deployment-config",
   "version": "0.1.0",
   "private": true,
   "sideEffects": false,
@@ -32,10 +32,10 @@
     "format:check": "biome format ."
   },
   "dependencies": {
-    "@sim/utils": "workspace:*"
+    "@labbai/utils": "workspace:*"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "typescript": "^7.0.2"
   }
 }

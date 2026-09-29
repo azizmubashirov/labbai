@@ -3,9 +3,9 @@ import {
   createPostgresLegacyKnowledgeBaseWorkspaceStore,
   type LegacyKnowledgeBaseMoveOutcome,
   selectLegacyKnowledgeBaseWorkspace,
-} from '@sim/db/script-migrations/0013_backfill_legacy_knowledge_base_workspaces'
-import { sleep } from '@sim/utils/helpers'
-import { generateId } from '@sim/utils/id'
+} from '@labbai/db/script-migrations/0013_backfill_legacy_knowledge_base_workspaces'
+import { sleep } from '@labbai/utils/helpers'
+import { generateId } from '@labbai/utils/id'
 import postgres, { type Sql } from 'postgres'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 

@@ -6,7 +6,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { posthogServerMockFns } from '@sim/testing'
+ * import { posthogServerMockFns } from '@labbai/testing'
  *
  * expect(posthogServerMockFns.mockCaptureServerEvent).toHaveBeenCalledWith(...)
  * ```

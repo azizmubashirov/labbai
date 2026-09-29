@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act } from 'react'
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@labbai/utils/helpers'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Code } from './code'

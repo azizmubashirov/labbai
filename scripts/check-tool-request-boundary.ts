@@ -2,9 +2,9 @@
 /**
  * Enforces the two tool execution boundaries: external ToolConfig requests are materialized only
  * by request-transport.ts, while same-process work uses registered InternalToolConfig operations.
- * Tool definitions may not point back to Sim API routes or revive the retired request.internal
+ * Tool definitions may not point back to Labbai API routes or revive the retired request.internal
  * escape hatch. Dynamic provider origins remain supported because the executor rejects their
- * resolved URL when it targets Sim; only the two generic user-directed HTTP tools may opt out.
+ * resolved URL when it targets Labbai; only the two generic user-directed HTTP tools may opt out.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, extname, join, relative, resolve } from 'node:path'
@@ -14,13 +14,13 @@ import ts from '@typescript/typescript6'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const APP = join(ROOT, 'apps/sim')
+const APP = join(ROOT, 'apps/labbai')
 const CANONICAL_TRANSPORT = join(APP, 'tools/request-transport.ts')
 const REQUEST_MEMBERS = new Set(['url', 'method', 'headers', 'body'])
 const REQUEST_CANDIDATE_TOKENS = new Set(['request', ...REQUEST_MEMBERS])
-const SIM_URLS_MODULE = '@/lib/core/utils/urls'
-const SIM_ORIGIN_EXPORTS = new Set(['getBaseUrl', 'getInternalApiBaseUrl'])
-const SIM_URL_BUILDER_EXPORTS = new Set(['ensureAbsoluteUrl'])
+const LABBAI_URLS_MODULE = '@/lib/core/utils/urls'
+const LABBAI_ORIGIN_EXPORTS = new Set(['getBaseUrl', 'getInternalApiBaseUrl'])
+const LABBAI_URL_BUILDER_EXPORTS = new Set(['ensureAbsoluteUrl'])
 const EXECUTOR_HTTP_MODULE = '@/executor/utils/http'
 const EXECUTOR_URL_BUILDER_EXPORTS = new Set(['buildAPIUrl'])
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'])
@@ -201,8 +201,8 @@ function getStaticString(expression: SyntaxNode): string | undefined {
 interface SelfHopResolver {
   bindings: ReadonlyMap<string, SyntaxNode>
   importedBindings: ReadonlyMap<string, ImportedBinding>
-  simOriginBindings: ReadonlySet<string>
-  simUrlBuilderBindings: ReadonlySet<string>
+  labbaiOriginBindings: ReadonlySet<string>
+  labbaiUrlBuilderBindings: ReadonlySet<string>
   file: string
   locals?: ReadonlyMap<string, SyntaxNode>
   scopedLocals?: ReadonlyMap<string, ScopedExpression>
@@ -396,7 +396,7 @@ function isOriginPreservingStaticSuffix(expression: SyntaxNode): boolean {
   return suffix !== undefined && (suffix === '' || /^[/?#]/.test(suffix))
 }
 
-function isSimOriginExpression(
+function isLabbaiOriginExpression(
   expression: SyntaxNode,
   resolver: SelfHopResolver,
   seen = new Set<string>()
@@ -409,7 +409,7 @@ function isSimOriginExpression(
     if (!binding) return false
     const nextSeen = new Set(seen)
     nextSeen.add(key)
-    return isSimOriginExpression(binding.expression, binding.resolver, nextSeen)
+    return isLabbaiOriginExpression(binding.expression, binding.resolver, nextSeen)
   }
   if (current.type === 'CallExpression' || current.type === 'OptionalCallExpression') {
     if (!isSyntaxNode(current.callee)) return false
@@ -417,7 +417,7 @@ function isSimOriginExpression(
     if (
       callee.type === 'Identifier' &&
       typeof callee.name === 'string' &&
-      resolver.simOriginBindings.has(callee.name)
+      resolver.labbaiOriginBindings.has(callee.name)
     ) {
       return true
     }
@@ -433,7 +433,7 @@ function isSimOriginExpression(
               .filter(isSyntaxNode)
               .map((argument) => resolveScopedArgument(argument, resolver))
           : []
-        return functionReturnsSimOrigin(
+        return functionReturnsLabbaiOrigin(
           binding.expression,
           binding.resolver,
           argumentsList,
@@ -449,7 +449,7 @@ function isSimOriginExpression(
     isSyntaxNode(current.right)
   ) {
     return (
-      isSimOriginExpression(current.left, resolver, new Set(seen)) &&
+      isLabbaiOriginExpression(current.left, resolver, new Set(seen)) &&
       isOriginPreservingStaticSuffix(current.right)
     )
   }
@@ -462,7 +462,7 @@ function isSimOriginExpression(
     current.expressions.every(isSyntaxNode) &&
     current.quasis.every(isSyntaxNode) &&
     getTemplateQuasiValue(current.quasis[0]) === '' &&
-    isSimOriginExpression(current.expressions[0], resolver, new Set(seen))
+    isLabbaiOriginExpression(current.expressions[0], resolver, new Set(seen))
   ) {
     const suffix = getTemplateQuasiValue(current.quasis[1])
     return (
@@ -473,22 +473,22 @@ function isSimOriginExpression(
   if (current.type === 'ConditionalExpression') {
     return (
       (isSyntaxNode(current.consequent) &&
-        isSimOriginExpression(current.consequent, resolver, new Set(seen))) ||
+        isLabbaiOriginExpression(current.consequent, resolver, new Set(seen))) ||
       (isSyntaxNode(current.alternate) &&
-        isSimOriginExpression(current.alternate, resolver, new Set(seen)))
+        isLabbaiOriginExpression(current.alternate, resolver, new Set(seen)))
     )
   }
   if (current.type === 'LogicalExpression') {
     return (
       (isSyntaxNode(current.left) &&
-        isSimOriginExpression(current.left, resolver, new Set(seen))) ||
-      (isSyntaxNode(current.right) && isSimOriginExpression(current.right, resolver, new Set(seen)))
+        isLabbaiOriginExpression(current.left, resolver, new Set(seen))) ||
+      (isSyntaxNode(current.right) && isLabbaiOriginExpression(current.right, resolver, new Set(seen)))
     )
   }
   return false
 }
 
-function functionReturnsSimOrigin(
+function functionReturnsLabbaiOrigin(
   fn: SyntaxNode,
   resolver: SelfHopResolver,
   argumentsList: readonly ScopedExpression[],
@@ -516,7 +516,7 @@ function functionReturnsSimOrigin(
   if (current.type === 'ArrowFunctionExpression' && isSyntaxNode(current.body)) {
     const body = unwrapExpression(current.body)
     if (body.type !== 'BlockStatement') {
-      return isSimOriginExpression(body, localResolver, new Set(seen))
+      return isLabbaiOriginExpression(body, localResolver, new Set(seen))
     }
   }
   let found = false
@@ -525,7 +525,7 @@ function functionReturnsSimOrigin(
     if (
       node.type === 'ReturnStatement' &&
       isSyntaxNode(node.argument) &&
-      isSimOriginExpression(node.argument, localResolver, new Set(seen))
+      isLabbaiOriginExpression(node.argument, localResolver, new Set(seen))
     ) {
       found = true
       return
@@ -554,7 +554,7 @@ function isSameOriginConcatenation(expression: SyntaxNode, resolver: SelfHopReso
     parts.push(value)
   }
   collect(current)
-  if (parts.length < 2 || !isSimOriginExpression(parts[0], resolver)) return false
+  if (parts.length < 2 || !isLabbaiOriginExpression(parts[0], resolver)) return false
   let staticSuffix = ''
   for (const part of parts.slice(1)) {
     const value = getStaticString(part)
@@ -569,7 +569,7 @@ function isSameOriginConcatenation(expression: SyntaxNode, resolver: SelfHopReso
   return false
 }
 
-function isKnownSimUrlBuilderCall(expression: SyntaxNode, resolver: SelfHopResolver): boolean {
+function isKnownLabbaiUrlBuilderCall(expression: SyntaxNode, resolver: SelfHopResolver): boolean {
   const current = unwrapExpression(expression)
   if (
     (current.type !== 'CallExpression' && current.type !== 'OptionalCallExpression') ||
@@ -583,7 +583,7 @@ function isKnownSimUrlBuilderCall(expression: SyntaxNode, resolver: SelfHopResol
   return (
     callee.type === 'Identifier' &&
     typeof callee.name === 'string' &&
-    resolver.simUrlBuilderBindings.has(callee.name) &&
+    resolver.labbaiUrlBuilderBindings.has(callee.name) &&
     isInternalPathExpression(current.arguments[0], resolver)
   )
 }
@@ -611,7 +611,7 @@ function isSameOriginTemplate(expression: SyntaxNode, resolver: SelfHopResolver)
   const leadingQuasi = getTemplateQuasiValue(current.quasis[0])
   if (leadingQuasi !== '') return false
   const origin = current.expressions[0]
-  if (!isSimOriginExpression(origin, resolver)) return false
+  if (!isLabbaiOriginExpression(origin, resolver)) return false
   const pathQuasi = getTemplateQuasiValue(current.quasis[1])
   if (pathQuasi?.startsWith('/api/')) return true
   return (
@@ -637,13 +637,13 @@ function isInternalUrlConstruction(node: SyntaxNode, resolver: SelfHopResolver):
     return (
       isSameOriginConcatenation(current.arguments[0], resolver) ||
       isSameOriginTemplate(current.arguments[0], resolver) ||
-      isKnownSimUrlBuilderCall(current.arguments[0], resolver)
+      isKnownLabbaiUrlBuilderCall(current.arguments[0], resolver)
     )
   }
   return (
     isSyntaxNode(current.arguments[1]) &&
     isInternalPathExpression(current.arguments[0], resolver, new Set(), true) &&
-    isSimOriginExpression(current.arguments[1], resolver)
+    isLabbaiOriginExpression(current.arguments[1], resolver)
   )
 }
 
@@ -774,7 +774,7 @@ function expressionContainsUnresolvedUrlHelper(
     current.operator === '+' &&
     isSyntaxNode(current.left)
   ) {
-    if (isSimOriginExpression(current.left, resolver) && isSyntaxNode(current.right)) {
+    if (isLabbaiOriginExpression(current.left, resolver) && isSyntaxNode(current.right)) {
       return expressionContainsUnresolvedUrlHelper(current.right, resolver, new Set(seen), true)
     }
     if (unresolvedIdentifierIsUnsafe && isSyntaxNode(current.right)) {
@@ -809,7 +809,7 @@ function expressionContainsUnresolvedUrlHelper(
       )
     }
     const origin = current.expressions[0]
-    if (isSimOriginExpression(origin, resolver)) {
+    if (isLabbaiOriginExpression(origin, resolver)) {
       const following = getTemplateQuasiValue(current.quasis[1])
       return (
         following === '' &&
@@ -830,8 +830,8 @@ function expressionContainsUnresolvedUrlHelper(
     const callee = unwrapExpression(current.callee)
     if (callee.type === 'Identifier' && typeof callee.name === 'string') {
       if (
-        resolver.simOriginBindings.has(callee.name) ||
-        resolver.simUrlBuilderBindings.has(callee.name)
+        resolver.labbaiOriginBindings.has(callee.name) ||
+        resolver.labbaiUrlBuilderBindings.has(callee.name)
       ) {
         return false
       }
@@ -897,7 +897,7 @@ function expressionContainsUnresolvedUrlHelper(
       const path = current.arguments.find(isSyntaxNode)
       const base = current.arguments.length > 1 ? current.arguments[1] : undefined
       if (isSyntaxNode(base)) {
-        return isSimOriginExpression(base, resolver)
+        return isLabbaiOriginExpression(base, resolver)
           ? Boolean(
               path && expressionContainsUnresolvedUrlHelper(path, resolver, new Set(seen), true)
             )
@@ -1004,12 +1004,12 @@ function functionContainsUnresolvedUrlHelper(
 
 function collectImportedBindings(program: SyntaxNode): {
   importedBindings: Map<string, ImportedBinding>
-  simOriginBindings: Set<string>
-  simUrlBuilderBindings: Set<string>
+  labbaiOriginBindings: Set<string>
+  labbaiUrlBuilderBindings: Set<string>
 } {
   const importedBindings = new Map<string, ImportedBinding>()
-  const simOriginBindings = new Set<string>()
-  const simUrlBuilderBindings = new Set<string>()
+  const labbaiOriginBindings = new Set<string>()
+  const labbaiUrlBuilderBindings = new Set<string>()
   const statements = Array.isArray(program.body) ? program.body : []
   for (const statement of statements) {
     if (
@@ -1043,18 +1043,18 @@ function collectImportedBindings(program: SyntaxNode): {
             : undefined
       if (!importedName) continue
       importedBindings.set(specifier.local.name, { importedName, source })
-      if (source === SIM_URLS_MODULE && SIM_ORIGIN_EXPORTS.has(importedName)) {
-        simOriginBindings.add(specifier.local.name)
+      if (source === LABBAI_URLS_MODULE && LABBAI_ORIGIN_EXPORTS.has(importedName)) {
+        labbaiOriginBindings.add(specifier.local.name)
       }
       if (
-        (source === SIM_URLS_MODULE && SIM_URL_BUILDER_EXPORTS.has(importedName)) ||
+        (source === LABBAI_URLS_MODULE && LABBAI_URL_BUILDER_EXPORTS.has(importedName)) ||
         (source === EXECUTOR_HTTP_MODULE && EXECUTOR_URL_BUILDER_EXPORTS.has(importedName))
       ) {
-        simUrlBuilderBindings.add(specifier.local.name)
+        labbaiUrlBuilderBindings.add(specifier.local.name)
       }
     }
   }
-  return { importedBindings, simOriginBindings, simUrlBuilderBindings }
+  return { importedBindings, labbaiOriginBindings, labbaiUrlBuilderBindings }
 }
 
 function collectTopLevelBindings(program: SyntaxNode): Map<string, SyntaxNode> {
@@ -1185,7 +1185,7 @@ function expressionContainsInternalRoute(
     if (!isSyntaxNode(current.callee)) return false
     const callee = unwrapExpression(current.callee)
     if (callee.type === 'Identifier') {
-      if (isKnownSimUrlBuilderCall(current, resolver)) return true
+      if (isKnownLabbaiUrlBuilderCall(current, resolver)) return true
       const binding =
         typeof callee.name === 'string' ? resolveScopedIdentifier(callee.name, resolver) : undefined
       if (binding && FUNCTION_NODE_TYPES.has(unwrapExpression(binding.expression).type)) {
@@ -1597,7 +1597,7 @@ function getResolvedObjectProperties(
   return { properties: [undefined], complete: true }
 }
 
-/** Rejects tool definitions that route execution back through this Sim app. */
+/** Rejects tool definitions that route execution back through this Labbai app. */
 function auditToolSelfHopProgram(program: SyntaxNode, file: string): ToolSelfHopAudit {
   const violations: ToolSelfHopViolation[] = []
   let detectedSelfHops = 0
@@ -1964,7 +1964,7 @@ function main(): void {
   }
 
   if (selfHopViolations.length > 0) {
-    console.error('Tool definitions must not execute through same-origin Sim API routes:')
+    console.error('Tool definitions must not execute through same-origin Labbai API routes:')
     for (const violation of selfHopViolations) {
       const description =
         violation.reason === 'same-origin-tool-request'

@@ -1,4 +1,4 @@
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@labbai/utils/id'
 import postgres from 'postgres'
 
 /**

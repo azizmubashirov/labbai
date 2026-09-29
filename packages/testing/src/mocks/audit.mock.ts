@@ -1,12 +1,12 @@
 import { vi } from 'vitest'
 
 /**
- * Controllable mock functions for `@sim/audit`.
+ * Controllable mock functions for `@labbai/audit`.
  * Exposes `mockRecordAudit` so tests can assert or override behavior per test.
  *
  * @example
  * ```ts
- * import { auditMockFns } from '@sim/testing'
+ * import { auditMockFns } from '@labbai/testing'
  *
  * expect(auditMockFns.mockRecordAudit).toHaveBeenCalledWith(...)
  * auditMockFns.mockRecordAudit.mockRejectedValueOnce(new Error('audit failed'))
@@ -18,11 +18,11 @@ export const auditMockFns = {
 }
 
 /**
- * Static mock module for `@sim/audit`.
+ * Static mock module for `@labbai/audit`.
  *
  * @example
  * ```ts
- * vi.mock('@sim/audit', () => auditMock)
+ * vi.mock('@labbai/audit', () => auditMock)
  * ```
  */
 export const auditMock = {

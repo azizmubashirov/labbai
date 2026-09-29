@@ -5,7 +5,7 @@ import * as SwitchPrimitives from '@radix-ui/react-switch'
 import { cn } from '../../lib/cn'
 
 /**
- * Switch component styled to match Sim's design system.
+ * Switch component styled to match Labbai's design system.
  * Uses brand color for checked state, neutral border for unchecked.
  */
 const Switch = React.memo(

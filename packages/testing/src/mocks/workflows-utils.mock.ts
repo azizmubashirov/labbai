@@ -6,7 +6,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { workflowsUtilsMockFns } from '@sim/testing'
+ * import { workflowsUtilsMockFns } from '@labbai/testing'
  *
  * workflowsUtilsMockFns.mockGetWorkflowById.mockResolvedValue({ id: 'wf-1', name: 'Test' })
  * ```
@@ -36,7 +36,7 @@ export const workflowsUtilsMockFns = {
  * - `validateWorkflowPermissions` resolves to an authorized result
  * - Other functions resolve to sensible empty/success defaults
  *
- * `authorizeWorkflowByWorkspacePermission` moved to `@sim/platform-authz/workflow`;
+ * `authorizeWorkflowByWorkspacePermission` moved to `@labbai/platform-authz/workflow`;
  * use `workflowAuthzMock` / `workflowAuthzMockFns` for that surface.
  *
  * @example

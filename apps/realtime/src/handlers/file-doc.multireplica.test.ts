@@ -36,7 +36,7 @@ const fakeStore = {
   isAgentStreaming: vi.fn(async () => false),
 }
 
-vi.mock('@sim/platform-authz/rooms', () => ({ authorizeRoom: vi.fn() }))
+vi.mock('@labbai/platform-authz/rooms', () => ({ authorizeRoom: vi.fn() }))
 
 vi.mock('@/handlers/file-doc-app', () => ({
   fetchFileDocSeed: vi.fn(),

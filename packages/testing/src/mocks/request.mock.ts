@@ -71,7 +71,7 @@ export function createMockFormDataRequest(
  *
  * @example
  * ```ts
- * import { requestUtilsMockFns } from '@sim/testing'
+ * import { requestUtilsMockFns } from '@labbai/testing'
  *
  * requestUtilsMockFns.mockGenerateRequestId.mockReturnValueOnce('test-req-42')
  * requestUtilsMockFns.mockGetClientIp.mockReturnValueOnce('10.0.0.5')

@@ -1,12 +1,12 @@
-import { createLogger } from '@sim/logger'
-import { ROOM_MEMBERSHIP_ACTIONS, satisfiesRoomMembership } from '@sim/platform-authz/room-policy'
-import { ROOM_TYPES, type RoomRef, roomName } from '@sim/realtime-protocol/rooms'
+import { createLogger } from '@labbai/logger'
+import { ROOM_MEMBERSHIP_ACTIONS, satisfiesRoomMembership } from '@labbai/platform-authz/room-policy'
+import { ROOM_TYPES, type RoomRef, roomName } from '@labbai/realtime-protocol/rooms'
 import {
   type JoinTablePayload,
   TABLE_PRESENCE_EVENTS,
   type TableCellRef,
   type TableCellSelection,
-} from '@sim/realtime-protocol/table-presence'
+} from '@labbai/realtime-protocol/table-presence'
 import { resolveAvatarUrl } from '@/handlers/avatar'
 import { evictSocketFromRoom, requestEvictionCleanup } from '@/handlers/room-eviction'
 import { resolveRoomJoinAuth } from '@/handlers/room-join-auth'

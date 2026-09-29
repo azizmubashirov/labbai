@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { auditMiddlewareExport, auditSource } from './check-capability-subject'
 
-const ROUTE = 'apps/sim/app/api/v1/tables/route.ts'
-const MIDDLEWARE = 'apps/sim/app/api/v1/middleware.ts'
+const ROUTE = 'apps/labbai/app/api/v1/tables/route.ts'
+const MIDDLEWARE = 'apps/labbai/app/api/v1/middleware.ts'
 
 describe('assertion B — a v1 route may not decide a capability for itself', () => {
   /**
@@ -90,7 +90,7 @@ describe('assertion C — the two renames that made it a no-op', () => {
 
   it('accepts an aliased call whose subject is still governed', () => {
     const { findings, sinks } = auditSource(
-      'apps/sim/app/api/v1/logs/route.ts',
+      'apps/labbai/app/api/v1/logs/route.ts',
       [
         'import { resolveLogFieldProjection as project } from "@/lib/logs/log-projection"',
         'const governed = capabilityGovernedUserId(rateLimit)',
@@ -104,7 +104,7 @@ describe('assertion C — the two renames that made it a no-op', () => {
 
   it('refuses a route that declares the governed-subject name for itself', () => {
     const { findings } = auditSource(
-      'apps/sim/app/api/v1/logs/route.ts',
+      'apps/labbai/app/api/v1/logs/route.ts',
       [
         'function capabilityGovernedUserId(rateLimit) { return rateLimit.userId }',
         "await isWorkspaceCapabilityWithheld(capabilityGovernedUserId(rateLimit), ws, 'tables.use')",

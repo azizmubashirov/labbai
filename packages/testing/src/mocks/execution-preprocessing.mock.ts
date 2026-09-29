@@ -6,7 +6,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { executionPreprocessingMockFns } from '@sim/testing'
+ * import { executionPreprocessingMockFns } from '@labbai/testing'
  *
  * executionPreprocessingMockFns.mockPreprocessExecution.mockResolvedValue({
  *   success: true,

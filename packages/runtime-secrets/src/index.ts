@@ -1,9 +1,9 @@
 import type { GetSecretValueCommandOutput } from '@aws-sdk/client-secrets-manager'
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager'
-import { createLogger } from '@sim/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { sleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
+import { createLogger } from '@labbai/logger'
+import { getErrorMessage } from '@labbai/utils/errors'
+import { sleep } from '@labbai/utils/helpers'
+import { backoffWithJitter } from '@labbai/utils/retry'
 
 const logger = createLogger('RuntimeSecrets')
 

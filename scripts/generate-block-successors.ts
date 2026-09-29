@@ -26,8 +26,8 @@ import { formatGeneratedSource } from './format-generated-source'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const OUTPUT_PATH = resolve(ROOT, 'apps/sim/lib/permission-groups/block-successors.generated.ts')
-const NAMES_OUTPUT_PATH = resolve(ROOT, 'apps/sim/lib/block-metadata/names.generated.ts')
+const OUTPUT_PATH = resolve(ROOT, 'apps/labbai/lib/permission-groups/block-successors.generated.ts')
+const NAMES_OUTPUT_PATH = resolve(ROOT, 'apps/labbai/lib/block-metadata/names.generated.ts')
 const CHECK_MODE = process.argv.includes('--check')
 
 interface SunsetBlock {
@@ -44,7 +44,7 @@ interface SunsetBlock {
  * project.
  */
 async function loadRegistry(): Promise<Record<string, SunsetBlock>> {
-  const { BLOCK_REGISTRY } = await import('../apps/sim/blocks/registry-maps')
+  const { BLOCK_REGISTRY } = await import('../apps/labbai/blocks/registry-maps')
   return BLOCK_REGISTRY
 }
 

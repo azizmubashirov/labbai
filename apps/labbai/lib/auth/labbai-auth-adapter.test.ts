@@ -1,0 +1,91 @@
+/**
+ * @vitest-environment node
+ */
+
+import { db } from '@labbai/db'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  insert: vi.fn(),
+  transaction: vi.fn(),
+  rootInsert: vi.fn(),
+}))
+
+vi.mock('@labbai/db', () => ({
+  db: {
+    insert: mocks.rootInsert,
+    transaction: mocks.transaction,
+  },
+}))
+
+vi.mock('better-auth/adapters/drizzle', () => ({
+  drizzleAdapter: (database: object) => () => ({
+    create: mocks.create,
+    transaction: vi.fn(),
+    database,
+  }),
+}))
+
+import { getAuthDatabase } from '@/lib/auth/database-context'
+import { createLabbaiAuthAdapter } from '@/lib/auth/labbai-auth-adapter'
+
+describe('createLabbaiAuthAdapter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    const tx = { insert: mocks.insert }
+    mocks.transaction.mockImplementation(async (callback) => callback(tx))
+    mocks.insert.mockReturnValue({
+      values: (values: object) => ({
+        onConflictDoUpdate: () => ({ returning: async () => [{ ...values, id: 'persisted' }] }),
+      }),
+    })
+    mocks.create.mockResolvedValue({ id: 'base-record' })
+  })
+
+  it('retains the OAuth guard inside a transaction callback', async () => {
+    const adapter = createLabbaiAuthAdapter({})
+    const now = new Date()
+
+    await adapter.transaction(async (tx) => {
+      await expect(
+        tx.create({
+          model: 'oauthConsent',
+          data: {
+            clientId: 'client-1',
+            userId: 'user-1',
+            referenceId: null,
+            scopes: ['api:read'],
+            createdAt: now,
+            updatedAt: now,
+          },
+        })
+      ).resolves.toMatchObject({ id: 'persisted' })
+
+      await expect(tx.create({ model: 'user', data: { name: 'Ada' } })).resolves.toEqual({
+        id: 'base-record',
+      })
+    })
+
+    expect(mocks.insert).toHaveBeenCalledOnce()
+    expect(mocks.rootInsert).not.toHaveBeenCalled()
+    expect(mocks.create).toHaveBeenCalledExactlyOnceWith({ model: 'user', data: { name: 'Ada' } })
+  })
+
+  it('scopes database hooks to the transaction and releases the executor after rollback', async () => {
+    const adapter = createLabbaiAuthAdapter({})
+    const transaction = { insert: mocks.insert }
+    mocks.transaction.mockImplementation(async (callback) => callback(transaction))
+
+    expect(getAuthDatabase()).toBe(db)
+    await expect(
+      adapter.transaction(async () => {
+        expect(getAuthDatabase()).toBe(transaction)
+        await Promise.resolve()
+        expect(getAuthDatabase()).toBe(transaction)
+        throw new Error('Abort signup')
+      })
+    ).rejects.toThrow('Abort signup')
+    expect(getAuthDatabase()).toBe(db)
+  })
+})

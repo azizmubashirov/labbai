@@ -1,5 +1,5 @@
-import { db } from '@sim/db'
-import { member, permissions } from '@sim/db/schema'
+import { db } from '@labbai/db'
+import { member, permissions } from '@labbai/db/schema'
 import { and, eq } from 'drizzle-orm'
 import { isOrgAdminRole, type PermissionType } from './predicates'
 

@@ -1,11 +1,11 @@
-import { db } from '@sim/db'
-import * as schema from '@sim/db/schema'
+import { db } from '@labbai/db'
+import * as schema from '@labbai/db/schema'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { oneTimeToken } from 'better-auth/plugins'
 
 export interface VerifyAuthOptions {
-  /** Better Auth shared secret. Must match the apps/sim Better Auth secret. */
+  /** Better Auth shared secret. Must match the apps/labbai Better Auth secret. */
   secret: string
   /** Public-facing Better Auth URL (usually same as NEXT_PUBLIC_APP_URL). */
   baseURL: string
@@ -13,7 +13,7 @@ export interface VerifyAuthOptions {
 
 /**
  * Session payload returned by one-time-token verification. The session row is
- * created by `apps/sim`'s full auth config, so it can carry plugin fields
+ * created by `apps/labbai`'s full auth config, so it can carry plugin fields
  * (e.g. `activeOrganizationId`) this minimal instance does not configure.
  */
 export interface VerifiedOneTimeTokenSession {
@@ -46,7 +46,7 @@ export interface VerifyAuth {
  * Minimal Better Auth instance used by services that only need to verify
  * one-time tokens issued by the main app. Shares the Better Auth DB schema
  * (`verification` table) and secret with the main app, so tokens issued by
- * `apps/sim`'s full auth config are accepted here. The instance is wrapped in
+ * `apps/labbai`'s full auth config are accepted here. The instance is wrapped in
  * the {@link VerifyAuth} contract rather than returned directly so consumers
  * (and this package's declaration output) never depend on Better Auth's
  * inferred endpoint types.
@@ -63,7 +63,7 @@ export function createVerifyAuth(options: VerifyAuthOptions): VerifyAuth {
       oneTimeToken({
         /**
          * Unused by this instance, which only verifies: `/one-time-token/verify` reads the expiry
-         * off the row. The app sets its own far shorter window in apps/sim/lib/auth/auth.ts.
+         * off the row. The app sets its own far shorter window in apps/labbai/lib/auth/auth.ts.
          */
         expiresIn: 24 * 60,
       }),

@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { pushCommands } from '@sim/db/scripts/push'
+import { pushCommands } from '@labbai/db/scripts/push'
 import { describe, expect, it } from 'vitest'
 
 describe('pushCommands', () => {

@@ -33,7 +33,7 @@ import { chipFieldSurfaceClass, chipFieldTextClass, chipGeometryClass } from '..
 type ChipInputIcon = React.ComponentType<{ className?: string }>
 
 export interface ChipInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> {
-  /** Leading icon component (e.g. `Search` from `@sim/emcn/icons`). Rendered at 14px in `--text-icon`, with the chip's 1.5 gap. */
+  /** Leading icon component (e.g. `Search` from `@labbai/emcn/icons`). Rendered at 14px in `--text-icon`, with the chip's 1.5 gap. */
   icon?: ChipInputIcon
   /** Custom leading content, such as a color swatch. Takes precedence over `icon`. */
   startAdornment?: React.ReactNode

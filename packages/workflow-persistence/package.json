@@ -1,5 +1,5 @@
 {
-  "name": "@sim/workflow-persistence",
+  "name": "@labbai/workflow-persistence",
   "version": "0.1.0",
   "private": true,
   "sideEffects": false,
@@ -45,15 +45,15 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@sim/db": "workspace:*",
-    "@sim/logger": "workspace:*",
-    "@sim/utils": "workspace:*",
-    "@sim/workflow-types": "workspace:*",
+    "@labbai/db": "workspace:*",
+    "@labbai/logger": "workspace:*",
+    "@labbai/utils": "workspace:*",
+    "@labbai/workflow-types": "workspace:*",
     "@xyflow/react": "12.11.3",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "@types/node": "24.2.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.0"

@@ -116,7 +116,7 @@ Some icons have uneven visual weight. The best fix is adjusting the SVG directly
 
 ## Shadows Instead of Borders
 
-> In this repo, use the `shadow-subtle`/`shadow-medium`/`shadow-overlay`/`shadow-card` tokens for elevation and keep neutral edges as `--border` borders (`.claude/rules/sim-styling.md`, Line weight); do not replace them with `0 0 0 1px` shadow rings. The pattern below is for projects without that token system.
+> In this repo, use the `shadow-subtle`/`shadow-medium`/`shadow-overlay`/`shadow-card` tokens for elevation and keep neutral edges as `--border` borders (`.claude/rules/labbai-styling.md`, Line weight); do not replace them with `0 0 0 1px` shadow rings. The pattern below is for projects without that token system.
 
 For **buttons, cards, and containers** that use a border for depth or elevation, prefer replacing it with a subtle `box-shadow`. Shadows adapt to any background since they use transparency; solid borders don't. This also helps when using images or multiple colors as backgrounds — solid border colors don't work well on backgrounds other than the ones they were designed for.
 

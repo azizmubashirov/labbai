@@ -1,6 +1,6 @@
 ---
 name: v2-api-conventions
-description: The response, error, pagination, and validation contract every `/api/v2` endpoint must satisfy. Use when adding or changing a route under `apps/sim/app/api/v2/`, or when auditing one for conformance.
+description: The response, error, pagination, and validation contract every `/api/v2` endpoint must satisfy. Use when adding or changing a route under `apps/labbai/app/api/v2/`, or when auditing one for conformance.
 argument-hint: <route-path>
 ---
 
@@ -30,11 +30,11 @@ Each was one line. The rules below are the generalisations.
 
 | Concern | File |
 |---|---|
-| Envelope + error codes + cursor codecs | `apps/sim/app/api/v2/lib/response.ts` |
-| Cross-tenant concealment | `apps/sim/lib/api/server/routes/resource-concealment.ts` |
-| Route builder | `apps/sim/lib/api/server/routes/v2-json-route.ts` |
-| Contracts | `apps/sim/lib/api/contracts/v2/**` |
-| Shared list/keyset helpers | `apps/sim/lib/api/list-query.ts` |
+| Envelope + error codes + cursor codecs | `apps/labbai/app/api/v2/lib/response.ts` |
+| Cross-tenant concealment | `apps/labbai/lib/api/server/routes/resource-concealment.ts` |
+| Route builder | `apps/labbai/lib/api/server/routes/v2-json-route.ts` |
+| Contracts | `apps/labbai/lib/api/contracts/v2/**` |
+| Shared list/keyset helpers | `apps/labbai/lib/api/list-query.ts` |
 
 ## Rule 1 — the envelope is produced by helpers, never by hand
 
@@ -151,7 +151,7 @@ Order matters because each layer is checked against the one before it.
 
 ### Public descriptions
 
-Use the [API description conventions](../../../apps/sim/lib/api/contracts/v2/openapi/README.md) when writing or auditing endpoint and field descriptions. Keep a short action-and-resource summary; use the description for behavior that changes the caller's choice, input, interpretation, or next action. Ordinary operations usually need one to three sentences, with no mandatory minimum.
+Use the [API description conventions](../../../apps/labbai/lib/api/contracts/v2/openapi/README.md) when writing or auditing endpoint and field descriptions. Keep a short action-and-resource summary; use the description for behavior that changes the caller's choice, input, interpretation, or next action. Ordinary operations usually need one to three sentences, with no mandatory minimum.
 
 Keep archive versus permanent-delete behavior, replacement versus partial-update semantics, partial success, retry safety, redaction, and asynchronous completion explicit. Verify these claims against the implementation. Describe observable behavior without exposing storage formats, locking mechanisms, internal identifiers, deployment architecture, or implementation history unless that detail changes how the caller must use the API.
 
@@ -176,7 +176,7 @@ Do not add a default for any other code. 400/403/404/409 are not fixed by waitin
 
 **A failure whose outcome is unknown must not advise a retry.** `ASYNC_ENQUEUE_AMBIGUOUS` is a 503 whose enqueue may have succeeded — it deliberately retains its execution-ID claim. Telling that caller to come back in 5 seconds invites a client with no `X-Run-Id` to start and bill a second run. It passes `omitRetryAfter: true` and returns the run id so the caller reconciles instead. Any future "we don't know if it happened" failure does the same.
 
-RFC 9110 §10.2.3 gives 503 this field's clearest meaning — "how long the service is expected to be unavailable to the client". Note the requirement level is only `MAY`, on 503 (§15.6.4) and, via RFC 6585 §4, on 429. It is `SHOULD` on exactly one status, 413, and only when the condition is temporary; none of Sim's 413s are temporary — they are fixed ceilings, on the request body and on the collections a response must materialize — so it correctly sends none.
+RFC 9110 §10.2.3 gives 503 this field's clearest meaning — "how long the service is expected to be unavailable to the client". Note the requirement level is only `MAY`, on 503 (§15.6.4) and, via RFC 6585 §4, on 429. It is `SHOULD` on exactly one status, 413, and only when the condition is temporary; none of Labbai's 413s are temporary — they are fixed ceilings, on the request body and on the collections a response must materialize — so it correctly sends none.
 
 ## Deliberate non-adoptions
 
@@ -190,8 +190,8 @@ Audited against the primary specs and against Stripe, GitHub, and Google's AIPs.
 | **`X-RateLimit-Reset` as delta-seconds** | No | It is an absolute ISO 8601 timestamp, so it is clock-skew sensitive — but the response where timing actually decides behaviour (429) also carries `Retry-After`, which is skew-free. The absolute value stays useful for scheduling. |
 | **422 for semantic validation** | No | RFC 9110 §15.5.21 defines 422, but Appendix B.3 records that 9110 **deleted** RFC 4918's clause saying 400 was inappropriate. 400 covers "cannot or will not process… perceived to be a client error". The split is convention, not requirement — GitHub splits, Stripe and Google do not. Our machine-readable `error.code` already carries the distinction, and restatusing now breaks clients. |
 | **`Location` on 201** | No | §9.3.3 makes this a `SHOULD` **for POST**; the status code itself (§15.3.2) requires nothing and defines the fallback — absent `Location`, the target URI identifies the resource. Declined knowingly: several 201 responses (signed upload sessions, table exports, knowledge folders) have no canonical single-resource GET, so a `Location` would 404, and adopting it on some of the 19 is worse for a client than on none. Every 201 returns the full representation including its `id`. Revisit per-route if one gains a canonical GET. |
-| **ETag / `If-None-Match` / `If-Match`** | No | Every v2 response is `Cache-Control: private, no-store` per-caller data, so `If-None-Match` buys nothing. For writes, `If-Match` needs a **strong** validator: §8.8.3.2's strong comparison fails if *either* tag is weak, so a weak ETag silently makes every `If-Match` fail. None of the three surveyed APIs does HTTP optimistic concurrency — Google does the semantics via a resource `etag` **field** (AIP-154), deliberately not the header. If Sim needs optimistic concurrency, do it that way. |
-| **`Deprecation` / `Sunset` on v1** | Not yet | RFC 9745 (Standards Track) and RFC 8594 (Informational) both apply, and GitHub emits both. But `Sunset` is a timestamp and 9745 §4 makes `Sunset >= Deprecation` a `MUST`, so emitting either commits Sim to a v1 retirement date — a product decision, not an engineering one. When that date exists: `Deprecation` is an RFC 9651 Structured Field **Date** (`@1688169599`); `Sunset` is an **HTTP-date** (`Sat, 31 Dec 2033 23:59:59 GMT`). Two encodings in one response — the most common implementation error here. |
+| **ETag / `If-None-Match` / `If-Match`** | No | Every v2 response is `Cache-Control: private, no-store` per-caller data, so `If-None-Match` buys nothing. For writes, `If-Match` needs a **strong** validator: §8.8.3.2's strong comparison fails if *either* tag is weak, so a weak ETag silently makes every `If-Match` fail. None of the three surveyed APIs does HTTP optimistic concurrency — Google does the semantics via a resource `etag` **field** (AIP-154), deliberately not the header. If Labbai needs optimistic concurrency, do it that way. |
+| **`Deprecation` / `Sunset` on v1** | Not yet | RFC 9745 (Standards Track) and RFC 8594 (Informational) both apply, and GitHub emits both. But `Sunset` is a timestamp and 9745 §4 makes `Sunset >= Deprecation` a `MUST`, so emitting either commits Labbai to a v1 retirement date — a product decision, not an engineering one. When that date exists: `Deprecation` is an RFC 9651 Structured Field **Date** (`@1688169599`); `Sunset` is an **HTTP-date** (`Sat, 31 Dec 2033 23:59:59 GMT`). Two encodings in one response — the most common implementation error here. |
 | **`application/merge-patch+json`** | No | v2 PATCH bodies are merge-patch *shaped* — absent means unchanged, `null` clears — but they are `.strict()`, so unknown members are rejected where RFC 7396 §2 would merge them, and nested objects are replaced wholesale rather than merged. Advertising the media type would over-claim. Document the semantics per contract instead. |
 
 ## Idempotency: at-most-once, not replay
@@ -244,4 +244,4 @@ Run this against any new or changed v2 endpoint.
 
 ## Known gap
 
-A 405 on a path that *does* have a route file but does not export that verb is generated by Next.js before any Sim code runs: zero-byte body, no `content-type`, and no `Allow` header, which RFC 9110 §15.5.6 requires. Fixing it means either exporting explicit rejecting handlers from every v2 route file or intercepting in `apps/sim/proxy.ts` with a static path→methods table. Neither is done. Unknown *paths* are handled — the catch-all covers those.
+A 405 on a path that *does* have a route file but does not export that verb is generated by Next.js before any Labbai code runs: zero-byte body, no `content-type`, and no `Allow` header, which RFC 9110 §15.5.6 requires. Fixing it means either exporting explicit rejecting handlers from every v2 route file or intercepting in `apps/labbai/proxy.ts` with a static path→methods table. Neither is done. Unknown *paths* are handled — the catch-all covers those.

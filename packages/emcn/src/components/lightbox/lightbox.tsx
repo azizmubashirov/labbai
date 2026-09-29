@@ -10,8 +10,8 @@ import {
   ModalClose,
   ModalContent,
   ModalTrigger,
-} from '@sim/emcn'
-import { Minus, Plus } from '@sim/emcn/icons'
+} from '@labbai/emcn'
+import { Minus, Plus } from '@labbai/emcn/icons'
 
 export interface LightboxProps {
   /** A button that opens the viewer. */

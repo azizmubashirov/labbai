@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 /**
  * Real `WorkflowLockedError` subclass used by tests so `instanceof` checks in
  * route handlers behave the same as in production. Mirrors the shape exported
- * by `@sim/platform-authz/workflow`.
+ * by `@labbai/platform-authz/workflow`.
  */
 export class MockWorkflowLockedError extends Error {
   readonly status = 423
@@ -17,7 +17,7 @@ export class MockWorkflowLockedError extends Error {
 /**
  * Real `FolderLockedError` subclass used by tests so `instanceof` checks in
  * route handlers behave the same as in production. Mirrors the shape exported
- * by `@sim/platform-authz/workflow`.
+ * by `@labbai/platform-authz/workflow`.
  */
 export class MockFolderLockedError extends Error {
   readonly status = 423
@@ -31,7 +31,7 @@ export class MockFolderLockedError extends Error {
 /**
  * Real `FolderNotFoundError` subclass used by tests so `instanceof` checks in
  * route handlers behave the same as in production. Mirrors the shape exported
- * by `@sim/platform-authz/workflow`.
+ * by `@labbai/platform-authz/workflow`.
  */
 export class MockFolderNotFoundError extends Error {
   readonly status = 400
@@ -51,14 +51,14 @@ const unlockedStatus = {
 }
 
 /**
- * Controllable mocks for the `@sim/platform-authz/workflow` entry.
+ * Controllable mocks for the `@labbai/platform-authz/workflow` entry.
  *
  * Defaults assume permissive access (no lock, write allowed). Override with
  * `mockResolvedValue` per test when exercising the lock/permission paths.
  *
  * @example
  * ```ts
- * import { workflowAuthzMockFns } from '@sim/testing'
+ * import { workflowAuthzMockFns } from '@labbai/testing'
  *
  * workflowAuthzMockFns.mockAuthorizeWorkflowByWorkspacePermission.mockResolvedValue({
  *   allowed: true,
@@ -82,11 +82,11 @@ export const workflowAuthzMockFns = {
 }
 
 /**
- * Static mock module for `@sim/platform-authz/workflow`.
+ * Static mock module for `@labbai/platform-authz/workflow`.
  *
  * @example
  * ```ts
- * vi.mock('@sim/platform-authz/workflow', () => workflowAuthzMock)
+ * vi.mock('@labbai/platform-authz/workflow', () => workflowAuthzMock)
  * ```
  */
 export const workflowAuthzMock = {

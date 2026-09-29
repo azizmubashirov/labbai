@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Chip, Tooltip } from '@sim/emcn'
+import { Chip, Tooltip } from '@labbai/emcn'
 
 interface ChartFrameProps {
   title?: string

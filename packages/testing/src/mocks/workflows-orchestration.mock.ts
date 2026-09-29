@@ -6,7 +6,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { workflowsOrchestrationMockFns } from '@sim/testing'
+ * import { workflowsOrchestrationMockFns } from '@labbai/testing'
  *
  * workflowsOrchestrationMockFns.mockPerformFullDeploy.mockResolvedValue({
  *   success: true,

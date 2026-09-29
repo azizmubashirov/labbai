@@ -46,13 +46,13 @@ import { fileURLToPath } from 'node:url'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const APP = join(ROOT, 'apps/sim')
+const APP = join(ROOT, 'apps/labbai')
 
 /** Module no client-reachable entry may reach. */
 const FORBIDDEN = join(APP, 'tools/registry.ts')
 
 interface EntrySource {
-  /** Directory under `apps/sim` the entries are discovered in. */
+  /** Directory under `apps/labbai` the entries are discovered in. */
   root: string
   /** Whether a file inside it counts as an entry. */
   matches: (filename: string, fullPath: string) => boolean

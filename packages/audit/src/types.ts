@@ -12,7 +12,7 @@ export const AuditAction = {
   PERSONAL_API_KEY_CREATED: 'personal_api_key.created',
   PERSONAL_API_KEY_REVOKED: 'personal_api_key.revoked',
 
-  // OAuth apps (Sim as the authorization server)
+  // OAuth apps (Labbai as the authorization server)
   OAUTH_APP_REVOKED: 'oauth_app.revoked',
 
   // BYOK Keys

@@ -25,7 +25,7 @@ import {
   resolveTimeTickIndices,
   useChartWidth,
   useIsDarkTheme,
-} from '@sim/emcn'
+} from '@labbai/emcn'
 
 export interface BarChartPoint {
   timestamp: string

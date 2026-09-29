@@ -1,12 +1,12 @@
 import { readFileSync } from 'node:fs'
-import { backfillEmbeddingSearch } from '@sim/db/script-migrations/0015_backfill_embedding_search'
+import { backfillEmbeddingSearch } from '@labbai/db/script-migrations/0015_backfill_embedding_search'
 import {
   backfillSearchKeywords,
   backfillSearchVectors,
   buildSearchIndexes,
-} from '@sim/db/script-migrations/0016_backfill_search_vectors'
-import { runScriptMigrations, scriptMigrations } from '@sim/db/script-migrations/index'
-import { generateId } from '@sim/utils/id'
+} from '@labbai/db/script-migrations/0016_backfill_search_vectors'
+import { runScriptMigrations, scriptMigrations } from '@labbai/db/script-migrations/index'
+import { generateId } from '@labbai/utils/id'
 import postgres, { type Sql } from 'postgres'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 

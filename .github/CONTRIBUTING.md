@@ -1,14 +1,14 @@
-# Contributing to Sim
+# Contributing to Labbai
 
-Thank you for your interest in contributing to Sim! Our goal is to provide developers with a powerful, user-friendly platform for building, testing, and optimizing agentic workflows. We welcome contributions in all forms—from bug fixes and design improvements to brand-new features.
+Thank you for your interest in contributing to Labbai! Our goal is to provide developers with a powerful, user-friendly platform for building, testing, and optimizing agentic workflows. We welcome contributions in all forms—from bug fixes and design improvements to brand-new features.
 
 > **Project Overview:**
-> Sim is a Turborepo monorepo with two deployable apps and a set of shared packages:
+> Labbai is a Turborepo monorepo with two deployable apps and a set of shared packages:
 >
-> - `apps/sim/` — the main Next.js application (App Router, ReactFlow, Zustand, Shadcn, Tailwind CSS).
-> - `apps/realtime/` — a small Bun + Socket.IO server that powers the collaborative canvas. Shares DB and Better Auth secrets with `apps/sim` via `@sim/*` packages.
+> - `apps/labbai/` — the main Next.js application (App Router, ReactFlow, Zustand, Shadcn, Tailwind CSS).
+> - `apps/realtime/` — a small Bun + Socket.IO server that powers the collaborative canvas. Shares DB and Better Auth secrets with `apps/labbai` via `@labbai/*` packages.
 > - `apps/docs/` — Fumadocs-based documentation site.
-> - `packages/` — shared workspace packages (`@sim/db`, `@sim/auth`, `@sim/audit`, `@sim/workflow-types`, `@sim/workflow-persistence`, `@sim/platform-authz`, `@sim/realtime-protocol`, `@sim/security`, `@sim/logger`, `@sim/utils`, `@sim/testing`, `@sim/tsconfig`).
+> - `packages/` — shared workspace packages (`@labbai/db`, `@labbai/auth`, `@labbai/audit`, `@labbai/workflow-types`, `@labbai/workflow-persistence`, `@labbai/platform-authz`, `@labbai/realtime-protocol`, `@labbai/security`, `@labbai/logger`, `@labbai/utils`, `@labbai/testing`, `@labbai/tsconfig`).
 >
 > Strict one-way dependency flow: `apps/* → packages/*`. Packages never import from apps. Please ensure your contributions follow this and our best practices for clarity, maintainability, and consistency.
 
@@ -37,8 +37,8 @@ We strive to keep our workflow as simple as possible. To contribute:
 2. **Clone Your Fork**
 
    ```bash
-   git clone https://github.com/<your-username>/sim.git
-   cd sim
+   git clone https://github.com/<your-username>/labbai.git
+   cd labbai
    ```
 
 3. **Create a Feature Branch**
@@ -139,31 +139,12 @@ Using clear and consistent commit messages makes it easier for everyone to under
 
 To set up your local development environment:
 
-### Option 1: Using NPM Package (Simplest)
-
-The easiest way to run Sim locally is using our NPM package:
-
-```bash
-npx simstudio
-```
-
-After running this command, open [http://localhost:3000/](http://localhost:3000/) in your browser.
-
-#### Options
-
-- `-p, --port <port>`: Specify the port to run Sim on (default: 3000)
-- `--no-pull`: Skip pulling the latest Docker images
-
-#### Requirements
-
-- Docker must be installed and running on your machine
-
-### Option 2: Using Docker Compose
+### Option 1: Using Docker Compose
 
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/sim.git
-cd sim
+git clone https://github.com/<your-username>/labbai.git
+cd labbai
 
 # Generate the required secrets. The stack refuses to start without them
 # rather than booting with empty values.
@@ -174,7 +155,7 @@ INTERNAL_API_SECRET=$(openssl rand -hex 32)
 CRON_SECRET=$(openssl rand -hex 32)
 EOF
 
-# Start Sim
+# Start Labbai
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -182,7 +163,7 @@ Access the application at [http://localhost:3000/](http://localhost:3000/)
 
 #### Using Local Models
 
-To use local models with Sim:
+To use local models with Labbai:
 
 1. Install Ollama and pull models:
 
@@ -194,7 +175,7 @@ To use local models with Sim:
    ollama pull gemma3:4b
    ```
 
-2. Start Sim with local model support:
+2. Start Labbai with local model support:
 
    ```bash
    # With NVIDIA GPU support
@@ -208,15 +189,15 @@ To use local models with Sim:
    docker compose -f docker-compose.prod.yml up -d
    ```
 
-### Option 3: Manual Setup
+### Option 2: Manual Setup
 
 If you prefer not to use Docker. **All commands run from the repository root unless explicitly noted.**
 
 1. **Clone and Install:**
 
    ```bash
-   git clone https://github.com/<your-username>/sim.git
-   cd sim
+   git clone https://github.com/<your-username>/labbai.git
+   cd labbai
    bun install
    ```
 
@@ -228,7 +209,7 @@ If you prefer not to use Docker. **All commands run from the repository root unl
 
    ```bash
    # Main app — large, app-specific (OAuth secrets, LLM keys, Stripe, etc.)
-   cp apps/sim/.env.example apps/sim/.env
+   cp apps/labbai/.env.example apps/labbai/.env
 
    # Realtime server — small, only the values shared with the main app
    cp apps/realtime/.env.example apps/realtime/.env
@@ -237,13 +218,13 @@ If you prefer not to use Docker. **All commands run from the repository root unl
    cp packages/db/.env.example packages/db/.env
    ```
 
-   At minimum, each `.env` needs `DATABASE_URL`. `apps/sim/.env` and `apps/realtime/.env` additionally need matching values for `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and `NEXT_PUBLIC_APP_URL`. `apps/sim/.env` also needs `ENCRYPTION_KEY` and `API_ENCRYPTION_KEY`. Generate any 32-char secrets with `openssl rand -hex 32`.
+   At minimum, each `.env` needs `DATABASE_URL`. `apps/labbai/.env` and `apps/realtime/.env` additionally need matching values for `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and `NEXT_PUBLIC_APP_URL`. `apps/labbai/.env` also needs `ENCRYPTION_KEY` and `API_ENCRYPTION_KEY`. Generate any 32-char secrets with `openssl rand -hex 32`.
 
-   The same `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and `DATABASE_URL` must appear in both `apps/sim/.env` and `apps/realtime/.env` so the two services share auth and DB. After editing `apps/sim/.env`, you can mirror the shared subset into the realtime env in one shot:
+   The same `BETTER_AUTH_SECRET`, `INTERNAL_API_SECRET`, and `DATABASE_URL` must appear in both `apps/labbai/.env` and `apps/realtime/.env` so the two services share auth and DB. After editing `apps/labbai/.env`, you can mirror the shared subset into the realtime env in one shot:
 
    ```bash
-   grep -E '^(DATABASE_URL|BETTER_AUTH_URL|BETTER_AUTH_SECRET|INTERNAL_API_SECRET|NEXT_PUBLIC_APP_URL|REDIS_URL)=' apps/sim/.env > apps/realtime/.env
-   grep -E '^DATABASE_URL=' apps/sim/.env > packages/db/.env
+   grep -E '^(DATABASE_URL|BETTER_AUTH_URL|BETTER_AUTH_SECRET|INTERNAL_API_SECRET|NEXT_PUBLIC_APP_URL|REDIS_URL)=' apps/labbai/.env > apps/realtime/.env
+   grep -E '^DATABASE_URL=' apps/labbai/.env > packages/db/.env
    ```
 
 3. **Run Database Migrations:**
@@ -291,7 +272,7 @@ When working on email templates, you can preview them using a local email previe
 1. **Run the Email Preview Server:**
 
    ```bash
-   cd apps/sim && bun run email:dev
+   cd apps/labbai && bun run email:dev
    ```
 
 2. **Access the Preview:**
@@ -302,14 +283,14 @@ When working on email templates, you can preview them using a local email previe
 
 3. **Templates Location:**
 
-   - Email templates live in `apps/sim/components/emails/`.
+   - Email templates live in `apps/labbai/components/emails/`.
    - Changes hot-reload automatically in the preview.
 
 ---
 
 ## Adding New Blocks and Tools
 
-Sim is built in a modular fashion where blocks and tools extend the platform's functionality. To maintain consistency and quality, please follow the guidelines below when adding a new block or tool.
+Labbai is built in a modular fashion where blocks and tools extend the platform's functionality. To maintain consistency and quality, please follow the guidelines below when adding a new block or tool.
 
 > **Use the skill guides for step-by-step recipes.** The repository ships opinionated, end-to-end guides under `.agents/skills/` that cover the exact file layout, conventions, registry wiring, and gotchas for each kind of contribution. Read the relevant SKILL.md before you start writing code:
 >
@@ -329,27 +310,27 @@ Sim is built in a modular fashion where blocks and tools extend the platform's f
 
 ### Where to Add Your Code
 
-- **Blocks:** Create your new block file under the `apps/sim/blocks/blocks/` directory. The name of the file should match the provider name (e.g., `pinecone.ts`).
-- **Tools:** Create a new directory under `apps/sim/tools/` with the same name as the provider (e.g., `apps/sim/tools/pinecone`).
+- **Blocks:** Create your new block file under the `apps/labbai/blocks/blocks/` directory. The name of the file should match the provider name (e.g., `pinecone.ts`).
+- **Tools:** Create a new directory under `apps/labbai/tools/` with the same name as the provider (e.g., `apps/labbai/tools/pinecone`).
 
 In addition, you will need to update the registries:
 
-- **Block Registry:** Add your block to `apps/sim/blocks/registry.ts`. (`apps/sim/blocks/index.ts` re-exports lookups from the registry; you do not need to edit it.)
-- **Tool Registry:** Add your tool to `apps/sim/tools/index.ts`.
+- **Block Registry:** Add your block to `apps/labbai/blocks/registry.ts`. (`apps/labbai/blocks/index.ts` re-exports lookups from the registry; you do not need to edit it.)
+- **Tool Registry:** Add your tool to `apps/labbai/tools/index.ts`.
 
 ### How to Create a New Block
 
 1. **Create a New File:**
-   Create a file for your block named after the provider (e.g., `pinecone.ts`) in the `apps/sim/blocks/blocks/` directory.
+   Create a file for your block named after the provider (e.g., `pinecone.ts`) in the `apps/labbai/blocks/blocks/` directory.
 
 2. **Create a New Icon:**
-   Create a new icon for your block in `apps/sim/components/icons.tsx`. The icon should follow the same naming convention as the block (e.g., `PineconeIcon`).
+   Create a new icon for your block in `apps/labbai/components/icons.tsx`. The icon should follow the same naming convention as the block (e.g., `PineconeIcon`).
 
 3. **Define the Block Configuration:**
    Your block should export a constant of type `BlockConfig`. For example:
 
    ```typescript
-   // apps/sim/blocks/blocks/pinecone.ts
+   // apps/labbai/blocks/blocks/pinecone.ts
    import { PineconeIcon } from '@/components/icons'
    import type { BlockConfig } from '@/blocks/types'
    import type { PineconeResponse } from '@/tools/pinecone/types'
@@ -417,10 +398,10 @@ In addition, you will need to update the registries:
    ```
 
 4. **Register Your Block:**
-   Add your block to the blocks registry (`apps/sim/blocks/registry.ts`):
+   Add your block to the blocks registry (`apps/labbai/blocks/registry.ts`):
 
    ```typescript
-   // apps/sim/blocks/registry.ts
+   // apps/labbai/blocks/registry.ts
    import { PineconeBlock } from '@/blocks/blocks/pinecone'
 
    // Registry of all available blocks
@@ -438,7 +419,7 @@ In addition, you will need to update the registries:
 ### How to Create a New Tool
 
 1. **Create a New Directory:**
-   Create a directory under `apps/sim/tools/` with the same name as the provider (e.g., `apps/sim/tools/pinecone`).
+   Create a directory under `apps/labbai/tools/` with the same name as the provider (e.g., `apps/labbai/tools/pinecone`).
 
 2. **Create Tool Files:**
    Create separate files for each tool functionality with descriptive names (e.g., `fetch.ts`, `generate_embeddings.ts`, `search_text.ts`) in your tool directory.
@@ -450,7 +431,7 @@ In addition, you will need to update the registries:
    Create an `index.ts` file in your tool directory that imports and exports all tools:
 
    ```typescript
-   // apps/sim/tools/pinecone/index.ts
+   // apps/labbai/tools/pinecone/index.ts
    import { fetchTool } from './fetch'
    import { generateEmbeddingsTool } from './generate_embeddings'
    import { searchTextTool } from './search_text'
@@ -462,7 +443,7 @@ In addition, you will need to update the registries:
    Your tool should export a constant with a naming convention of `{toolName}Tool`. The tool ID should follow the format `{provider}_{tool_name}`. For example:
 
    ```typescript
-   // apps/sim/tools/pinecone/fetch.ts
+   // apps/labbai/tools/pinecone/fetch.ts
    import { ToolConfig, ToolResponse } from '@/tools/types'
    import { PineconeParams, PineconeResponse } from '@/tools/pinecone/types'
 
@@ -499,10 +480,10 @@ In addition, you will need to update the registries:
    ```
 
 6. **Register Your Tool:**
-   Update the tools registry in `apps/sim/tools/index.ts` to include your new tool:
+   Update the tools registry in `apps/labbai/tools/index.ts` to include your new tool:
 
    ```typescript
-   // apps/sim/tools/index.ts
+   // apps/labbai/tools/index.ts
    import { fetchTool, generateEmbeddingsTool, searchTextTool } from '@/tools/pinecone'
    // ... other imports
 
@@ -518,10 +499,10 @@ In addition, you will need to update the registries:
    Ensure that your tool functions correctly by making test requests and verifying the responses.
 
 8. **Generate Documentation:**
-   Run the documentation generator (from `apps/sim`) to create docs for your new tool:
+   Run the documentation generator (from `apps/labbai`) to create docs for your new tool:
 
    ```bash
-   cd apps/sim && bun run generate-docs
+   cd apps/labbai && bun run generate-docs
    ```
 
 ### Naming Conventions
@@ -538,7 +519,7 @@ Maintaining consistent naming across the codebase is critical for auto-generatio
 
 ### Parameter Visibility System
 
-Sim implements a sophisticated parameter visibility system that controls how parameters are exposed to users and LLMs in agent workflows. Each parameter can have one of four visibility levels:
+Labbai implements a sophisticated parameter visibility system that controls how parameters are exposed to users and LLMs in agent workflows. Each parameter can have one of four visibility levels:
 
 | Visibility    | User Sees | LLM Sees | How It Gets Set                |
 | ------------- | --------- | -------- | ------------------------------ |
@@ -604,7 +585,7 @@ This project is licensed under the Apache License 2.0. By contributing, you agre
 
 By contributing to this repository, you agree that your contributions are provided under the terms of the Apache License Version 2.0, as included in the LICENSE file of this repository.
 
-In addition, by submitting your contributions, you grant Sim, Inc. ("The Licensor") a perpetual, irrevocable, worldwide, royalty-free, sublicensable right and license to:
+In addition, by submitting your contributions, you grant Labbai, Inc. ("The Licensor") a perpetual, irrevocable, worldwide, royalty-free, sublicensable right and license to:
 
 - Use, copy, modify, distribute, publicly display, publicly perform, and prepare derivative works of your contributions.
 - Incorporate your contributions into other works or products.
@@ -616,4 +597,4 @@ If you do not agree with these terms, you must not contribute your work to this 
 
 ---
 
-Thank you for taking the time to contribute to Sim. We truly appreciate your efforts and look forward to collaborating with you!
+Thank you for taking the time to contribute to Labbai. We truly appreciate your efforts and look forward to collaborating with you!

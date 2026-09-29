@@ -1,5 +1,5 @@
 {
-  "name": "@sim/platform-authz",
+  "name": "@labbai/platform-authz",
   "version": "0.1.0",
   "private": true,
   "sideEffects": false,
@@ -39,12 +39,12 @@
     "format:check": "biome format ."
   },
   "dependencies": {
-    "@sim/db": "workspace:*",
-    "@sim/realtime-protocol": "workspace:*",
+    "@labbai/db": "workspace:*",
+    "@labbai/realtime-protocol": "workspace:*",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "@types/node": "24.2.1",
     "typescript": "^7.0.2"
   }

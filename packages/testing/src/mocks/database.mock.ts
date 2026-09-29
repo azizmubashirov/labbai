@@ -185,7 +185,7 @@ function dequeueChainRows(tables: unknown[]): unknown[] | null {
  *
  * @example
  * ```ts
- * import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@sim/testing'
+ * import { dbChainMockFns, queueTableRows, resetDbChainMock, schemaMock } from '@labbai/testing'
  *
  * beforeEach(() => {
  *   vi.clearAllMocks()
@@ -400,7 +400,7 @@ export function resetDbChainMock(): void {
 }
 
 /**
- * The single shared `@sim/db` mock instance backing BOTH `dbChainMock` and
+ * The single shared `@labbai/db` mock instance backing BOTH `dbChainMock` and
  * `databaseMock`. Because every binding resolves to the same chain spies, a
  * module bound to either export behaves identically — there is exactly one
  * db-mock state to configure and reset.
@@ -418,11 +418,11 @@ const dbInstance = {
 }
 
 /**
- * Static mock module for `@sim/db` backed by `dbChainMockFns`.
+ * Static mock module for `@labbai/db` backed by `dbChainMockFns`.
  *
  * @example
  * ```ts
- * vi.mock('@sim/db', () => dbChainMock)
+ * vi.mock('@labbai/db', () => dbChainMock)
  * ```
  */
 export const dbChainMock = {
@@ -436,14 +436,14 @@ export const dbChainMock = {
 }
 
 /**
- * Mock module for `@sim/db` installed globally in vitest.setup.ts. Shares its
+ * Mock module for `@labbai/db` installed globally in vitest.setup.ts. Shares its
  * `db` instance (and therefore all chain spies and table queues) with
  * `dbChainMock`; additionally exposes the `sql` template tag and operator
  * exports the real module provides.
  *
  * @example
  * ```ts
- * vi.mock('@sim/db', () => databaseMock)
+ * vi.mock('@labbai/db', () => databaseMock)
  * ```
  */
 export const databaseMock = {

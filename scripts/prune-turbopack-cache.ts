@@ -2,7 +2,7 @@
 /**
  * Caps the size of Turbopack's dev filesystem cache.
  *
- * `experimental.turbopackFileSystemCacheForDev` is ON (see `apps/sim/next.config.ts`)
+ * `experimental.turbopackFileSystemCacheForDev` is ON (see `apps/labbai/next.config.ts`)
  * because it makes dev-server restarts 5.4x faster and cuts RSS ~1.9x. The tradeoff
  * is that the cache is an append-heavy LSM store with no upstream GC: it grows with
  * every route compiled and every code change, and it is never pruned. An abandoned

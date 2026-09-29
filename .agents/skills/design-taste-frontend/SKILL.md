@@ -4,7 +4,7 @@ source: https://github.com/leonxlnx/taste-skill — skills/taste-skill/SKILL.md
 description: Anti-slop frontend skill for landing pages, portfolios, and redesigns. The agent reads the brief, infers the right design direction, and ships interfaces that do not look templated. Real design systems when applicable, audit-first on redesigns, strict pre-flight check.
 ---
 
-> **In this repo:** Tailwind 4 (CSS-first config in `apps/sim/app/_styles/globals.css`); animation via `import { motion } from 'framer-motion'` (not `motion/react` — rewrite every `motion/react` import in the samples below); icons from `@sim/emcn/icons`; colors through the CSS-variable tokens in `.claude/rules/sim-styling.md` (no hardcoded `text-gray-*`/hex/`zinc` utilities, no paired `dark:` utilities). This note overrides any conflicting guidance or code sample anywhere in this file.
+> **In this repo:** Tailwind 4 (CSS-first config in `apps/labbai/app/_styles/globals.css`); animation via `import { motion } from 'framer-motion'` (not `motion/react` — rewrite every `motion/react` import in the samples below); icons from `@labbai/emcn/icons`; colors through the CSS-variable tokens in `.claude/rules/labbai-styling.md` (no hardcoded `text-gray-*`/hex/`zinc` utilities, no paired `dark:` utilities). This note overrides any conflicting guidance or code sample anywhere in this file.
 
 # tasteskill: Anti-Slop Frontend Skill
 
@@ -141,7 +141,7 @@ Unless the design read picks a real design system (Section 2.A), these are the d
 * **NEVER** use `useState` to track continuous values driven by user input (mouse position, scroll progress, pointer physics, magnetic hover). Use Motion's `useMotionValue` / `useTransform` / `useScroll`. `useState` re-renders the React tree on every change and collapses on mobile.
 
 ### 3.C Icons
-* **Icons:** in this repo, `@sim/emcn/icons` only — one family per tree, `strokeWidth` standardized. Outside this repo, pick one maintained library and standardize on it.
+* **Icons:** in this repo, `@labbai/emcn/icons` only — one family per tree, `strokeWidth` standardized. Outside this repo, pick one maintained library and standardize on it.
 
 ### 3.D Emoji Policy
 Discouraged by default in code, markup, and visible text. Replace symbols with icon-library glyphs. **Override:** allow emojis only when the user explicitly asks for a playful / chat-style / social-native vibe - and even then use them sparingly with intent.

@@ -1,5 +1,5 @@
-import type { ScriptMigration } from '@sim/db/script-migrations/types'
-import { createLogger } from '@sim/logger'
+import type { ScriptMigration } from '@labbai/db/script-migrations/types'
+import { createLogger } from '@labbai/logger'
 import postgres, { type Sql } from 'postgres'
 
 const logger = createLogger('SearchVectorProjection')

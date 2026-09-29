@@ -1,7 +1,7 @@
-import type { ScriptMigration } from '@sim/db/script-migrations/types'
-import { createLogger } from '@sim/logger'
-import { getPostgresErrorCode } from '@sim/utils/errors'
-import { generateId } from '@sim/utils/id'
+import type { ScriptMigration } from '@labbai/db/script-migrations/types'
+import { createLogger } from '@labbai/logger'
+import { getPostgresErrorCode } from '@labbai/utils/errors'
+import { generateId } from '@labbai/utils/id'
 import type { Fragment, Sql, TransactionSql } from 'postgres'
 
 const logger = createLogger('LegacyKnowledgeBaseWorkspaces')

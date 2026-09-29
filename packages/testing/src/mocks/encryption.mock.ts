@@ -7,7 +7,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { encryptionMockFns } from '@sim/testing'
+ * import { encryptionMockFns } from '@labbai/testing'
  *
  * encryptionMockFns.mockDecryptSecret.mockResolvedValueOnce({ decrypted: 'my-secret' })
  * ```

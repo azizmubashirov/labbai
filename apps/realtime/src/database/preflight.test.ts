@@ -4,7 +4,7 @@ const { mockLimit } = vi.hoisted(() => ({
   mockLimit: vi.fn(),
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@labbai/db', () => ({
   db: {
     select: () => ({
       from: () => ({
@@ -14,11 +14,11 @@ vi.mock('@sim/db', () => ({
   },
 }))
 
-vi.mock('@sim/db/schema', () => ({
+vi.mock('@labbai/db/schema', () => ({
   workflow: {},
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@labbai/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -27,11 +27,11 @@ vi.mock('@sim/logger', () => ({
   }),
 }))
 
-vi.mock('@sim/utils/helpers', () => ({
+vi.mock('@labbai/utils/helpers', () => ({
   sleep: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { sleep } from '@sim/utils/helpers'
+import { sleep } from '@labbai/utils/helpers'
 import { assertSchemaCompatibility } from '@/database/preflight'
 
 /** Builds a Postgres-shaped error carrying a SQLSTATE `code`, as postgres.js throws. */

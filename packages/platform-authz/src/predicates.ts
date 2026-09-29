@@ -1,4 +1,4 @@
-import type { permissionTypeEnum } from '@sim/db/schema'
+import type { permissionTypeEnum } from '@labbai/db/schema'
 
 /** Workspace permission level: read < write < admin. */
 export type PermissionType = (typeof permissionTypeEnum.enumValues)[number]

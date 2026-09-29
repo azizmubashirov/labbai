@@ -1,6 +1,6 @@
-import type { createLogger } from '@sim/logger'
-import { authorizeRoom } from '@sim/platform-authz/rooms'
-import type { RoomRef } from '@sim/realtime-protocol/rooms'
+import type { createLogger } from '@labbai/logger'
+import { authorizeRoom } from '@labbai/platform-authz/rooms'
+import type { RoomRef } from '@labbai/realtime-protocol/rooms'
 import { beginRoomPermissionRead, commitRoomPermission } from '@/middleware/permissions'
 
 type Authorized = Awaited<ReturnType<typeof authorizeRoom>>

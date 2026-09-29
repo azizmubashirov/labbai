@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import ts from '@typescript/typescript6'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const SCAN_ROOT = 'apps/sim/lib'
+const SCAN_ROOT = 'apps/labbai/lib'
 const OPERATIONS_FILE = 'operations.ts'
 
 /** The pair that must travel together. */

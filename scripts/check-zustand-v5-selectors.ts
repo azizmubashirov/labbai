@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const APP_DIR = path.join(ROOT, 'apps/sim')
+const APP_DIR = path.join(ROOT, 'apps/labbai')
 
 const SKIP_DIRS = new Set(['node_modules', '.next', '.turbo', 'coverage', 'dist', 'build'])
 

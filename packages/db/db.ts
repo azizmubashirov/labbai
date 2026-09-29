@@ -1,5 +1,5 @@
-import { DB_POOL_PROFILES } from '@sim/db/pool-profiles'
-import { createLogger } from '@sim/logger'
+import { DB_POOL_PROFILES } from '@labbai/db/pool-profiles'
+import { createLogger } from '@labbai/logger'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { resolveDbUrl } from './connection-url'
@@ -55,7 +55,7 @@ if (!connectionString) {
  * as one array parameter. `packages/db/scripts/migrate.ts` deliberately omits
  * `fetch_types` for that reason; see the note there before sharing these options.
  *
- * Pinned by apps/sim/lib/execution/payloads/prune-metadata-sql.test.ts, which renders
+ * Pinned by apps/labbai/lib/execution/payloads/prune-metadata-sql.test.ts, which renders
  * the real statements and asserts no bind parameter is an array.
  */
 const poolOptions = withUtcTimestamps({

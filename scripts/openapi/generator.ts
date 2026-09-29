@@ -1,4 +1,4 @@
-import { omit } from '@sim/utils/object'
+import { omit } from '@labbai/utils/object'
 import Ajv2020 from 'ajv/dist/2020'
 import { z } from 'zod'
 import type { AnyApiRouteContract, ApiSchema } from '@/lib/api/contracts/types'

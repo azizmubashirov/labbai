@@ -1,4 +1,4 @@
-import { generateShortId } from '@sim/utils/id'
+import { generateShortId } from '@labbai/utils/id'
 
 const COLUMN_SUFFIX_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789_'
 
@@ -81,8 +81,8 @@ export interface TableLocksFixture {
 }
 
 /**
- * Structural stand-in for `TableDefinition` in `apps/sim/lib/table/types.ts`.
- * Declared here rather than imported because `@sim/testing` must not depend on
+ * Structural stand-in for `TableDefinition` in `apps/labbai/lib/table/types.ts`.
+ * Declared here rather than imported because `@labbai/testing` must not depend on
  * `apps/*` (enforced by `scripts/check-monorepo-boundaries.ts`).
  */
 export interface TableDefinitionFixture {

@@ -1,5 +1,5 @@
 /**
- * @sim/testing - Shared testing utilities for Sim
+ * @labbai/testing - Shared testing utilities for Labbai
  *
  * This package provides a comprehensive set of tools for writing tests:
  * - Factories: Create mock data with sensible defaults
@@ -24,7 +24,7 @@
  *   expectBlockExists,
  *   expectEdgeConnects,
  *   expectBlockExecuted,
- * } from '@sim/testing'
+ * } from '@labbai/testing'
  *
  * describe('MyFeature', () => {
  *   it('should work with a linear workflow', () => {

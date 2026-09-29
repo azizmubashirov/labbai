@@ -2,7 +2,7 @@
 /**
  * Projects the executable tool registry down to its serializable metadata.
  *
- * `apps/sim/tools/registry.ts` is a ~9,000-line barrel importing all 4,300+
+ * `apps/labbai/tools/registry.ts` is a ~9,000-line barrel importing all 4,300+
  * tools. Each `ToolConfig` mixes plain data (`params`, `outputs`, `name`) with
  * closures (`request.headers`, `transformResponse`,
  * `postProcess`), and it is those closures — and the SDK clients and API
@@ -36,15 +36,15 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { deriveHostedApiKeySupport } from '../apps/sim/tools/hosted-api-key'
-import { tools } from '../apps/sim/tools/registry'
-import { hasToolId } from '../apps/sim/tools/tool-ids'
-import type { ToolConfig } from '../apps/sim/tools/types'
-import { getTool } from '../apps/sim/tools/utils'
+import { deriveHostedApiKeySupport } from '../apps/labbai/tools/hosted-api-key'
+import { tools } from '../apps/labbai/tools/registry'
+import { hasToolId } from '../apps/labbai/tools/tool-ids'
+import type { ToolConfig } from '../apps/labbai/tools/types'
+import { getTool } from '../apps/labbai/tools/utils'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(SCRIPT_DIR, '..')
-const GENERATED_DIR = resolve(ROOT, 'apps/sim/tools/generated')
+const GENERATED_DIR = resolve(ROOT, 'apps/labbai/tools/generated')
 const IDS_PATH = resolve(GENERATED_DIR, 'tool-ids.ts')
 const METADATA_PATH = resolve(GENERATED_DIR, 'tool-metadata.ts')
 const OUTPUTS_PATH = resolve(GENERATED_DIR, 'tool-outputs.ts')
@@ -147,7 +147,7 @@ function build(registry: ToolRecord) {
     }
     /**
      * Derived, never copied. `hosting` itself holds closures and would trip
-     * `findFunctionPaths`; this is the serializable answer to "does Sim supply
+     * `findFunctionPaths`; this is the serializable answer to "does Labbai supply
      * the API key", which is otherwise only discoverable by reading the tool's
      * source.
      */
@@ -266,7 +266,7 @@ function assertResolverParity() {
     throw new Error(
       `Tool id resolvers disagree on ${divergent.length} of ${probes.size} names ` +
         `(e.g. ${divergent.slice(0, 5).join(', ')}).\n` +
-        'resolveToolId in apps/sim/tools/utils.ts and apps/sim/tools/tool-ids.ts have drifted.'
+        'resolveToolId in apps/labbai/tools/utils.ts and apps/labbai/tools/tool-ids.ts have drifted.'
     )
   }
 }

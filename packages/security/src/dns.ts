@@ -96,7 +96,7 @@ export async function resolveHostAddresses(
       preferred: preferIpv4(addresses),
       // Resolver order is preserved (`verbatim: true`) because `preferred`
       // applies the IPv4 preference itself, so the order here is informational.
-      // Deliberately unlike `createSsrfGuardedLookup` in apps/sim, which hands
+      // Deliberately unlike `createSsrfGuardedLookup` in apps/labbai, which hands
       // its full ordered list to undici to dial in turn and so wants
       // `verbatim: false`.
     }

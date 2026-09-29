@@ -3,16 +3,16 @@
  *
  * @example
  * ```ts
- * import { createMockLogger, setupGlobalFetchMock, databaseMock } from '@sim/testing/mocks'
+ * import { createMockLogger, setupGlobalFetchMock, databaseMock } from '@labbai/testing/mocks'
  *
  * // Mock the logger
- * vi.mock('@sim/logger', () => ({ createLogger: () => createMockLogger() }))
+ * vi.mock('@labbai/logger', () => ({ createLogger: () => createMockLogger() }))
  *
  * // Mock fetch globally
  * setupGlobalFetchMock({ json: { success: true } })
  *
  * // Mock database
- * vi.mock('@sim/db', () => databaseMock)
+ * vi.mock('@labbai/db', () => databaseMock)
  * ```
  */
 
@@ -85,7 +85,7 @@ export {
   executionPreprocessingMock,
   executionPreprocessingMockFns,
 } from './execution-preprocessing.mock'
-// Executor mocks - use side-effect import: import '@sim/testing/mocks/executor'
+// Executor mocks - use side-effect import: import '@labbai/testing/mocks/executor'
 // Fetch mocks
 export {
   createMockFetch,
@@ -185,7 +185,7 @@ export {
   v2RateLimiterModuleMock,
   v2RouteMocks,
 } from './v2-route.mock'
-// Workflow authz package mocks (for @sim/platform-authz/workflow)
+// Workflow authz package mocks (for @labbai/platform-authz/workflow)
 export { workflowAuthzMock, workflowAuthzMockFns } from './workflow-authz.mock'
 // Workflows API utils mocks (for @/app/api/workflows/utils)
 export { workflowsApiUtilsMock, workflowsApiUtilsMockFns } from './workflows-api-utils.mock'

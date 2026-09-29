@@ -6,7 +6,7 @@ const tables = new Map([['retiringTable', new Set(['retired', 'otherRetired'])]]
 function audit(statement: string) {
   return auditFile(
     'query-example.ts',
-    `import { retiringTable } from '@sim/db/schema'; ${statement}`,
+    `import { retiringTable } from '@labbai/db/schema'; ${statement}`,
     tables
   )
 }
@@ -24,10 +24,10 @@ describe('pending-drop query audit', () => {
   })
 
   it.each([
-    "import { retiringTable as stats } from '@sim/db/schema'; db.insert(stats).values({})",
-    "import * as schema from '@sim/db/schema'; db.insert(schema.retiringTable).values({})",
-    "import { retiringTable as stats } from '@sim/db/schema'; db.select().from(alias(stats, 's'))",
-    "import * as schema from '@sim/db/schema'; db.select().from(schema.retiringTable)",
+    "import { retiringTable as stats } from '@labbai/db/schema'; db.insert(stats).values({})",
+    "import * as schema from '@labbai/db/schema'; db.insert(schema.retiringTable).values({})",
+    "import { retiringTable as stats } from '@labbai/db/schema'; db.select().from(alias(stats, 's'))",
+    "import * as schema from '@labbai/db/schema'; db.select().from(schema.retiringTable)",
   ])('resolves renamed and namespace table imports', (source) => {
     expect(auditFile('query-example.ts', source, tables)).toHaveLength(1)
   })
@@ -68,13 +68,13 @@ describe('pending-drop query audit', () => {
   it('scans escaped identifiers without treating comments as table references', () => {
     expect(
       mayReferencePendingTable(
-        "import { retiring\\u0054able } from '@sim/db/schema'",
+        "import { retiring\\u0054able } from '@labbai/db/schema'",
         new Set(tables.keys())
       )
     ).toBe(true)
     expect(
       mayReferencePendingTable(
-        "import { activeTable } from '@sim/db/schema'; // retiringTable",
+        "import { activeTable } from '@labbai/db/schema'; // retiringTable",
         new Set(tables.keys())
       )
     ).toBe(false)

@@ -1,4 +1,4 @@
-import { auditMock } from '@sim/testing'
+import { auditMock } from '@labbai/testing'
 import { describe, expect, it } from 'vitest'
 import { auditUpdatedFields } from './updated-fields'
 
@@ -26,12 +26,12 @@ describe('auditUpdatedFields', () => {
   })
 
   /**
-   * `auditMock` carries its own copy because `@sim/audit` devDepends on
-   * `@sim/testing` — importing the real helper there would close a package
+   * `auditMock` carries its own copy because `@labbai/audit` devDepends on
+   * `@labbai/testing` — importing the real helper there would close a package
    * cycle. The copy is pinned from this side instead, where the dependency
    * already runs the safe direction.
    */
-  it('stays in step with the copy @sim/testing hands to mocked callers', () => {
+  it('stays in step with the copy @labbai/testing hands to mocked callers', () => {
     const cases: object[] = [
       { name: 'Renamed', url: 'https://example.com' },
       { name: 'Renamed', updatedAt: new Date() },

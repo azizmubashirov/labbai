@@ -1,6 +1,6 @@
-import { createLogger } from '@sim/logger'
-import { getErrorMessage } from '@sim/utils/errors'
-import { isRecordLike } from '@sim/utils/object'
+import { createLogger } from '@labbai/logger'
+import { getErrorMessage } from '@labbai/utils/errors'
+import { isRecordLike } from '@labbai/utils/object'
 import type { Sql } from 'postgres'
 import type { ScriptMigration } from './types'
 

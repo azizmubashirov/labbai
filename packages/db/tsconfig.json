@@ -1,9 +1,9 @@
 {
-  "extends": "@sim/tsconfig/library.json",
+  "extends": "@labbai/tsconfig/library.json",
   "compilerOptions": {
     "paths": {
-      "@sim/db": ["./index.ts"],
-      "@sim/db/*": ["./*"]
+      "@labbai/db": ["./index.ts"],
+      "@labbai/db/*": ["./*"]
     }
   },
   "include": ["**/*.ts"],

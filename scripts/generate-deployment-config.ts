@@ -14,7 +14,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getAllOAuthServices } from '../apps/sim/lib/oauth/utils'
+import { getAllOAuthServices } from '../apps/labbai/lib/oauth/utils'
 import { INTEGRATION_METADATA } from '../packages/deployment-config/src/integration-metadata'
 import { formatGeneratedSource } from './format-generated-source'
 

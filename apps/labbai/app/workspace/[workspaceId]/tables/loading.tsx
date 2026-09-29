@@ -1,0 +1,37 @@
+'use client'
+
+import { Plus, Upload } from '@labbai/emcn'
+import { FolderPlus, Table as TableIcon } from '@labbai/emcn/icons'
+import {
+  type ChromeActionSpec,
+  ResourceChromeFallback,
+} from '@/app/workspace/[workspaceId]/components'
+
+const COLUMNS = [
+  { id: 'name', header: 'Name' },
+  { id: 'columns', header: 'Columns' },
+  { id: 'rows', header: 'Rows' },
+  { id: 'created', header: 'Created' },
+  { id: 'owner', header: 'Owner' },
+  { id: 'updated', header: 'Last Updated' },
+]
+
+const ACTIONS: ChromeActionSpec[] = [
+  { text: 'Import CSV', icon: Upload },
+  { text: 'New folder', icon: FolderPlus },
+  { text: 'New table', icon: Plus, variant: 'primary' },
+]
+
+export default function TablesLoading() {
+  return (
+    <ResourceChromeFallback
+      icon={TableIcon}
+      title='Tables'
+      columns={COLUMNS}
+      actions={ACTIONS}
+      searchPlaceholder='Search tables...'
+      hasSort
+      hasFilter
+    />
+  )
+}

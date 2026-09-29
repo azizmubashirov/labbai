@@ -3,7 +3,7 @@ import {
   applyMigration,
   migrationTestDatabaseUrl,
   withMigrationSchema,
-} from '@sim/db/scripts/migration-fixture'
+} from '@labbai/db/scripts/migration-fixture'
 import type postgres from 'postgres'
 import { describe, expect, it } from 'vitest'
 

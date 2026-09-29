@@ -7,24 +7,24 @@
  * - Edge cases and invalid inputs
  */
 
-import { ALL_SOCKET_OPERATIONS, BLOCK_OPERATIONS } from '@sim/realtime-protocol/constants'
+import { ALL_SOCKET_OPERATIONS, BLOCK_OPERATIONS } from '@labbai/realtime-protocol/constants'
 import {
   expectPermissionAllowed,
   expectPermissionDenied,
   ROLE_ALLOWED_OPERATIONS,
   SOCKET_OPERATIONS,
-} from '@sim/testing'
+} from '@labbai/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockAuthorize } = vi.hoisted(() => ({
   mockAuthorize: vi.fn(),
 }))
 
-vi.mock('@sim/platform-authz/workflow', () => ({
+vi.mock('@labbai/platform-authz/workflow', () => ({
   authorizeWorkflowByWorkspacePermission: mockAuthorize,
 }))
 
-vi.mock('@sim/db', () => ({
+vi.mock('@labbai/db', () => ({
   db: {
     select: vi.fn(() => ({
       from: vi.fn(() => ({

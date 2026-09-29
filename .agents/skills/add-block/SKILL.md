@@ -1,17 +1,17 @@
 ---
 name: add-block
-description: Create or update a Sim integration block with correct subBlocks, conditions, dependsOn, modes, canonicalParamId usage, outputs, and tool wiring. Use when working on `apps/sim/blocks/blocks/{service}.ts` or aligning a block with its tools.
+description: Create or update a Labbai integration block with correct subBlocks, conditions, dependsOn, modes, canonicalParamId usage, outputs, and tool wiring. Use when working on `apps/labbai/blocks/blocks/{service}.ts` or aligning a block with its tools.
 argument-hint: <service-name>
 ---
 
 # Add Block Skill
 
-You are an expert at creating block configurations for Sim. You understand the serializer, subBlock types, conditions, dependsOn, modes, and all UI patterns.
+You are an expert at creating block configurations for Labbai. You understand the serializer, subBlock types, conditions, dependsOn, modes, and all UI patterns.
 
 ## Your Task
 
 When the user asks you to create a block:
-1. Create the block file in `apps/sim/blocks/blocks/{service}.ts`
+1. Create the block file in `apps/labbai/blocks/blocks/{service}.ts`
 2. Configure all subBlocks with proper types, conditions, and dependencies
 3. Wire up tools correctly
 
@@ -32,7 +32,6 @@ export const {ServiceName}Block: BlockConfig = {
   name: '{Service Name}',               // Human readable
   description: 'Brief description',     // One sentence
   longDescription: 'Detailed description for docs',
-  docsLink: 'https://docs.sim.ai/integrations/{service}',
   category: 'tools',                    // 'tools' | 'blocks' | 'triggers'
   integrationType: IntegrationType.X,   // Primary category (see IntegrationType enum)
   tags: ['oauth', 'api'],              // Cross-cutting tags (see IntegrationTag type)
@@ -172,7 +171,7 @@ When adding or changing an OAuth integration block:
    Microsoft service IDs intentionally share their provider-level capability; do not add duplicate
    entries for those aliases.
 3. For a new capability, add its required client fields to `OAUTH_CLIENT_CAPABILITIES` and ensure
-   every referenced field exists in the env schema in `apps/sim/lib/core/config/env.ts`. Then add
+   every referenced field exists in the env schema in `apps/labbai/lib/core/config/env.ts`. Then add
    the matching `text` or `secret` input modes to `OAUTH_CLIENT_SETUP_FIELDS` in
    `packages/sim-setup/src/capability-config.ts`. The CLI catalog is exhaustively typed and checked
    against the runtime field list; do not infer secrecy from the field name.
@@ -286,7 +285,7 @@ When your block accepts file uploads, use the basic/advanced mode pattern with `
 
 **Keep the pair to one logical thing.** Basic is the file upload, advanced is *only* a reference to
 a file from a previous block. Gmail attachments are the reference implementation
-(`apps/sim/blocks/blocks/gmail.ts` — `attachmentFiles` / `attachments`).
+(`apps/labbai/blocks/blocks/gmail.ts` — `attachmentFiles` / `attachments`).
 
 Do not overload the advanced side with alternate identifiers (a remote URL, a provider asset ID, a
 path). A subblock whose meaning changes based on what the string looks like is impossible to reason
@@ -342,7 +341,7 @@ tools: {
 
 **Where the value actually lives at runtime.** The subblock `id` is where the UI *stores* the value,
 but it is not what the params function receives. `extractBlockParams`
-(`apps/sim/serializer/index.ts`) collapses each canonical group at serialization time:
+(`apps/labbai/serializer/index.ts`) collapses each canonical group at serialization time:
 
 ```typescript
 const sourceIds = [group.basicId, ...group.advancedIds].filter(Boolean)
@@ -694,7 +693,7 @@ export const ServiceV2Block: BlockConfig = {
 
 ## Registering Blocks
 
-Register the block in `apps/sim/blocks/registry-maps.ts` — add the import and an entry to each map alphabetically:
+Register the block in `apps/labbai/blocks/registry-maps.ts` — add the import and an entry to each map alphabetically:
 
 ```typescript
 import { ServiceBlock, ServiceBlockMeta } from '@/blocks/blocks/service'
@@ -723,7 +722,6 @@ export const ServiceBlock: BlockConfig = {
   name: 'Service',
   description: 'Integrate with Service API',
   longDescription: 'Full description for documentation...',
-  docsLink: 'https://docs.sim.ai/integrations/service',
   category: 'tools',
   integrationType: IntegrationType.DeveloperTools,
   tags: ['oauth', 'api'],
@@ -856,14 +854,14 @@ Optional fields that are rarely used should be set to `mode: 'advanced'` so they
 
 ## BlockMeta (Required)
 
-Every block file must export a `{Service}BlockMeta` alongside the block — **minimum 7 templates**. Look at existing examples in `apps/sim/blocks/blocks/` (e.g. `browser_use.ts`, `google_sheets.ts`) for the pattern.
+Every block file must export a `{Service}BlockMeta` alongside the block — **minimum 7 templates**. Look at existing examples in `apps/labbai/blocks/blocks/` (e.g. `browser_use.ts`, `google_sheets.ts`) for the pattern.
 
 ```typescript
 import type { BlockMeta } from '@/blocks/types'
 
 export const {Service}BlockMeta = {
   tags: ['tag1', 'tag2'],                  // IntegrationTag[]
-  url: 'https://{service}.com',            // external service homepage (verify it resolves) — NOT docs.sim.ai
+  url: 'https://{service}.com',            // external service homepage (verify it resolves) — not a docs link
   templates: [
     {
       icon: {Service}Icon,
@@ -909,7 +907,7 @@ Write one `byOperation` entry per operation dropdown option (or a single `defaul
 when the block has no operation dropdown).
 
 **The full authoring contract — voice, structure, and the two mistakes that break
-cards silently — is `apps/sim/blocks/AGENTS.md` → "Canvas sentences". Read it
+cards silently — is `apps/labbai/blocks/AGENTS.md` → "Canvas sentences". Read it
 before writing any.** The two failures worth repeating here, because both are
 invisible at runtime:
 
@@ -922,13 +920,13 @@ invisible at runtime:
 Validate before finishing:
 
 ```bash
-bun run apps/sim/scripts/check-canvas-sentences.ts --block={service}
+bun run apps/labbai/scripts/check-canvas-sentences.ts --block={service}
 ```
 
 ## Generated artifacts
 
 When adding or changing `sunset.replacedBy`, run `bun run generate:block-successors` and commit
-`apps/sim/lib/permission-groups/block-successors.generated.ts`. Authorization uses this generated
+`apps/labbai/lib/permission-groups/block-successors.generated.ts`. Authorization uses this generated
 map to resolve legacy and current block IDs consistently without importing the executable registry.
 Verify it with `bun run check:block-successors`.
 
@@ -967,7 +965,7 @@ changes.
 - [ ] Required fields marked correctly (boolean or condition)
 - [ ] OAuth inputs have correct `serviceId` and `requiredScopes: getScopesForService(serviceId)`
 - [ ] Every OAuth `serviceId` resolves through `resolveOAuthClientCapabilityId()` to the correct `OAUTH_CLIENT_CAPABILITIES` entry
-- [ ] Any new OAuth capability fields exist in `apps/sim/lib/core/config/env.ts`
+- [ ] Any new OAuth capability fields exist in `apps/labbai/lib/core/config/env.ts`
 - [ ] If the OAuth service supports service accounts, `SERVICE_ACCOUNT_METADATA_BY_OAUTH_SERVICE_ID` matches its canonical `serviceAccountProviderId` and deployment requirement
 - [ ] Scope descriptions added to `SCOPE_DESCRIPTIONS` in `lib/oauth/utils.ts` for any new scopes
 - [ ] Tools.access lists all tool IDs (snake_case)
@@ -986,7 +984,7 @@ changes.
 - [ ] Exported `{Service}BlockMeta` with at least 7 templates
 - [ ] `url` set on `{Service}BlockMeta` to the external service's verified homepage (omit only for first-party blocks with no external service)
 - [ ] `skills` added to `{Service}BlockMeta`, each grounded in `tools.access` and sourced from a real online use case (not invented)
-- [ ] `canvasPresentation.sentences` covers every operation, and `bun run apps/sim/scripts/check-canvas-sentences.ts --block={service}` passes with 100% coverage
+- [ ] `canvasPresentation.sentences` covers every operation, and `bun run apps/labbai/scripts/check-canvas-sentences.ts --block={service}` passes with 100% coverage
 
 ## Final Validation (Required)
 
@@ -1012,9 +1010,9 @@ Validate the block against every tool in `tools.access`:
 A sub-block gets its choices from exactly one of two places. There is no third.
 
 **`selectorKey` — every remote list.** Use the `add-selector` skill to add browser-safe metadata in
-`apps/sim/lib/selectors/manifest.ts`. Attach `provider-server` selectors under
-`apps/sim/lib/selectors/server/providers/` and `internal-server` selectors in
-`apps/sim/lib/selectors/server/internal.ts`. Point the sub-block at that key. All remote selectors
+`apps/labbai/lib/selectors/manifest.ts`. Attach `provider-server` selectors under
+`apps/labbai/lib/selectors/server/providers/` and `internal-server` selectors in
+`apps/labbai/lib/selectors/server/internal.ts`. Point the sub-block at that key. All remote selectors
 execute through `selectors.execute`; never add a client provider module or selector-only fetch route.
 
 ```ts

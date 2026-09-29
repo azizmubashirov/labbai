@@ -126,13 +126,13 @@ CREATE OR REPLACE TRIGGER "oauth_consent_delete_unlinked_access_tokens"
 	AFTER DELETE ON "oauth_consent"
 	FOR EACH ROW
 	EXECUTE FUNCTION "oauth_consent_delete_unlinked_access_tokens"();--> statement-breakpoint
--- Seed the first-party Sim CLI as a public PKCE client. Loopback URIs match any port per RFC 8252.
+-- Seed the first-party Labbai CLI as a public PKCE client. Loopback URIs match any port per RFC 8252.
 INSERT INTO "oauth_client" (
 	"id", "client_id", "name", "disabled", "skip_consent", "public", "type",
 	"token_endpoint_auth_method", "require_pkce", "grant_types", "response_types",
 	"redirect_uris", "scopes", "created_at", "updated_at"
 ) VALUES (
-	'sim-cli', 'sim-cli', 'Sim CLI', false, false, true, 'native',
+	'sim-cli', 'sim-cli', 'Labbai CLI', false, false, true, 'native',
 	'none', true, ARRAY['authorization_code', 'refresh_token'], ARRAY['code'],
 	ARRAY['http://127.0.0.1/callback', 'http://[::1]/callback'],
 	ARRAY['offline_access', 'api:read', 'api:write'],

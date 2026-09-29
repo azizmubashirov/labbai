@@ -1,6 +1,6 @@
-import { getPostgresErrorCode } from '@sim/utils/errors'
-import { sleep as defaultSleep } from '@sim/utils/helpers'
-import { backoffWithJitter } from '@sim/utils/retry'
+import { getPostgresErrorCode } from '@labbai/utils/errors'
+import { sleep as defaultSleep } from '@labbai/utils/helpers'
+import { backoffWithJitter } from '@labbai/utils/retry'
 
 /** SQLSTATE `lock_not_available`, raised when `lock_timeout` expires. */
 const LOCK_NOT_AVAILABLE = '55P03'

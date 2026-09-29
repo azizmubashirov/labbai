@@ -9,7 +9,7 @@ import { act, Profiler, useLayoutEffect } from 'react'
 import {
   normalizeWorkflowEdgeSourceHandle,
   normalizeWorkflowEdgeTargetHandle,
-} from '@sim/workflow-types/workflow'
+} from '@labbai/workflow-types/workflow'
 import { type Edge, ReactFlowProvider, useStoreApi as useReactFlowStoreApi } from '@xyflow/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'

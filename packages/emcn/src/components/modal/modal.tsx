@@ -94,7 +94,7 @@ const blockPendingNativeInteraction = (event: Event) => {
  * keyboard events and global shortcuts otherwise keep firing through an
  * invisible modal. When the native WebContents owns focus, the renderer sees
  * `<body>` as active, so a sentinel also pulls keyboard ownership back into
- * Sim. A real renderer control remains focused: Radix can then remember and
+ * Labbai. A real renderer control remains focused: Radix can then remember and
  * restore the correct trigger when the modal closes. This lock exists only
  * when a native listener actually claims the barrier, so ordinary web modals
  * retain their exact historical focus and keyboard behavior.

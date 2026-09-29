@@ -22,8 +22,8 @@
  *                             inline-arrow queryFn with a recognizable call are present.
  *
  * Enforcement model (mirrors check-api-validation-contracts.ts):
- *   - STRICT ZONE (apps/sim/hooks/queries/**): zero tolerance — any violation fails.
- *   - Elsewhere under apps/sim/**: ratcheted against scripts/check-react-query-patterns.baseline.json
+ *   - STRICT ZONE (apps/labbai/hooks/queries/**): zero tolerance — any violation fails.
+ *   - Elsewhere under apps/labbai/**: ratcheted against scripts/check-react-query-patterns.baseline.json
  *     (fails only when a category's count rises above the recorded baseline).
  *
  * Escape hatch: put `// rq-lint-allow: <reason>` on the line directly above the
@@ -39,11 +39,11 @@ import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const APP_DIR = path.join(ROOT, 'apps/sim')
+const APP_DIR = path.join(ROOT, 'apps/labbai')
 const BASELINE_PATH = path.join(ROOT, 'scripts/check-react-query-patterns.baseline.json')
 
 const SKIP_DIRS = new Set(['node_modules', '.next', '.turbo', 'coverage', 'dist', 'build'])
-const STRICT_PREFIX = 'apps/sim/hooks/queries/'
+const STRICT_PREFIX = 'apps/labbai/hooks/queries/'
 const ALLOW = 'rq-lint-allow:'
 
 type Category =
@@ -481,7 +481,7 @@ async function main() {
   for (const v of ratchet) counts[v.category] = (counts[v.category] ?? 0) + 1
 
   if (update) {
-    const baseline: Baseline = { generatedFrom: 'apps/sim (non-strict zone)', counts }
+    const baseline: Baseline = { generatedFrom: 'apps/labbai (non-strict zone)', counts }
     await writeFile(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`)
     console.log(`✓ Baseline written: ${JSON.stringify(counts)}`)
     process.exit(0)

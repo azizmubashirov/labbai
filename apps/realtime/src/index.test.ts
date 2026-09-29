@@ -4,9 +4,9 @@
  * @vitest-environment node
  */
 import { createServer, request as httpRequest } from 'http'
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
-import { createMockLogger } from '@sim/testing'
-import { randomInt } from '@sim/utils/random'
+import { ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
+import { createMockLogger } from '@labbai/testing'
+import { randomInt } from '@labbai/utils/random'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSocketIOServer } from '@/config/socket'
 import { MemoryRoomManager, workflowRoom } from '@/rooms'
@@ -309,7 +309,7 @@ describe('Socket Server Index Integration', () => {
       const { authenticateSocket } = await import('@/middleware/auth')
       const { verifyWorkflowAccess } = await import('@/middleware/permissions')
       const { getWorkflowState } = await import('@/database/operations')
-      const { WorkflowOperationSchema } = await import('@sim/realtime-protocol/schemas')
+      const { WorkflowOperationSchema } = await import('@labbai/realtime-protocol/schemas')
 
       expect(createSocketIOServer).toBeTypeOf('function')
       expect(createHttpHandler).toBeTypeOf('function')
@@ -345,7 +345,7 @@ describe('Socket Server Index Integration', () => {
 
   describe('Validation and Utils', () => {
     it.concurrent('should validate workflow operations', async () => {
-      const { WorkflowOperationSchema } = await import('@sim/realtime-protocol/schemas')
+      const { WorkflowOperationSchema } = await import('@labbai/realtime-protocol/schemas')
 
       const validOperation = {
         operation: 'batch-add-blocks',
@@ -371,7 +371,7 @@ describe('Socket Server Index Integration', () => {
     })
 
     it.concurrent('should validate batch-add-blocks with edges', async () => {
-      const { WorkflowOperationSchema } = await import('@sim/realtime-protocol/schemas')
+      const { WorkflowOperationSchema } = await import('@labbai/realtime-protocol/schemas')
 
       const validOperationWithEdge = {
         operation: 'batch-add-blocks',
@@ -406,7 +406,7 @@ describe('Socket Server Index Integration', () => {
     })
 
     it.concurrent('should validate edge operations', async () => {
-      const { WorkflowOperationSchema } = await import('@sim/realtime-protocol/schemas')
+      const { WorkflowOperationSchema } = await import('@labbai/realtime-protocol/schemas')
 
       const validEdgeOperation = {
         operation: 'add',
@@ -423,7 +423,7 @@ describe('Socket Server Index Integration', () => {
     })
 
     it('should validate subflow operations', async () => {
-      const { WorkflowOperationSchema } = await import('@sim/realtime-protocol/schemas')
+      const { WorkflowOperationSchema } = await import('@labbai/realtime-protocol/schemas')
 
       const validSubflowOperation = {
         operation: 'update',

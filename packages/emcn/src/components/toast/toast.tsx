@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { generateId } from '@sim/utils/id'
+import { generateId } from '@labbai/utils/id'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { usePathname } from 'next/navigation'
 import { createPortal } from 'react-dom'

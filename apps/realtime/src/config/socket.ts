@@ -1,5 +1,5 @@
 import type { Server as HttpServer } from 'http'
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@labbai/logger'
 import { createAdapter } from '@socket.io/redis-adapter'
 import { createClient, type RedisClientType } from 'redis'
 import { Server } from 'socket.io'

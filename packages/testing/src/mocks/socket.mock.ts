@@ -1,4 +1,4 @@
-import { generateRandomString } from '@sim/utils/random'
+import { generateRandomString } from '@labbai/utils/random'
 import { type Mock, vi } from 'vitest'
 
 /**

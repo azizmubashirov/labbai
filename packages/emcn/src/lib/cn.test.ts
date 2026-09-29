@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { cn } from './cn'
 
 describe('cn', () => {
-  describe("Sim's font-size class group", () => {
+  describe("Labbai's font-size class group", () => {
     /**
      * The whole reason `cn.ts` extends the `font-size` group: without it the
      * merger reads `text-small` as a colour, so it does not conflict with
@@ -79,7 +79,7 @@ describe('cn', () => {
       expect(cn('border hover:border-2')).toBe('border hover:border-2')
     })
 
-    it("resolves within Sim's hover-hover custom variant", () => {
+    it("resolves within Labbai's hover-hover custom variant", () => {
       expect(cn('hover-hover:bg-red-500 hover-hover:bg-blue-500')).toBe('hover-hover:bg-blue-500')
     })
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Validates that every `<path d='…'>` in `apps/sim/components/icons.tsx` is
+ * Validates that every `<path d='…'>` in `apps/labbai/components/icons.tsx` is
  * syntactically well-formed SVG path data.
  *
  * Malformed path data does not crash the build or fail TypeScript — the browser
@@ -25,7 +25,7 @@ const ROOT = path.resolve(import.meta.dir, '..')
 /** Defaults to the shared icon module; overridable via argv for testing. */
 const ICONS_FILE = process.argv[2]
   ? path.resolve(process.argv[2])
-  : path.join(ROOT, 'apps/sim/components/icons.tsx')
+  : path.join(ROOT, 'apps/labbai/components/icons.tsx')
 
 /** Operand count per path command; arc (`a`) is handled specially for flags. */
 const OPERANDS: Record<string, number> = {

@@ -3,7 +3,7 @@
  */
 
 import { act, createElement } from 'react'
-import { Calendar } from '@sim/emcn'
+import { Calendar } from '@labbai/emcn'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 

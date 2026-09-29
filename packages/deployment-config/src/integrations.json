@@ -9,7 +9,6 @@
       "longDescription": "Integrates Airtable into the workflow. Can list bases, list tables (with schema), and create, get, list, update, upsert, or delete records. Can also be used in trigger mode to trigger a workflow when an update is made to an Airtable table.",
       "bgColor": "#FFFFFF",
       "iconName": "AirtableIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/airtable",
       "operations": [
         {
           "name": "List Bases",
@@ -75,7 +74,6 @@
       "longDescription": "Integrate Cal.com into your workflow. Create and manage bookings, event types, schedules, and check availability slots. Supports creating, listing, rescheduling, and canceling bookings, as well as managing event types and schedules. Can also trigger workflows based on Cal.com webhook events (booking created, cancelled, rescheduled). Connect your Cal.com account via OAuth.",
       "bgColor": "#292929",
       "iconName": "CalComIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/calcom",
       "operations": [
         {
           "name": "List Bookings",
@@ -217,7 +215,6 @@
       "longDescription": "Integrate Calendly into your workflow. Manage event types, scheduled events, invitees, and webhooks. Can also trigger workflows based on Calendly webhook events (invitee scheduled, invitee canceled, routing form submitted). Requires Personal Access Token.",
       "bgColor": "#FFFFFF",
       "iconName": "CalendlyIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/calendly",
       "operations": [
         {
           "name": "Get Current User",
@@ -333,7 +330,6 @@
       "longDescription": "Integrate ElevenLabs into the workflow. Convert text to speech, generate sound effects, transform voices, isolate audio, and manage voices, models, and account settings.",
       "bgColor": "#181C1E",
       "iconName": "ElevenLabsIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/elevenlabs",
       "operations": [
         {
           "name": "Text to Speech",
@@ -392,7 +388,6 @@
       "longDescription": "Turn text into embedding vectors for semantic search, clustering, and similarity. Supports OpenAI, OpenRouter, Google Gemini, Cohere, and Mistral embedding models, plus embedding models on a self-hosted Ollama.",
       "bgColor": "#7B4DFF",
       "iconName": "EmbeddingsIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/embeddings",
       "operations": [],
       "operationCount": 0,
       "triggers": [],
@@ -410,7 +405,6 @@
       "longDescription": "Integrate Exa into the workflow. Can search the web, get page contents, find similar links, answer a question with citations, and run deep research with Exa Agent.",
       "bgColor": "#1F40ED",
       "iconName": "ExaAIIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/exa",
       "operations": [
         {
           "name": "Search",
@@ -449,7 +443,6 @@
       "longDescription": "Integrate Firecrawl into the workflow. Scrape pages, search the web, crawl entire sites, map URL structures, and extract structured data with AI.",
       "bgColor": "#181C1E",
       "iconName": "FirecrawlIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/firecrawl",
       "operations": [
         {
           "name": "Scrape",
@@ -520,7 +513,6 @@
       "longDescription": "Integrate Gmail into the workflow. Can send, read, search, and move emails. Can be used in trigger mode to trigger a workflow when a new email is received.",
       "bgColor": "#FFFFFF",
       "iconName": "GmailIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/gmail",
       "operations": [
         {
           "name": "Send Email",
@@ -598,7 +590,6 @@
       "longDescription": "Integrate Google Calendar into the workflow. Can create, read, update, and list calendar events.",
       "bgColor": "#FFFFFF",
       "iconName": "GoogleCalendarIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/google_calendar",
       "operations": [
         {
           "name": "Create Event",
@@ -700,7 +691,6 @@
       "longDescription": "Integrate Google Docs into the workflow. Read, write, and create documents, insert text, tables, images, and page breaks, find and replace text, and apply text styling.",
       "bgColor": "#FFFFFF",
       "iconName": "GoogleDocsIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/google_docs",
       "operations": [
         {
           "name": "Read Document",
@@ -780,7 +770,6 @@
       "longDescription": "Integrate Google Drive into the workflow. Can create, upload, download, copy, move, delete, share files and manage permissions.",
       "bgColor": "#FFFFFF",
       "iconName": "GoogleDriveIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/google_drive",
       "operations": [
         {
           "name": "List Files",
@@ -902,7 +891,6 @@
       "longDescription": "Integrate Google Forms into your workflow. Read form structure, get responses, create forms, update content, and manage notification watches.",
       "bgColor": "#FFFFFF",
       "iconName": "GoogleFormsIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/google_forms",
       "operations": [
         {
           "name": "Get Responses",
@@ -964,7 +952,6 @@
       "longDescription": "Integrate Google Maps Platform APIs into your workflow. Supports geocoding addresses to coordinates, reverse geocoding, getting directions between locations, calculating distance matrices, searching for places, retrieving place details, elevation data, and timezone information.",
       "bgColor": "#FFFFFF",
       "iconName": "GoogleMapsIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/google_maps",
       "operations": [
         {
           "name": "Geocode Address",
@@ -1047,7 +1034,6 @@
       "longDescription": "Integrate Google Sheets into the workflow with explicit sheet selection. Can read, write, append, update, clear data, create spreadsheets, get spreadsheet info, and copy sheets.",
       "bgColor": "#FFFFFF",
       "iconName": "GoogleSheetsIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/google_sheets",
       "operations": [
         {
           "name": "Read Data",
@@ -1129,7 +1115,6 @@
       "longDescription": "Integrate HubSpot into your workflow. Manage contacts, companies, deals, tickets, and other CRM objects with powerful automation capabilities. Can be used in trigger mode to start workflows when records are created, updated, a specific property changes, or a contact joins a list.",
       "bgColor": "#FF7A59",
       "iconName": "HubspotIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/hubspot",
       "operations": [
         {
           "name": "Get Contacts",
@@ -1355,7 +1340,6 @@
       "longDescription": "Integrate MySQL into the workflow. Can query, insert, update, delete, and execute raw SQL.",
       "bgColor": "#FFFFFF",
       "iconName": "MySQLIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/mysql",
       "operations": [
         {
           "name": "Query (SELECT)",
@@ -1398,7 +1382,6 @@
       "longDescription": "Integrate with Notion into the workflow. Can read page, read database, create page, create database, append content, query database, and search workspace.",
       "bgColor": "#FFFFFF",
       "iconName": "NotionIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/notion",
       "operations": [],
       "operationCount": 0,
       "triggers": [
@@ -1463,7 +1446,6 @@
       "longDescription": "Integrate Pipedrive into your workflow. Manage deals, contacts, sales pipeline, projects, activities, files, and communications with powerful CRM capabilities.",
       "bgColor": "#2E6936",
       "iconName": "PipedriveIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/pipedrive",
       "operations": [
         {
           "name": "Get All Deals",
@@ -1555,7 +1537,6 @@
       "longDescription": "Integrate PostgreSQL into the workflow. Can query, insert, update, delete, and execute raw SQL.",
       "bgColor": "#336791",
       "iconName": "PostgresIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/postgresql",
       "operations": [
         {
           "name": "Query (SELECT)",
@@ -1598,7 +1579,6 @@
       "longDescription": "Integrate Serper into the workflow. Can search the web.",
       "bgColor": "#2B3543",
       "iconName": "SerperIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/serper",
       "operations": [],
       "operationCount": 0,
       "triggers": [],
@@ -1616,7 +1596,6 @@
       "longDescription": "Integrate Shopify into your workflow. Manage products, orders, customers, and inventory. Create, read, update, and delete products. List and manage orders. Handle customer data and adjust inventory levels.",
       "bgColor": "#FFFFFF",
       "iconName": "ShopifyIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/shopify",
       "operations": [
         {
           "name": "Create Product",
@@ -1720,7 +1699,6 @@
       "longDescription": "Send emails using any SMTP server (Gmail, Outlook, custom servers, etc.). Configure SMTP connection settings and send emails with full control over content, recipients, and attachments.",
       "bgColor": "#2D3748",
       "iconName": "SmtpIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/smtp",
       "operations": [],
       "operationCount": 0,
       "triggers": [],
@@ -1738,7 +1716,6 @@
       "longDescription": "Integrate Supabase into the workflow. Supports database operations (query, insert, update, delete, upsert), full-text search, RPC functions, Edge Function invocation, row counting, vector search, and complete storage management (upload, download, list, move, copy, delete files and buckets).",
       "bgColor": "#1C1C1C",
       "iconName": "SupabaseIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/supabase",
       "operations": [
         {
           "name": "Get Many Rows",
@@ -1861,7 +1838,6 @@
       "longDescription": "Integrate Telegram into the workflow. Send, edit, forward, copy, pin, and delete messages; send media, locations, contacts, and polls; react to messages; show chat actions; and look up chat and member info. Can be used in trigger mode to start a workflow when a message is sent to a chat.",
       "bgColor": "#FFFFFF",
       "iconName": "TelegramIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/telegram",
       "operations": [
         {
           "name": "Send Message",
@@ -1962,7 +1938,6 @@
       "longDescription": "Integrate with Trello to list, search, create, update, and delete cards and lists, manage checklists and checklist items, assign labels and members, review activity, and add comments.",
       "bgColor": "#0052CC",
       "iconName": "TrelloIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/trello",
       "operations": [
         {
           "name": "Get Lists",
@@ -2066,7 +2041,6 @@
       "longDescription": "Integrate Twilio into the workflow. Can send SMS messages.",
       "bgColor": "#F22F46",
       "iconName": "TwilioIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/twilio_sms",
       "operations": [],
       "operationCount": 0,
       "triggers": [
@@ -2095,7 +2069,6 @@
       "longDescription": "Integrate WhatsApp into the workflow. Send text, template, media, and interactive messages, react to messages, and mark messages as read through the WhatsApp Cloud API. Free-form messages only reach a recipient within 24 hours of their last message to you — outside that window WhatsApp requires a pre-approved template.",
       "bgColor": "#25D366",
       "iconName": "WhatsAppIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/whatsapp",
       "operations": [
         {
           "name": "Send Message",
@@ -2152,7 +2125,6 @@
       "longDescription": "Integrate with WordPress.com to create, update, and manage posts, pages, media, comments, categories, tags, and users. Connects to WordPress.com sites via OAuth.",
       "bgColor": "#21759B",
       "iconName": "WordpressIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/wordpress",
       "operations": [
         {
           "name": "Create Post",
@@ -2300,7 +2272,6 @@
       "longDescription": "Integrate Zoom into workflows. Create, list, update, and delete Zoom meetings. Get meeting details, invitations, recordings, and participants. Manage cloud recordings programmatically.",
       "bgColor": "#2D8CFF",
       "iconName": "ZoomIcon",
-      "docsUrl": "https://docs.sim.ai/integrations/zoom",
       "operations": [
         {
           "name": "Create Meeting",

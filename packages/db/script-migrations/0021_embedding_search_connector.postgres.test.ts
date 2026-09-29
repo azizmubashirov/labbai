@@ -1,11 +1,11 @@
-import { PROJECTION_SOURCE_ACL_TABLES } from '@sim/db/script-migrations/0021_embedding_search_connector'
-import { projectionSourceAclBackfillMigration as embeddingSearchConnectorMigration } from '@sim/db/script-migrations/0022_projection_source_acl_backfill'
-import { projectionAclSkipUnfilledMigration } from '@sim/db/script-migrations/0023_projection_acl_skip_unfilled'
+import { PROJECTION_SOURCE_ACL_TABLES } from '@labbai/db/script-migrations/0021_embedding_search_connector'
+import { projectionSourceAclBackfillMigration as embeddingSearchConnectorMigration } from '@labbai/db/script-migrations/0022_projection_source_acl_backfill'
+import { projectionAclSkipUnfilledMigration } from '@labbai/db/script-migrations/0023_projection_acl_skip_unfilled'
 import {
   installKnowledgeProjectionMarking,
   knowledgeProjectionAsyncMigration,
-} from '@sim/db/script-migrations/0024_knowledge_projection_async'
-import { generateId } from '@sim/utils/id'
+} from '@labbai/db/script-migrations/0024_knowledge_projection_async'
+import { generateId } from '@labbai/utils/id'
 import postgres, { type Sql } from 'postgres'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 

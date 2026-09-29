@@ -1,5 +1,5 @@
-import { replaceProjectionSourceAclSync } from '@sim/db/script-migrations/0021_embedding_search_connector'
-import type { ScriptMigration } from '@sim/db/script-migrations/types'
+import { replaceProjectionSourceAclSync } from '@labbai/db/script-migrations/0021_embedding_search_connector'
+import type { ScriptMigration } from '@labbai/db/script-migrations/types'
 
 /**
  * Replaces the document trigger's body so a document's ACL change no longer writes the ACL onto

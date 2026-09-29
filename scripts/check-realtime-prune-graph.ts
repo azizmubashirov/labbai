@@ -27,8 +27,8 @@ async function listPackages(root: string): Promise<string[]> {
 async function main() {
   const scratch = await mkdtemp(path.join(tmpdir(), 'sim-realtime-prune-'))
   try {
-    console.log(`Pruning @sim/realtime into ${scratch}`)
-    await $`${localBin('turbo')} prune @sim/realtime --docker --out-dir=${scratch}`.quiet()
+    console.log(`Pruning @labbai/realtime into ${scratch}`)
+    await $`${localBin('turbo')} prune @labbai/realtime --docker --out-dir=${scratch}`.quiet()
 
     const apps = await listPackages(path.join(scratch, 'json', 'apps'))
     const packages = await listPackages(path.join(scratch, 'json', 'packages'))
@@ -43,7 +43,7 @@ async function main() {
         `\n❌ Pruned realtime dep graph has ${total} workspaces (limit: ${MAX_PRUNED_PACKAGE_COUNT}).`
       )
       console.error(
-        'A new package was pulled into @sim/realtime. Ensure only pure, single-purpose packages are in its dep graph.'
+        'A new package was pulled into @labbai/realtime. Ensure only pure, single-purpose packages are in its dep graph.'
       )
       process.exit(1)
     }

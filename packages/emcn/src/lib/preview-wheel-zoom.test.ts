@@ -8,7 +8,7 @@
  * so page zoom still works over a table.
  */
 
-import { bindPreviewHorizontalWheel } from '@sim/emcn'
+import { bindPreviewHorizontalWheel } from '@labbai/emcn'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 /** jsdom does no layout, so scrollWidth/clientWidth are stubbed to model an overflowing container. */

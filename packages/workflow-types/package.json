@@ -1,5 +1,5 @@
 {
-  "name": "@sim/workflow-types",
+  "name": "@labbai/workflow-types",
   "version": "0.1.0",
   "private": true,
   "sideEffects": false,
@@ -30,7 +30,7 @@
     "@xyflow/react": "^12.11.3"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "@xyflow/react": "12.11.3",
     "typescript": "^7.0.2"
   }

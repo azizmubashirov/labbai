@@ -1,6 +1,6 @@
 import type { ComponentType, HTMLAttributes } from 'react'
-import { ChipTag, chipIconSlotClass, cn } from '@sim/emcn'
-import { isLightTileColor } from '@sim/workflow-renderer/tile-icon-color'
+import { ChipTag, chipIconSlotClass, cn } from '@labbai/emcn'
+import { isLightTileColor } from '@labbai/workflow-renderer/tile-icon-color'
 
 const WORKFLOW_ROLE_ACCENTS = {
   agentic: { variant: 'workflow', tone: 'inverse' },

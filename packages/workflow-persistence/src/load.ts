@@ -1,13 +1,13 @@
-import { db, workflow, workflowBlocks, workflowEdges, workflowSubflows } from '@sim/db'
-import { createLogger } from '@sim/logger'
-import type { BlockRetryConfig, BlockState, Loop, Parallel } from '@sim/workflow-types/workflow'
+import { db, workflow, workflowBlocks, workflowEdges, workflowSubflows } from '@labbai/db'
+import { createLogger } from '@labbai/logger'
+import type { BlockRetryConfig, BlockState, Loop, Parallel } from '@labbai/workflow-types/workflow'
 import {
   normalizeBlockRetryTries,
   normalizeBlockRetryWaitMs,
   normalizeWorkflowEdgeSourceHandle,
   normalizeWorkflowEdgeTargetHandle,
   SUBFLOW_TYPES,
-} from '@sim/workflow-types/workflow'
+} from '@labbai/workflow-types/workflow'
 import type { Edge } from '@xyflow/react'
 import { and, eq, getTableColumns, isNull, sql } from 'drizzle-orm'
 import { clampParallelBatchSize } from './subflow-helpers'
@@ -45,7 +45,7 @@ const logger = createLogger('WorkflowPersistenceLoad')
  *
  * `forEachItems` and `distribution` deliberately do NOT go through this: both
  * are declared `unknown[] | Record<string, unknown> | string` in
- * `@sim/workflow-types` and published as that union by the v2 read schema, so a
+ * `@labbai/workflow-types` and published as that union by the v2 read schema, so a
  * stored array is correct data rather than a shape to coerce.
  */
 function storedConfigString(value: unknown): string {

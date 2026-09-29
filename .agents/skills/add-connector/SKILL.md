@@ -1,18 +1,18 @@
 ---
 name: add-connector
-description: Add or update a Sim knowledge base connector for syncing documents from an external source, including auth mode, config fields, pagination, document mapping, tags, and registry wiring. Use when working in `apps/sim/connectors/{service}/` or adding a new external document source.
+description: Add or update a Labbai knowledge base connector for syncing documents from an external source, including auth mode, config fields, pagination, document mapping, tags, and registry wiring. Use when working in `apps/labbai/connectors/{service}/` or adding a new external document source.
 argument-hint: <service-name> [api-docs-url]
 ---
 
 # Add Connector Skill
 
-You are an expert at adding knowledge base connectors to Sim. A connector syncs documents from an external source (Confluence, Google Drive, Notion, etc.) into a knowledge base.
+You are an expert at adding knowledge base connectors to Labbai. A connector syncs documents from an external source (Confluence, Google Drive, Notion, etc.) into a knowledge base.
 
 ## Your Task
 
 When the user asks you to create a connector:
 1. Use Context7 or WebFetch to read the service's API documentation
-2. Determine the auth mode: **OAuth** (if Sim already has an OAuth provider for the service) or **API key** (if the service uses API key / Bearer token auth)
+2. Determine the auth mode: **OAuth** (if Labbai already has an OAuth provider for the service) or **API key** (if the service uses API key / Bearer token auth)
 3. Create the connector directory: a client-safe `meta.ts` (declarative metadata) plus the runtime module that spreads it
 4. Register it in BOTH the server registry and the client-safe meta registry
 
@@ -33,9 +33,9 @@ If the source schema is unknown, do one of these instead:
 
 ## Directory Structure
 
-Each connector is split into a client-safe metadata file and a server-only runtime file. This mirrors the `XBlockMeta` / `BLOCK_META_REGISTRY` split in `apps/sim/blocks` — client components (the knowledge UI) only need the metadata (icon, name, auth, config fields), so the runtime functions (which pull server-only helpers like `input-validation.server` → `undici` → `node:net`) must stay out of the client bundle.
+Each connector is split into a client-safe metadata file and a server-only runtime file. This mirrors the `XBlockMeta` / `BLOCK_META_REGISTRY` split in `apps/labbai/blocks` — client components (the knowledge UI) only need the metadata (icon, name, auth, config fields), so the runtime functions (which pull server-only helpers like `input-validation.server` → `undici` → `node:net`) must stay out of the client bundle.
 
-Create files in `apps/sim/connectors/{service}/`:
+Create files in `apps/labbai/connectors/{service}/`:
 ```
 connectors/{service}/
 ├── index.ts          # Barrel export (re-exports the runtime connector)
@@ -57,7 +57,7 @@ type ConnectorAuthConfig =
 ```
 
 ### OAuth mode
-For services with existing OAuth providers in `apps/sim/lib/oauth/types.ts`. The `provider` must match an `OAuthService`. The modal shows a credential picker and handles token refresh automatically.
+For services with existing OAuth providers in `apps/labbai/lib/oauth/types.ts`. The `provider` must match an `OAuthService`. The modal shows a credential picker and handles token refresh automatically.
 
 ### API key mode
 For services that use API key / Bearer token auth. The modal shows a password input with the configured `label` and `placeholder`. The API key is encrypted at rest using AES-256-GCM and stored in a dedicated `encryptedApiKey` column on the connector record. The sync engine decrypts it automatically — connectors receive the raw access token in `listDocuments`, `getDocument`, and `validateConfig`.
@@ -100,7 +100,7 @@ Keep `meta.ts` free of any server/runtime import. Only the icon, the `ConnectorM
 ### `{service}.ts` — runtime (OAuth example)
 
 ```typescript
-import { createLogger } from '@sim/logger'
+import { createLogger } from '@labbai/logger'
 import { fetchWithRetry } from '@/lib/knowledge/documents/utils'
 import { {service}ConnectorMeta } from '@/connectors/{service}/meta'
 import type { ConnectorConfig, ExternalDocument, ExternalDocumentList } from '@/connectors/types'
@@ -198,7 +198,7 @@ Three field types are supported: `short-input`, `dropdown`, and `selector`.
 ## Dynamic Selectors (Canonical Pairs)
 
 Use `type: 'selector'` for a key declared in the browser-safe selector manifest at
-`apps/sim/lib/selectors/manifest.ts`. Remote selectors execute through the authorized
+`apps/labbai/lib/selectors/manifest.ts`. Remote selectors execute through the authorized
 `selectors.execute` server operation and a server attachment; connectors never call providers or
 resolve credentials in the browser. Apply the `add-selector` skill when the key does not exist.
 
@@ -308,12 +308,12 @@ configFields: [
 The shared connector context builder projects only active dependencies. A canonical dependency uses
 its active basic or advanced value under `canonicalParamId`; a non-canonical dependency uses its
 field `id`. The resulting key must be a `SelectorContextKey` in
-`apps/sim/lib/selectors/types.ts` and must be explicitly allowed by that selector's manifest entry.
+`apps/labbai/lib/selectors/types.ts` and must be explicitly allowed by that selector's manifest entry.
 The browser sends the connector's workspace scope, not the complete connector configuration.
 
 ### Available selector keys
 
-Check `apps/sim/lib/selectors/manifest.ts` for the exhaustive selector keys. Common ones for
+Check `apps/labbai/lib/selectors/manifest.ts` for the exhaustive selector keys. Common ones for
 connectors:
 
 | SelectorKey | Context Deps | Returns |
@@ -567,13 +567,13 @@ You never need to modify the sync engine when adding a connector.
 
 The `icon` field on `ConnectorConfig` is used throughout the UI — in the connector list, the add-connector modal, and as the document icon in the knowledge base table (replacing the generic file type icon for connector-sourced documents). The icon is read from `CONNECTOR_META_REGISTRY[connectorType].icon` (the client-safe registry) at runtime — no separate icon map to maintain.
 
-If the service already has an icon in `apps/sim/components/icons.tsx` (from a tool integration), reuse it. Otherwise, ask the user to provide the SVG.
+If the service already has an icon in `apps/labbai/components/icons.tsx` (from a tool integration), reuse it. Otherwise, ask the user to provide the SVG.
 
 ## Registering
 
 Register in BOTH registries, keeping the same alphabetical-by-id ordering in each.
 
-1. **Server registry** — `apps/sim/connectors/registry.server.ts` (server-only full registry; holds full connectors with runtime functions, imported by the sync engine and knowledge API routes):
+1. **Server registry** — `apps/labbai/connectors/registry.server.ts` (server-only full registry; holds full connectors with runtime functions, imported by the sync engine and knowledge API routes):
 
 ```typescript
 import { {service}Connector } from '@/connectors/{service}'
@@ -584,7 +584,7 @@ export const CONNECTOR_REGISTRY: ConnectorRegistry = {
 }
 ```
 
-2. **Client-safe meta registry** — `apps/sim/connectors/registry.ts` (imports each connector's `meta.ts` only, so client components can use it without pulling server-only code; the metadata counterpart to `BLOCK_META_REGISTRY`):
+2. **Client-safe meta registry** — `apps/labbai/connectors/registry.ts` (imports each connector's `meta.ts` only, so client components can use it without pulling server-only code; the metadata counterpart to `BLOCK_META_REGISTRY`):
 
 ```typescript
 import { {service}ConnectorMeta } from '@/connectors/{service}/meta'
@@ -599,12 +599,12 @@ export const CONNECTOR_META_REGISTRY: ConnectorMetaRegistry = {
 
 ## Reference Implementations
 
-- **OAuth + contentDeferred**: `apps/sim/connectors/google-drive/google-drive.ts` — file download with metadata-based hash, `orderBy` for deterministic pagination
-- **OAuth + contentDeferred (blocks API)**: `apps/sim/connectors/notion/notion.ts` — complex block content extraction deferred to `getDocument`
-- **OAuth + contentDeferred (git)**: `apps/sim/connectors/github/github.ts` — blob SHA hash, tree listing
-- **OAuth + inline content**: `apps/sim/connectors/slack/slack.ts` — list API returns message content inline, metadata-derived `contentHash`
-- **OAuth + contentDeferred + config fields**: `apps/sim/connectors/confluence/confluence.ts` — multiple config field types, `mapTags`, label fetching
-- **API key**: `apps/sim/connectors/fireflies/fireflies.ts` — GraphQL API with Bearer token auth
+- **OAuth + contentDeferred**: `apps/labbai/connectors/google-drive/google-drive.ts` — file download with metadata-based hash, `orderBy` for deterministic pagination
+- **OAuth + contentDeferred (blocks API)**: `apps/labbai/connectors/notion/notion.ts` — complex block content extraction deferred to `getDocument`
+- **OAuth + contentDeferred (git)**: `apps/labbai/connectors/github/github.ts` — blob SHA hash, tree listing
+- **OAuth + inline content**: `apps/labbai/connectors/slack/slack.ts` — list API returns message content inline, metadata-derived `contentHash`
+- **OAuth + contentDeferred + config fields**: `apps/labbai/connectors/confluence/confluence.ts` — multiple config field types, `mapTags`, label fetching
+- **API key**: `apps/labbai/connectors/fireflies/fireflies.ts` — GraphQL API with Bearer token auth
 
 ## Checklist
 
@@ -617,7 +617,7 @@ export const CONNECTOR_META_REGISTRY: ConnectorMetaRegistry = {
 - [ ] **Selector fields configured correctly (if applicable):**
   - Every `type: 'selector'` field has a canonical pair (`short-input` or `dropdown` with same `canonicalParamId` and `mode: 'advanced'`)
   - `required` is identical on both fields in each canonical pair
-  - `selectorKey` exists in `apps/sim/lib/selectors/manifest.ts`
+  - `selectorKey` exists in `apps/labbai/lib/selectors/manifest.ts`
   - `dependsOn` references selector field IDs (not `canonicalParamId`)
   - Each projected dependency key is a `SelectorContextKey` allowed by the selector manifest
   - Every remote key has one server attachment with credential provider binding and a reviewed

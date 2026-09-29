@@ -9,7 +9,7 @@ const { mockInfo, mockWarn } = vi.hoisted(() => ({
   mockWarn: vi.fn(),
 }))
 
-vi.mock('@sim/logger', () => ({
+vi.mock('@labbai/logger', () => ({
   createLogger: () => ({
     debug: vi.fn(),
     error: vi.fn(),

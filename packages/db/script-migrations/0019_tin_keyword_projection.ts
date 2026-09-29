@@ -1,6 +1,6 @@
-import { EMBEDDING_KEYWORD_TIN_INDEX } from '@sim/db/schema'
-import { type ScriptMigration, ScriptMigrationDeferred } from '@sim/db/script-migrations/types'
-import { createLogger } from '@sim/logger'
+import { EMBEDDING_KEYWORD_TIN_INDEX } from '@labbai/db/schema'
+import { type ScriptMigration, ScriptMigrationDeferred } from '@labbai/db/script-migrations/types'
+import { createLogger } from '@labbai/logger'
 import postgres, { type Sql } from 'postgres'
 
 const logger = createLogger('TinKeywordProjection')

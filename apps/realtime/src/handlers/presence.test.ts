@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
+import { ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setupPresenceHandlers } from '@/handlers/presence'
 import type { IRoomManager } from '@/rooms'

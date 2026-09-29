@@ -1,7 +1,7 @@
-import { auditLog, db, user } from '@sim/db'
-import { createLogger, getRequestContext } from '@sim/logger'
-import { createClientIpResolver } from '@sim/security/ip'
-import { generateShortId } from '@sim/utils/id'
+import { auditLog, db, user } from '@labbai/db'
+import { createLogger, getRequestContext } from '@labbai/logger'
+import { createClientIpResolver } from '@labbai/security/ip'
+import { generateShortId } from '@labbai/utils/id'
 import { eq } from 'drizzle-orm'
 import type { AuditActionType, AuditResourceTypeValue } from './types'
 

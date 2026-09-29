@@ -1,6 +1,6 @@
-import { createLogger } from '@sim/logger'
-import type { CursorPosition, PresenceSelection } from '@sim/realtime-protocol/events'
-import { ROOM_TYPES } from '@sim/realtime-protocol/rooms'
+import { createLogger } from '@labbai/logger'
+import type { CursorPosition, PresenceSelection } from '@labbai/realtime-protocol/events'
+import { ROOM_TYPES } from '@labbai/realtime-protocol/rooms'
 import type { AuthenticatedSocket } from '@/middleware/auth'
 import type { IRoomManager } from '@/rooms'
 

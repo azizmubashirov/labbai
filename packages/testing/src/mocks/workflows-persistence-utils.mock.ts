@@ -6,7 +6,7 @@ import { vi } from 'vitest'
  *
  * @example
  * ```ts
- * import { workflowsPersistenceUtilsMockFns } from '@sim/testing'
+ * import { workflowsPersistenceUtilsMockFns } from '@labbai/testing'
  *
  * workflowsPersistenceUtilsMockFns.mockLoadWorkflowFromNormalizedTables.mockResolvedValue({
  *   blocks: {},

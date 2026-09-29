@@ -1,12 +1,12 @@
 ---
 name: add-trigger
-description: Create webhook or polling triggers for a Sim integration
+description: Create webhook or polling triggers for a Labbai integration
 argument-hint: <service-name>
 ---
 
 # Add Trigger
 
-You are an expert at creating webhook and polling triggers for Sim. You understand the trigger system, the generic `buildTriggerSubBlocks` helper, polling infrastructure, and how triggers connect to blocks.
+You are an expert at creating webhook and polling triggers for Labbai. You understand the trigger system, the generic `buildTriggerSubBlocks` helper, polling infrastructure, and how triggers connect to blocks.
 
 ## Your Task
 
@@ -33,14 +33,14 @@ If the payload shape is unknown, do one of these instead:
 ## Directory Structure
 
 ```
-apps/sim/triggers/{service}/
+apps/labbai/triggers/{service}/
 ├── index.ts              # Barrel exports
 ├── utils.ts              # Service-specific helpers (options, instructions, extra fields, outputs)
 ├── {event_a}.ts          # Primary trigger (includes dropdown)
 ├── {event_b}.ts          # Secondary trigger (no dropdown)
 └── webhook.ts            # Generic webhook trigger (optional, for "all events")
 
-apps/sim/lib/webhooks/
+apps/labbai/lib/webhooks/
 ├── provider-subscription-utils.ts  # Shared subscription helpers (getProviderConfig, getNotificationUrl)
 ├── providers/
 │   ├── {service}.ts       # Provider handler (auth, formatInput, matchEvent, subscriptions)
@@ -141,14 +141,14 @@ export const {service}EventBTrigger: TriggerConfig = {
 
 ## Step 3: Register and Wire
 
-### `apps/sim/triggers/{service}/index.ts`
+### `apps/labbai/triggers/{service}/index.ts`
 
 ```typescript
 export { {service}EventATrigger } from './event_a'
 export { {service}EventBTrigger } from './event_b'
 ```
 
-### `apps/sim/triggers/registry.ts`
+### `apps/labbai/triggers/registry.ts`
 
 ```typescript
 import { {service}EventATrigger, {service}EventBTrigger } from '@/triggers/{service}'
@@ -160,7 +160,7 @@ export const TRIGGER_REGISTRY: TriggerRegistry = {
 }
 ```
 
-### Block file (`apps/sim/blocks/blocks/{service}.ts`)
+### Block file (`apps/labbai/blocks/blocks/{service}.ts`)
 
 Wire triggers into the block so the trigger UI appears and `generate-docs.ts` discovers them. Two changes are needed:
 
@@ -195,7 +195,7 @@ export const {Service}Block: BlockConfig = {
 
 ## Provider Handler
 
-All provider-specific webhook logic lives in a single handler file: `apps/sim/lib/webhooks/providers/{service}.ts`.
+All provider-specific webhook logic lives in a single handler file: `apps/labbai/lib/webhooks/providers/{service}.ts`.
 
 ### When to Create a Handler
 
@@ -217,8 +217,8 @@ If none apply, you don't need a handler. The default handler provides bearer tok
 
 ```typescript
 import crypto from 'crypto'
-import { createLogger } from '@sim/logger'
-import { safeCompare } from '@sim/security/compare'
+import { createLogger } from '@labbai/logger'
+import { safeCompare } from '@labbai/security/compare'
 import type { EventMatchContext, FormatInputContext, FormatInputResult, WebhookProviderHandler } from '@/lib/webhooks/providers/types'
 import { createHmacVerifier } from '@/lib/webhooks/providers/utils'
 
@@ -267,7 +267,7 @@ export const {service}Handler: WebhookProviderHandler = {
 
 ### Register the Handler
 
-In `apps/sim/lib/webhooks/providers/registry.ts`:
+In `apps/labbai/lib/webhooks/providers/registry.ts`:
 
 ```typescript
 import { {service}Handler } from '@/lib/webhooks/providers/{service}'
@@ -364,15 +364,15 @@ Use polling when the service lacks reliable webhooks (e.g., Google Sheets, Googl
 ### Directory Structure
 
 ```
-apps/sim/triggers/{service}/
+apps/labbai/triggers/{service}/
 ├── index.ts              # Barrel export
 └── poller.ts             # TriggerConfig with polling: true
 
-apps/sim/lib/webhooks/polling/
+apps/labbai/lib/webhooks/polling/
 └── {service}.ts           # PollingProviderHandler implementation
 ```
 
-### Polling Handler (`apps/sim/lib/webhooks/polling/{service}.ts`)
+### Polling Handler (`apps/labbai/lib/webhooks/polling/{service}.ts`)
 
 ```typescript
 import { pollingIdempotency } from '@/lib/core/idempotency/service'
@@ -421,7 +421,7 @@ export const {service}PollingHandler: PollingProviderHandler = {
 - Use `updateWebhookProviderConfig(webhookId, partialConfig, logger)` for read-merge-write on state
 - Use the latest server-side timestamp from API responses (not wall clock) to avoid clock skew
 
-### Trigger Config (`apps/sim/triggers/{service}/poller.ts`)
+### Trigger Config (`apps/labbai/triggers/{service}/poller.ts`)
 
 ```typescript
 import { {Service}Icon } from '@/components/icons'
@@ -450,9 +450,9 @@ export const {service}PollingTrigger: TriggerConfig = {
 
 ### Registration (3 places)
 
-1. **`apps/sim/triggers/constants.ts`** — add provider to `POLLING_PROVIDERS` Set
-2. **`apps/sim/lib/webhooks/polling/registry.ts`** — import handler, add to `POLLING_HANDLERS`
-3. **`apps/sim/triggers/registry.ts`** — import trigger config, add to `TRIGGER_REGISTRY`
+1. **`apps/labbai/triggers/constants.ts`** — add provider to `POLLING_PROVIDERS` Set
+2. **`apps/labbai/lib/webhooks/polling/registry.ts`** — import handler, add to `POLLING_HANDLERS`
+3. **`apps/labbai/triggers/registry.ts`** — import trigger config, add to `TRIGGER_REGISTRY`
 
 ### Helm Cron Job
 
@@ -473,10 +473,10 @@ Mirror the existing `rssWebhookPoll` entry.
 
 ### Reference Implementations
 
-- Simple: `apps/sim/lib/webhooks/polling/rss.ts` + `apps/sim/triggers/rss/poller.ts`
-- Complex (OAuth, attachments): `apps/sim/lib/webhooks/polling/gmail.ts` + `apps/sim/triggers/gmail/poller.ts`
-- Cursor-based (changes API): `apps/sim/lib/webhooks/polling/google-drive.ts`
-- Timestamp-based: `apps/sim/lib/webhooks/polling/google-calendar.ts`
+- Simple: `apps/labbai/lib/webhooks/polling/rss.ts` + `apps/labbai/triggers/rss/poller.ts`
+- Complex (OAuth, attachments): `apps/labbai/lib/webhooks/polling/gmail.ts` + `apps/labbai/triggers/gmail/poller.ts`
+- Cursor-based (changes API): `apps/labbai/lib/webhooks/polling/google-drive.ts`
+- Timestamp-based: `apps/labbai/lib/webhooks/polling/google-calendar.ts`
 
 ## Option Lists: `selectorKey` or `options`, never a per-block fetcher
 
@@ -521,7 +521,7 @@ Two rules the checks enforce:
 ## Checklist
 
 Webhook and polling routes are legitimate external ingress boundaries. They must not call this
-Sim app's own API routes to reuse provider or business logic. Extract the shared provider operation
+Labbai app's own API routes to reuse provider or business logic. Extract the shared provider operation
 or authorized application use case and call it directly from the trigger handler and any other
 server adapter. HTTP is reserved for an actual cross-process/capability boundary. Tool work uses a
 registered `InternalToolConfig.operation`; a `directExecution` property fails
@@ -539,7 +539,7 @@ registered `InternalToolConfig.operation`; a `directExecution` property fails
 - [ ] Block spreads all trigger subBlocks: `...getTrigger('id').subBlocks`
 
 ### Provider Handler (if needed)
-- [ ] Handler file at `apps/sim/lib/webhooks/providers/{service}.ts`
+- [ ] Handler file at `apps/labbai/lib/webhooks/providers/{service}.ts`
 - [ ] Registered in `providers/registry.ts` (alphabetical)
 - [ ] Signature validator is a private function inside the handler file
 - [ ] `formatInput` output keys match trigger `outputs` exactly

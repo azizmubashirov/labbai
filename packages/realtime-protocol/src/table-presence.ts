@@ -5,7 +5,7 @@
  * separate from the one-way durable cell-status stream (`lib/table/events.ts`).
  *
  * Centralized here so the server emits and the client subscriptions cannot drift.
- * This module is pure so both `apps/sim` and `apps/realtime` can import it.
+ * This module is pure so both `apps/labbai` and `apps/realtime` can import it.
  */
 
 /** Socket.IO event names for the table presence channel. */

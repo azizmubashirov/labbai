@@ -10,7 +10,7 @@ import {
   getPostgresErrorCode,
   getTransientDatabaseFailure,
   toError,
-} from '@sim/utils/errors'
+} from '@labbai/utils/errors'
 import { describe, expect, it } from 'vitest'
 
 describe('getPostgresCancellationReason', () => {

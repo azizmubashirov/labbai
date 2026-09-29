@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { act, useRef, useState } from 'react'
-import { scrollFadeAttributes, useScrollEdges } from '@sim/emcn'
+import { scrollFadeAttributes, useScrollEdges } from '@labbai/emcn'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

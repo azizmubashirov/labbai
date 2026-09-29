@@ -8,7 +8,7 @@
  * @example
  * ```ts
  * // Import at the very top of your test file for side effects
- * import '@sim/testing/mocks/executor.mock'
+ * import '@labbai/testing/mocks/executor.mock'
  *
  * // Then your other imports
  * import { describe, it, expect } from 'vitest'
@@ -19,7 +19,7 @@ import { setupGlobalFetchMock } from './fetch.mock'
 import { loggerMock } from './logger.mock'
 
 // Logger
-vi.mock('@sim/logger', () => loggerMock)
+vi.mock('@labbai/logger', () => loggerMock)
 
 // Blocks
 vi.mock('@/blocks/index', () => ({

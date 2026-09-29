@@ -6,7 +6,7 @@
  * Basic usage with folders:
  * ```tsx
  * import { Popover, PopoverAnchor, PopoverBackButton, PopoverContent, PopoverFolder, PopoverItem } from '../../index'
- * import { Workflow } from '@sim/emcn/icons'
+ * import { Workflow } from '@labbai/emcn/icons'
  *
  * function MyMenu() {
  *   const [workflows, setWorkflows] = useState([])

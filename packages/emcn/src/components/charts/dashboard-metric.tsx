@@ -1,6 +1,6 @@
 'use client'
 
-import { Tooltip } from '@sim/emcn'
+import { Tooltip } from '@labbai/emcn'
 
 interface DashboardMetricProps {
   label: string

@@ -1,5 +1,5 @@
 /** @vitest-environment node */
-import { OPERATION_TARGETS, SUBBLOCK_OPERATIONS } from '@sim/realtime-protocol/constants'
+import { OPERATION_TARGETS, SUBBLOCK_OPERATIONS } from '@labbai/realtime-protocol/constants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockTransaction, mockSelectWhere, mockSet } = vi.hoisted(() => ({
@@ -8,8 +8,8 @@ const { mockTransaction, mockSelectWhere, mockSet } = vi.hoisted(() => ({
   mockSet: vi.fn(),
 }))
 
-vi.mock('@sim/audit', () => ({ AuditAction: {}, AuditResourceType: {}, recordAudit: vi.fn() }))
-vi.mock('@sim/db', () => ({
+vi.mock('@labbai/audit', () => ({ AuditAction: {}, AuditResourceType: {}, recordAudit: vi.fn() }))
+vi.mock('@labbai/db', () => ({
   instrumentPoolClient: vi.fn(),
   resolveDbUrl: vi.fn(() => 'postgres://localhost/test'),
   workflow: { id: 'workflow.id' },
@@ -17,17 +17,17 @@ vi.mock('@sim/db', () => ({
   workflowEdges: {},
   workflowSubflows: {},
 }))
-vi.mock('@sim/db/timestamps', () => ({ withUtcTimestamps: (options: unknown) => options }))
-vi.mock('@sim/logger', () => ({
+vi.mock('@labbai/db/timestamps', () => ({ withUtcTimestamps: (options: unknown) => options }))
+vi.mock('@labbai/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }))
-vi.mock('@sim/platform-authz/workflow', () => ({
+vi.mock('@labbai/platform-authz/workflow', () => ({
   getActiveWorkflowContext: vi.fn().mockResolvedValue({ id: 'workflow-1' }),
 }))
-vi.mock('@sim/workflow-persistence/load', () => ({
+vi.mock('@labbai/workflow-persistence/load', () => ({
   loadWorkflowFromNormalizedTablesRaw: vi.fn(),
 }))
-vi.mock('@sim/workflow-persistence/subblocks', () => ({ mergeSubBlockValues: vi.fn() }))
+vi.mock('@labbai/workflow-persistence/subblocks', () => ({ mergeSubBlockValues: vi.fn() }))
 vi.mock('drizzle-orm', () => ({
   and: vi.fn(),
   eq: vi.fn(),

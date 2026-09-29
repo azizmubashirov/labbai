@@ -1,4 +1,4 @@
-import { createClientIpResolver, normalizeIpAddress } from '@sim/security/ip'
+import { createClientIpResolver, normalizeIpAddress } from '@labbai/security/ip'
 import { describe, expect, it } from 'vitest'
 
 function headers(values: Record<string, string>): Headers {

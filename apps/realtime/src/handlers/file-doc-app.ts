@@ -1,4 +1,4 @@
-import { FILE_DOC_TIMEOUTS } from '@sim/realtime-protocol/file-doc'
+import { FILE_DOC_TIMEOUTS } from '@labbai/realtime-protocol/file-doc'
 import { env, getBaseUrl } from '@/env'
 
 /**

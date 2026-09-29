@@ -1,4 +1,4 @@
-import { ROOM_TYPES, type RoomType } from '@sim/realtime-protocol/rooms'
+import { ROOM_TYPES, type RoomType } from '@labbai/realtime-protocol/rooms'
 import { isPermissionType, type PermissionType, permissionSatisfies } from './predicates'
 
 /**

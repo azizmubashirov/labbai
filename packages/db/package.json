@@ -1,5 +1,5 @@
 {
-  "name": "@sim/db",
+  "name": "@labbai/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -45,13 +45,13 @@
     "format:check": "biome format ."
   },
   "dependencies": {
-    "@sim/logger": "workspace:*",
-    "@sim/utils": "workspace:*",
+    "@labbai/logger": "workspace:*",
+    "@labbai/utils": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.5"
   },
   "devDependencies": {
-    "@sim/tsconfig": "workspace:*",
+    "@labbai/tsconfig": "workspace:*",
     "drizzle-kit": "^0.31.4",
     "@types/node": "24.2.1",
     "typescript": "^7.0.2",

@@ -3,10 +3,10 @@ import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const ROOT = path.resolve(import.meta.dir, '..')
-const API_DIR = path.join(ROOT, 'apps/sim/app/api')
-const CONTRACTS_DIR = path.join(ROOT, 'apps/sim/lib/api/contracts')
-const QUERY_HOOKS_DIR = path.join(ROOT, 'apps/sim/hooks/queries')
-const SELECTOR_HOOKS_DIR = path.join(ROOT, 'apps/sim/hooks/selectors')
+const API_DIR = path.join(ROOT, 'apps/labbai/app/api')
+const CONTRACTS_DIR = path.join(ROOT, 'apps/labbai/lib/api/contracts')
+const QUERY_HOOKS_DIR = path.join(ROOT, 'apps/labbai/hooks/queries')
+const SELECTOR_HOOKS_DIR = path.join(ROOT, 'apps/labbai/hooks/selectors')
 
 /**
  * `totalRoutes` is reported, never gated.
@@ -43,98 +43,98 @@ const BOUNDARY_POLICY_BASELINE = {
 
 const INDIRECT_ZOD_ROUTES = new Set([
   /** Shared MCP protocol factory validates the owner and JSON-RPC envelope before SDK dispatch. */
-  'apps/sim/app/api/mcp/search/[workspaceId]/route.ts',
-  'apps/sim/app/api/mcp/route.ts',
+  'apps/labbai/app/api/mcp/search/[workspaceId]/route.ts',
+  'apps/labbai/app/api/mcp/route.ts',
   // SCIM discovery documents (RFC 7644 section 4). Each serves a fixed document
   // describing what this server implements and accepts no params, query, or body,
   // so there is no input to validate and no contract to bind. They are deliberately
   // unauthenticated: a provider negotiates against them before it holds a
   // credential. Wrapped in withRouteHandler by `defineScimDiscoveryRoute`.
-  'apps/sim/app/api/scim/v2/ServiceProviderConfig/route.ts',
-  'apps/sim/app/api/scim/v2/ResourceTypes/route.ts',
-  'apps/sim/app/api/scim/v2/ResourceTypes/[id]/route.ts',
-  'apps/sim/app/api/scim/v2/Schemas/route.ts',
-  'apps/sim/app/api/scim/v2/Schemas/[id]/route.ts',
+  'apps/labbai/app/api/scim/v2/ServiceProviderConfig/route.ts',
+  'apps/labbai/app/api/scim/v2/ResourceTypes/route.ts',
+  'apps/labbai/app/api/scim/v2/ResourceTypes/[id]/route.ts',
+  'apps/labbai/app/api/scim/v2/Schemas/route.ts',
+  'apps/labbai/app/api/scim/v2/Schemas/[id]/route.ts',
   // Catch-all JSON 404 for unknown /api/v2 paths. It has no contract by
   // construction: it exists precisely for requests that match no operation, so
   // there is no input to validate and its only response is the fixed v2 error
   // envelope.
-  'apps/sim/app/api/v2/[[...segments]]/route.ts',
+  'apps/labbai/app/api/v2/[[...segments]]/route.ts',
   // Input-less session-bound GET: nothing to validate; response is
   // contract-typed via `satisfies InvitationDetails` in the route.
   // Public updater feed: input-less GET, session-less, returns YAML (not JSON),
   // so it can't be JSON-contract-bound. Wrapped in withRouteHandler.
   // Public updater download redirect: input-less GET, session-less, whose only
   // response is a 302 to a GitHub release asset. Wrapped in withRouteHandler.
-  'apps/sim/app/api/invitations/route.ts',
-  'apps/sim/app/api/logs/export/route.ts',
-  'apps/sim/app/api/tools/docusign/route.ts',
+  'apps/labbai/app/api/invitations/route.ts',
+  'apps/labbai/app/api/logs/export/route.ts',
+  'apps/labbai/app/api/tools/docusign/route.ts',
   // Better Auth handles its own validation for the catch-all route below.
-  'apps/sim/app/api/auth/[...all]/route.ts',
+  'apps/labbai/app/api/auth/[...all]/route.ts',
   /** OAuth protocol routes use bounded form or bearer parsing instead of JSON contracts. */
-  'apps/sim/app/api/auth/oauth2/revoke/route.ts',
-  'apps/sim/app/api/auth/oauth2/token/route.ts',
-  /** Input-less RFC 8414 aliases return Better Auth metadata with Sim's supported surface. */
-  'apps/sim/app/api/auth/.well-known/oauth-authorization-server/route.ts',
+  'apps/labbai/app/api/auth/oauth2/revoke/route.ts',
+  'apps/labbai/app/api/auth/oauth2/token/route.ts',
+  /** Input-less RFC 8414 aliases return Better Auth metadata with Labbai's supported surface. */
+  'apps/labbai/app/api/auth/.well-known/oauth-authorization-server/route.ts',
   // Better Auth handles validation for the Stripe webhook handler.
-  'apps/sim/app/api/auth/webhook/stripe/route.ts',
+  'apps/labbai/app/api/auth/webhook/stripe/route.ts',
   // Routes with no client-supplied input that previously had no-op
   // `z.object({}).strict().parse({})` guards. The boundary contract for
   // these routes is "no input", and they consume validated data only via
   // session/headers handled by `getSession()` / Better Auth.
-  'apps/sim/app/api/auth/oauth/connections/route.ts',
-  'apps/sim/app/api/auth/providers/route.ts',
-  'apps/sim/app/api/auth/socket-token/route.ts',
-  'apps/sim/app/api/workspaces/invitations/route.ts',
+  'apps/labbai/app/api/auth/oauth/connections/route.ts',
+  'apps/labbai/app/api/auth/providers/route.ts',
+  'apps/labbai/app/api/auth/socket-token/route.ts',
+  'apps/labbai/app/api/workspaces/invitations/route.ts',
   // Internal cron entry point that authenticates via `Authorization: Bearer
   // CRON_SECRET` and ignores query/body. The boundary contract is "no
   // client-supplied input"; query params from external callers are not
   // consumed.
-  'apps/sim/app/api/schedules/execute/route.ts',
+  'apps/labbai/app/api/schedules/execute/route.ts',
   // Routes with no client-supplied input. Auth is handled via session/cron/internal
   // tokens and there are no params, query, or body to validate. Previously had
   // no-op `validateSchema(noInputSchema, {})` guards.
-  'apps/sim/app/api/health/route.ts',
-  'apps/sim/app/api/settings/allowed-providers/route.ts',
-  'apps/sim/app/api/settings/allowed-integrations/route.ts',
-  'apps/sim/app/api/settings/allowed-mcp-domains/route.ts',
-  'apps/sim/app/api/cron/scim-reconcile/route.ts',
-  'apps/sim/app/api/cron/cleanup-tasks/route.ts',
-  'apps/sim/app/api/cron/cleanup-file-versions/route.ts',
-  'apps/sim/app/api/cron/cleanup-soft-deletes/route.ts',
-  'apps/sim/app/api/cron/cleanup-table-row-ttl/route.ts',
-  'apps/sim/app/api/cron/cleanup-stale-executions/route.ts',
-  'apps/sim/app/api/cron/cleanup-oauth-tokens/route.ts',
-  'apps/sim/app/api/cron/billing-cycle-close/route.ts',
-  'apps/sim/app/api/cron/reconcile-billing-seats/route.ts',
+  'apps/labbai/app/api/health/route.ts',
+  'apps/labbai/app/api/settings/allowed-providers/route.ts',
+  'apps/labbai/app/api/settings/allowed-integrations/route.ts',
+  'apps/labbai/app/api/settings/allowed-mcp-domains/route.ts',
+  'apps/labbai/app/api/cron/scim-reconcile/route.ts',
+  'apps/labbai/app/api/cron/cleanup-tasks/route.ts',
+  'apps/labbai/app/api/cron/cleanup-file-versions/route.ts',
+  'apps/labbai/app/api/cron/cleanup-soft-deletes/route.ts',
+  'apps/labbai/app/api/cron/cleanup-table-row-ttl/route.ts',
+  'apps/labbai/app/api/cron/cleanup-stale-executions/route.ts',
+  'apps/labbai/app/api/cron/cleanup-oauth-tokens/route.ts',
+  'apps/labbai/app/api/cron/billing-cycle-close/route.ts',
+  'apps/labbai/app/api/cron/reconcile-billing-seats/route.ts',
   // Returns immediately after Trigger.dev accepts the asynchronous dispatcher task.
-  'apps/sim/app/api/cron/workspace-file-search-dispatch/route.ts',
-  'apps/sim/app/api/cron/knowledge-projection/route.ts',
-  'apps/sim/app/api/logs/cleanup/route.ts',
-  'apps/sim/app/api/knowledge/connectors/sync/route.ts',
-  'apps/sim/app/api/knowledge/connectors/member-sync/route.ts',
-  'apps/sim/app/api/knowledge/connectors/directory-sync/route.ts',
-  'apps/sim/app/api/webhooks/outbox/process/route.ts',
-  'apps/sim/app/api/webhooks/cleanup/idempotency/route.ts',
+  'apps/labbai/app/api/cron/workspace-file-search-dispatch/route.ts',
+  'apps/labbai/app/api/cron/knowledge-projection/route.ts',
+  'apps/labbai/app/api/logs/cleanup/route.ts',
+  'apps/labbai/app/api/knowledge/connectors/sync/route.ts',
+  'apps/labbai/app/api/knowledge/connectors/member-sync/route.ts',
+  'apps/labbai/app/api/knowledge/connectors/directory-sync/route.ts',
+  'apps/labbai/app/api/webhooks/outbox/process/route.ts',
+  'apps/labbai/app/api/webhooks/cleanup/idempotency/route.ts',
   // Shared Slack app event ingest. The body is an opaque, HMAC-verified Slack
   // event envelope (varies per event type) read via parseWebhookBody; there is
   // no client contract to bind — authenticity is enforced by signature.
-  'apps/sim/app/api/resume/poll/route.ts',
+  'apps/labbai/app/api/resume/poll/route.ts',
   // MCP routes that take only auth context (no client-supplied params/query/body).
-  'apps/sim/app/api/mcp/discover/route.ts',
-  'apps/sim/app/api/mcp/tools/stored/route.ts',
+  'apps/labbai/app/api/mcp/discover/route.ts',
+  'apps/labbai/app/api/mcp/tools/stored/route.ts',
   // MCP OAuth callback is the provider redirect target — the response is HTML
   // that closes the popup, so the JSON-mode contract framework doesn't fit.
   // Validation is enforced via state lookup + session-vs-row userId match.
-  'apps/sim/app/api/mcp/oauth/callback/route.ts',
+  'apps/labbai/app/api/mcp/oauth/callback/route.ts',
   // Deprecated Copilot MCP surface: these routes are gated to always return
   // 410 Gone and consume no client-supplied input.
-  'apps/sim/app/api/mcp/copilot/route.ts',
-  'apps/sim/app/api/mcp/copilot/.well-known/oauth-authorization-server/route.ts',
-  'apps/sim/app/api/mcp/copilot/.well-known/oauth-protected-resource/route.ts',
+  'apps/labbai/app/api/mcp/copilot/route.ts',
+  'apps/labbai/app/api/mcp/copilot/.well-known/oauth-authorization-server/route.ts',
+  'apps/labbai/app/api/mcp/copilot/.well-known/oauth-protected-resource/route.ts',
   // Deprecated v1 headless copilot chat API: gated to always return 410 Gone
   // and consumes no client-supplied input.
-  'apps/sim/app/api/v1/copilot/chat/route.ts',
+  'apps/labbai/app/api/v1/copilot/chat/route.ts',
 ])
 
 /**
@@ -149,33 +149,33 @@ const INDIRECT_ZOD_ROUTES = new Set([
  * `// boundary-raw-json: <reason>` instead.
  */
 const RAW_JSON_BASELINE_ROUTES = new Set([
-  'apps/sim/app/api/billing/portal/route.ts',
-  'apps/sim/app/api/copilot/chat/abort/route.ts',
-  'apps/sim/app/api/folders/[id]/restore/route.ts',
-  'apps/sim/app/api/invitations/[id]/accept/route.ts',
-  'apps/sim/app/api/invitations/[id]/reject/route.ts',
-  'apps/sim/app/api/invitations/[id]/route.ts',
-  'apps/sim/app/api/knowledge/[id]/documents/route.ts',
-  'apps/sim/app/api/knowledge/[id]/documents/[documentId]/chunks/route.ts',
-  'apps/sim/app/api/mcp/serve/[serverId]/route.ts',
-  'apps/sim/app/api/mcp/servers/route.ts',
-  'apps/sim/app/api/mcp/servers/[id]/route.ts',
-  'apps/sim/app/api/mcp/servers/test-connection/route.ts',
-  'apps/sim/app/api/mcp/tools/discover/route.ts',
-  'apps/sim/app/api/mcp/tools/execute/route.ts',
-  'apps/sim/app/api/mcp/workflow-servers/route.ts',
-  'apps/sim/app/api/mcp/workflow-servers/[id]/route.ts',
-  'apps/sim/app/api/mcp/workflow-servers/[id]/tools/route.ts',
-  'apps/sim/app/api/mcp/workflow-servers/[id]/tools/[toolId]/route.ts',
-  'apps/sim/app/api/organizations/route.ts',
-  'apps/sim/app/api/organizations/[id]/transfer-ownership/route.ts',
-  'apps/sim/app/api/resume/[workflowId]/[executionId]/[contextId]/route.ts',
-  'apps/sim/app/api/speech/token/route.ts',
-  'apps/sim/app/api/table/[tableId]/rows/route.ts',
-  'apps/sim/app/api/tools/file/manage/route.ts',
-  'apps/sim/app/api/workspaces/invitations/batch/route.ts',
-  'apps/sim/app/api/workspaces/[id]/route.ts',
-  'apps/sim/app/api/workspaces/[id]/files/[fileId]/content/route.ts',
+  'apps/labbai/app/api/billing/portal/route.ts',
+  'apps/labbai/app/api/copilot/chat/abort/route.ts',
+  'apps/labbai/app/api/folders/[id]/restore/route.ts',
+  'apps/labbai/app/api/invitations/[id]/accept/route.ts',
+  'apps/labbai/app/api/invitations/[id]/reject/route.ts',
+  'apps/labbai/app/api/invitations/[id]/route.ts',
+  'apps/labbai/app/api/knowledge/[id]/documents/route.ts',
+  'apps/labbai/app/api/knowledge/[id]/documents/[documentId]/chunks/route.ts',
+  'apps/labbai/app/api/mcp/serve/[serverId]/route.ts',
+  'apps/labbai/app/api/mcp/servers/route.ts',
+  'apps/labbai/app/api/mcp/servers/[id]/route.ts',
+  'apps/labbai/app/api/mcp/servers/test-connection/route.ts',
+  'apps/labbai/app/api/mcp/tools/discover/route.ts',
+  'apps/labbai/app/api/mcp/tools/execute/route.ts',
+  'apps/labbai/app/api/mcp/workflow-servers/route.ts',
+  'apps/labbai/app/api/mcp/workflow-servers/[id]/route.ts',
+  'apps/labbai/app/api/mcp/workflow-servers/[id]/tools/route.ts',
+  'apps/labbai/app/api/mcp/workflow-servers/[id]/tools/[toolId]/route.ts',
+  'apps/labbai/app/api/organizations/route.ts',
+  'apps/labbai/app/api/organizations/[id]/transfer-ownership/route.ts',
+  'apps/labbai/app/api/resume/[workflowId]/[executionId]/[contextId]/route.ts',
+  'apps/labbai/app/api/speech/token/route.ts',
+  'apps/labbai/app/api/table/[tableId]/rows/route.ts',
+  'apps/labbai/app/api/tools/file/manage/route.ts',
+  'apps/labbai/app/api/workspaces/invitations/batch/route.ts',
+  'apps/labbai/app/api/workspaces/[id]/route.ts',
+  'apps/labbai/app/api/workspaces/[id]/files/[fileId]/content/route.ts',
 ])
 
 const CONTRACT_IMPORT_PATTERN = /\bfrom\s+['"]@\/lib\/api\/contracts(?:\/[^'"]*)?['"]/
@@ -212,7 +212,7 @@ const RAW_FETCH_HELPER_GUARD_PATTERN = /(?:requestJson|requestRaw|prefetchJson|p
  * Matches `fetch(` (with optional whitespace, including newlines) followed by
  * a string literal — single quote, double quote, or template literal —
  * whose first character is `/api/`. This catches same-origin internal API
- * fetches in any non-test source file under `apps/sim/**` that aren't an
+ * fetches in any non-test source file under `apps/labbai/**` that aren't an
  * `app/api/**\/route.ts` server handler. Template literals with leading
  * interpolations (e.g. `${base}/api/foo`) are intentionally NOT matched
  * because they're rare and could trigger false positives on non-`/api/` URLs.
@@ -255,11 +255,11 @@ const TEST_FILE_PATTERN = /(?:\.test|\.spec)\.(?:ts|tsx)$/
 const TEST_HELPER_FILE_PATTERN = /(?:^|\/)test-[^/]+\.ts$/
 const TEST_DIR_SEGMENT_PATTERN = /(?:^|\/)(?:__tests__|testing)(?:\/|$)/
 /**
- * Skips user-uploaded content stored under `apps/sim/uploads/...` (workspace
- * file uploads, etc.). Does NOT match `apps/sim/lib/uploads/...`, which is
+ * Skips user-uploaded content stored under `apps/labbai/uploads/...` (workspace
+ * file uploads, etc.). Does NOT match `apps/labbai/lib/uploads/...`, which is
  * source code for the uploads subsystem.
  */
-const USER_UPLOADS_DIR_PATTERN = /(?:^|\/)apps\/sim\/uploads(?:\/|$)/
+const USER_UPLOADS_DIR_PATTERN = /(?:^|\/)apps\/labbai\/uploads(?:\/|$)/
 const SOURCE_SKIP_DIRS = new Set([
   'node_modules',
   '.next',
@@ -442,15 +442,15 @@ function extractAnnotation(
 }
 
 /**
- * Walks `apps/sim/**` and optionally `packages/**` for `.ts` / `.tsx`
+ * Walks `apps/labbai/**` and optionally `packages/**` for `.ts` / `.tsx`
  * source files, excluding tests, build artifacts, and coverage output.
  * Kept separate from `walk(API_DIR)` because the source-wide audit has
  * different exclusion rules than the route audit.
  */
 async function walkAllSourceFiles(root: string, includePackages: boolean): Promise<string[]> {
   const roots = includePackages
-    ? [path.join(root, 'apps/sim'), path.join(root, 'packages')]
-    : [path.join(root, 'apps/sim')]
+    ? [path.join(root, 'apps/labbai'), path.join(root, 'packages')]
+    : [path.join(root, 'apps/labbai')]
   const results: string[] = []
 
   for (const start of roots) {
@@ -679,7 +679,7 @@ function isClientHookFile(filePath: string): boolean {
 }
 
 /**
- * Identifies `apps/sim/app/api/**\/route.ts` API route handlers. Same-origin
+ * Identifies `apps/labbai/app/api/**\/route.ts` API route handlers. Same-origin
  * `/api/` fetch scanning skips these — server-side fetches from inside a
  * route handler are a different concern and are not what this ratchet is
  * trying to catch.
@@ -691,7 +691,7 @@ function isApiRouteHandler(filePath: string): boolean {
 }
 
 /**
- * Inspect a non-API-route source file under `apps/sim/**` for raw
+ * Inspect a non-API-route source file under `apps/labbai/**` for raw
  * `fetch('/api/...')`, `fetch("/api/...")`, or ``fetch(`/api/...`)`` calls.
  *
  * Each callsite is either an exemption (annotated with
@@ -744,7 +744,7 @@ function findSameOriginApiFetchFindings(
 }
 
 function routeFamily(routePath: string): string {
-  const relative = routePath.replace(/^apps\/sim\/app\/api\//, '')
+  const relative = routePath.replace(/^apps\/labbai\/app\/api\//, '')
   const [first, second] = relative.split('/')
 
   if (first === 'tools') return `tools/${second ?? 'unknown'}`
@@ -996,7 +996,7 @@ function buildBoundaryPolicyMetrics(
       },
       {
         key: 'clientSameOriginApiFetches',
-        label: 'apps/sim files with raw same-origin /api/ fetch() calls',
+        label: 'apps/labbai files with raw same-origin /api/ fetch() calls',
         current: new Set(sameOriginApiFetchSummary.findings.map((finding) => finding.path)).size,
       },
       {
@@ -1031,11 +1031,11 @@ function buildBoundaryPolicyMetrics(
         current: rawFetchSummary.exemptions,
       },
       {
-        label: 'apps/sim raw same-origin /api/ fetch() callsites',
+        label: 'apps/labbai raw same-origin /api/ fetch() callsites',
         current: sameOriginApiFetchSummary.findings.length,
       },
       {
-        label: 'apps/sim raw same-origin /api/ fetch() exemptions (annotated)',
+        label: 'apps/labbai raw same-origin /api/ fetch() exemptions (annotated)',
         current: sameOriginApiFetchSummary.exemptions,
       },
       {
@@ -1079,13 +1079,13 @@ function printRawFetchAndDoubleCastMetrics(
   console.log(`  client hook raw fetch() exemptions (annotated): ${rawFetchExemptions}`)
   const sameOriginFiles = new Set(sameOriginApiFetchFindings.map((finding) => finding.path)).size
   console.log(
-    `  apps/sim files with raw same-origin /api/ fetch() calls: ${sameOriginFiles} (baseline ${BOUNDARY_POLICY_BASELINE.clientSameOriginApiFetches})`
+    `  apps/labbai files with raw same-origin /api/ fetch() calls: ${sameOriginFiles} (baseline ${BOUNDARY_POLICY_BASELINE.clientSameOriginApiFetches})`
   )
   console.log(
-    `  apps/sim raw same-origin /api/ fetch() callsites: ${sameOriginApiFetchFindings.length}`
+    `  apps/labbai raw same-origin /api/ fetch() callsites: ${sameOriginApiFetchFindings.length}`
   )
   console.log(
-    `  apps/sim raw same-origin /api/ fetch() exemptions (annotated): ${sameOriginApiFetchExemptions}`
+    `  apps/labbai raw same-origin /api/ fetch() exemptions (annotated): ${sameOriginApiFetchExemptions}`
   )
   console.log(`  as unknown as double-casts (non-test): ${doubleCastFindings.length}`)
   console.log(`  as unknown as double-cast exemptions (annotated): ${doubleCastExemptions}`)
@@ -1241,7 +1241,7 @@ function printBoundaryContractDrift(
     console.log(`    ... ${adHocWireTypes.length - 25} more`)
   }
 
-  console.log('  apps/sim same-origin /api/ fetch file examples:')
+  console.log('  apps/labbai same-origin /api/ fetch file examples:')
   for (const filePath of sameOriginApiFetchFiles.slice(0, 25)) {
     console.log(`    ${filePath}`)
   }
@@ -1312,7 +1312,7 @@ async function main() {
   let sameOriginApiFetchExemptions = 0
   let doubleCastExemptions = 0
 
-  const appsSimRoot = path.join(ROOT, 'apps/sim')
+  const appsLabbaiRoot = path.join(ROOT, 'apps/labbai')
   const contractsRoot = path.join(CONTRACTS_DIR, path.sep)
 
   for (const filePath of sourceFiles) {
@@ -1328,7 +1328,7 @@ async function main() {
     }
 
     if (
-      normalized.startsWith(`${appsSimRoot}/`) &&
+      normalized.startsWith(`${appsLabbaiRoot}/`) &&
       !isApiRouteHandler(filePath) &&
       filePath !== path.join(ROOT, 'scripts', 'check-api-validation-contracts.ts') &&
       content.includes('fetch') &&

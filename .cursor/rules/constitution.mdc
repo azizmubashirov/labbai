@@ -1,21 +1,21 @@
 ---
-description: "Sim product language, positioning, and tone guidelines"
+description: "Labbai product language, positioning, and tone guidelines"
 alwaysApply: true
 ---
 
 <!-- Generated from .claude/rules/constitution.md by `bun run skills:sync`. Edit the source, not this file. -->
 
-# Sim — Language & Positioning
+# Labbai — Language & Positioning
 
 When editing user-facing copy (landing pages, docs, metadata, marketing), follow these rules.
 
 ## Identity
 
-Sim is the **AI workspace** where teams build and run AI agents. Not a workflow tool, not an agent framework, not an automation platform.
+Labbai is the **AI workspace** where teams build and run AI agents. Not a workflow tool, not an agent framework, not an automation platform.
 
-**Short definition:** Sim is the open-source AI workspace where teams build, deploy, and manage AI agents.
+**Short definition:** Labbai is the open-source AI workspace where teams build, deploy, and manage AI agents.
 
-**Full definition:** Sim is the open-source AI workspace where teams build, deploy, and manage AI agents. Connect 1,000+ integrations and every major LLM to create agents that automate real work — visually, conversationally, or with code.
+**Full definition:** Labbai is the open-source AI workspace where teams build, deploy, and manage AI agents. Connect 1,000+ integrations and every major LLM to create agents that automate real work — visually, conversationally, or with code.
 
 ## Audience
 
@@ -30,7 +30,7 @@ Sim is the **AI workspace** where teams build and run AI agents. Not a workflow 
 | The product | "AI workspace" | "workflow tool", "automation platform", "agent framework" |
 | Building | "build agents", "create agents" | "create workflows" (unless describing the workflow module specifically) |
 | Visual builder | "workflow builder" or "visual builder" | "canvas", "graph editor" |
-| The agent | "Sim" — you talk to Sim | "Mothership", "copilot", "AI assistant" |
+| The agent | "Labbai" — you talk to Labbai | "Mothership", "copilot", "AI assistant" |
 | The chat surface | "Chat" (capitalized, the module) | "Mothership", "copilot" |
 | Deployment | "deploy", "ship" | "publish", "activate" |
 | Audience | "teams", "builders" | "users", "customers" (in marketing copy) |
@@ -46,7 +46,7 @@ Sim is the **AI workspace** where teams build and run AI agents. Not a workflow 
 
 ## Claim Hierarchy
 
-When describing Sim, always lead with the most differentiated claim:
+When describing Labbai, always lead with the most differentiated claim:
 
 1. **What it is:** "The AI workspace for teams"
 2. **What you do:** "Build, deploy, and manage AI agents"
@@ -58,7 +58,7 @@ When describing Sim, always lead with the most differentiated claim:
 
 | Module | One-liner |
 |--------|-----------|
-| **Chat** | Your AI command center. Talk to Sim — build and manage everything in natural language. |
+| **Chat** | Your AI command center. Talk to Labbai — build and manage everything in natural language. |
 | **Workflows** | The visual builder. Connect blocks, models, and integrations into agent logic. |
 | **Knowledge Base** | Your agents' memory. Upload docs, sync sources, build vector databases. |
 | **Tables** | A database, built in. Store, query, and wire structured data into agent runs. |
@@ -67,14 +67,14 @@ When describing Sim, always lead with the most differentiated claim:
 
 ## What We Never Say
 
-- Never call Sim "just a workflow tool"
+- Never call Labbai "just a workflow tool"
 - Never compare only on integration count — we win on AI-native capabilities
 - Never use "no-code" as the primary descriptor — say "visually, conversationally, or with code"
 - Never promise unshipped features
 - Never use jargon ("RAG", "vector database", "MCP") without plain-English explanation on public pages
 - Avoid "agentic workforce" as a primary term — use "AI agents"
-- Never say "Mothership" or "copilot" — the agent is "Sim", the surface is "Chat" (in run logs the trigger reads "Sim agent")
+- Never say "Mothership" or "copilot" — the agent is "Labbai", the surface is "Chat" (in run logs the trigger reads "Labbai agent")
 
 ## Vision
 
-Sim becomes the default environment where teams build AI agents — not a tool you visit for one task, but a workspace you live in. Workflows are one module; Chat is another. The workspace is the constant; the interface adapts.
+Labbai becomes the default environment where teams build AI agents — not a tool you visit for one task, but a workspace you live in. Workflows are one module; Chat is another. The workspace is the constant; the interface adapts.

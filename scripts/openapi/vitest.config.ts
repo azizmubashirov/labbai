@@ -6,7 +6,7 @@ const ROOT = path.resolve(import.meta.dirname, '../..')
 export default defineConfig({
   resolve: {
     alias: {
-      '@': path.join(ROOT, 'apps/sim'),
+      '@': path.join(ROOT, 'apps/labbai'),
     },
   },
   test: {

@@ -1,4 +1,4 @@
-import { attributeUndeclaredClient, type ResolvedClientInfo } from '@sim/utils/client-info'
+import { attributeUndeclaredClient, type ResolvedClientInfo } from '@labbai/utils/client-info'
 
 export interface RequestContext {
   requestId: string
