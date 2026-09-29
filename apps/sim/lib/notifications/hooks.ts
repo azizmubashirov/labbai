@@ -14,9 +14,10 @@ export interface InboxNotificationCheck {
 }
 
 /**
- * Judges Inbox messages against the workspace's notification triggers in the background. Returns
- * at once: the webhook response and the agent's tool call never wait for the judge, and nothing
- * it does can fail them. A no-op while the platform notification bot is not configured.
+ * Judges Inbox messages against the notification rules of their conversation's workflow in the
+ * background. Returns at once: the webhook response and the agent's tool call never wait for the
+ * judge, and nothing it does can fail them. A no-op while the platform notification bot is not
+ * configured.
  */
 export function scheduleInboxNotificationChecks(checks: InboxNotificationCheck[]): void {
   if (checks.length === 0 || !isNotificationsConfigured()) return

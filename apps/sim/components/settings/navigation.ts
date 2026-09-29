@@ -1,6 +1,5 @@
 import type { ComponentType } from 'react'
 import {
-  Bell,
   ClipboardList,
   GridOffset,
   Key,
@@ -39,7 +38,6 @@ export type WorkspaceSettingsSection =
   | 'mcp'
   | 'workflow-mcp-servers'
   | 'api-keys'
-  | 'notifications'
   | 'recently-deleted'
 
 export type SettingsSection =
@@ -71,7 +69,6 @@ export type UnifiedSettingsSection =
   | 'workflow-mcp-servers'
   | 'admin'
   | 'security'
-  | 'notifications'
   | 'recently-deleted'
 
 export type UnifiedNavigationSection = 'account' | 'workspace' | 'organization' | 'platform'
@@ -94,10 +91,7 @@ export interface UnifiedSettingsNavigationItem {
   requiresSelfHosted?: boolean
   /** See {@link SelfHostedOverride}; resolved against the deployment shape at filter time. */
   selfHostedOverride?: SelfHostedOverride
-  /**
-   * The section exists only while the deployment offers this feature (hosted or not), e.g.
-   * Notifications need the platform notification bot configured on the server.
-   */
+  /** The section exists only while the deployment offers this feature (hosted or not). */
   requiresDeploymentFeature?: keyof DeploymentFeatures
   requiresSuperUser?: boolean
   requiresAdminRole?: boolean
@@ -425,20 +419,6 @@ export const SETTINGS_SECTION_REGISTRY: readonly SettingsSectionRegistryEntry[] 
     },
   },
   {
-    label: 'Notifications',
-    icon: Bell,
-    unified: {
-      id: 'notifications',
-      description: 'Get Telegram alerts when a conversation needs you.',
-      group: 'workspace',
-      order: 9,
-      requiresDeploymentFeature: 'notifications',
-    },
-    planes: {
-      workspace: { id: 'notifications', group: 'workspace', order: 2 },
-    },
-  },
-  {
     label: 'Recently deleted',
     icon: Trash,
     unified: {
@@ -728,7 +708,6 @@ const WORKSPACE_MUTATION_PERMISSION: Record<WorkspaceSettingsSection, Permission
   mcp: 'write',
   'workflow-mcp-servers': 'write',
   'api-keys': 'admin',
-  notifications: 'admin',
   'recently-deleted': 'write',
 }
 

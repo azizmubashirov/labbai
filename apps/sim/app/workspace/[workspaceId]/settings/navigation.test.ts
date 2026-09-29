@@ -33,7 +33,6 @@ describe('unified settings navigation', () => {
       { id: 'mcp', label: 'MCP tools', section: 'workspace' },
       { id: 'apikeys', label: 'Labbai API keys', section: 'workspace' },
       { id: 'workflow-mcp-servers', label: 'MCP servers', section: 'workspace' },
-      { id: 'notifications', label: 'Notifications', section: 'workspace' },
       { id: 'recently-deleted', label: 'Recently deleted', section: 'workspace' },
       { id: 'security', label: 'Security', section: 'organization' },
       { id: 'admin', label: 'Admin', section: 'platform' },
@@ -55,7 +54,6 @@ describe('unified settings navigation', () => {
       'custom-tools',
       'workflow-mcp-servers',
       'apikeys',
-      'notifications',
       'recently-deleted',
       'requests',
     ])

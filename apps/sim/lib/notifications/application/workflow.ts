@@ -22,7 +22,6 @@ export interface NotifyChatReference {
 export type NotifyFromWorkflowInput =
   | {
       workspaceId: string
-      workflowId: string | null
       kind: 'event'
       eventKey: NotificationEventKey
       reason?: string
@@ -30,7 +29,6 @@ export type NotifyFromWorkflowInput =
     }
   | {
       workspaceId: string
-      workflowId: string | null
       kind: 'message'
       message: string
       chat?: NotifyChatReference
@@ -68,9 +66,13 @@ async function findConversation(
 }
 
 /**
- * The Notify workflow block. `event` fires the workspace's event triggers watching that event
- * in the customer's conversation (with their pause modes and cooldowns); a chat without a
- * conversation fires nothing. `message` sends the text straight to the workspace's connected
+ * The Notify workflow block, scoped to the TOP-LEVEL workflow of the run: the delegation's root
+ * workflow, never an id from the block's input. A shared child workflow (e.g. one
+ * `escalate_to_human` called as a tool by several agent workflows) therefore alerts the calling
+ * agent's recipients with the calling agent's event rules; used directly in an agent workflow,
+ * the root is that workflow. `event` fires that workflow's deployed event rules watching the
+ * event in the customer's conversation (with their pause modes and cooldowns); a chat without a
+ * conversation fires nothing. `message` sends the text straight to that workflow's connected
  * recipients, naming the conversation when the chat has one. The workspace is always the run's
  * own: the conversation is looked up only inside it.
  */
@@ -79,12 +81,21 @@ export const notifyFromWorkflowOperation = defineAuthorizedWorkspaceUseCase({
   resolveContext: (args: { input: NotifyFromWorkflowInput }) =>
     resolveActiveWorkspaceApplicationContext(args.input.workspaceId),
   authorizationOptions: { delegation: notificationsDelegationPolicy },
-  async execute({ input, context }): Promise<NotifyFromWorkflowResult> {
+  async execute({ principal, input, context }): Promise<NotifyFromWorkflowResult> {
     if (!isNotificationsConfigured()) {
       throw new OrchestrationError(
         'validation',
         'Notifications are not set up on this server (NOTIFICATION_BOT_TOKEN is missing)'
       )
+    }
+    /*
+     * The delegation's `workflowId` is the run's root workflow; a child workflow run keeps it and
+     * only swaps `currentWorkflow` (`executor/handlers/workflow/workflow-handler.ts`), and the
+     * binding verifies both are in the run's workspace.
+     */
+    const workflowId = principal.delegationContext?.workflowId
+    if (!workflowId) {
+      throw new OrchestrationError('forbidden', 'Notify runs only inside a workflow run')
     }
     const conversation = await findConversation(context.workspaceId, input.chat)
 
@@ -94,6 +105,7 @@ export const notifyFromWorkflowOperation = defineAuthorizedWorkspaceUseCase({
       }
       const result = await fireNotificationEvent({
         conversation,
+        workflowId,
         eventKey: input.eventKey,
         reason: input.reason,
       })
@@ -108,7 +120,7 @@ export const notifyFromWorkflowOperation = defineAuthorizedWorkspaceUseCase({
 
     const sent = await sendWorkflowNotificationMessage({
       workspaceId: context.workspaceId,
-      workflowId: input.workflowId,
+      workflowId,
       message: input.message,
       conversation,
     })

@@ -11,7 +11,6 @@ import {
   Label,
   Switch,
 } from '@sim/emcn'
-import { getErrorMessage } from '@sim/utils/errors'
 import {
   NOTIFICATION_CONDITION_MAX_LENGTH,
   NOTIFICATION_DIRECTION_LABELS,
@@ -30,10 +29,10 @@ import {
   type NotificationTriggerDirection,
 } from '@/lib/notifications/constants'
 import {
-  type NotificationTrigger,
-  useCreateNotificationTrigger,
-  useUpdateNotificationTrigger,
-} from '@/hooks/queries/notifications'
+  DEFAULT_NOTIFICATION_PAUSE_MINUTES,
+  type NotificationRule,
+  notificationRuleProblem,
+} from '@/lib/notifications/rules'
 
 const DIRECTION_OPTIONS = NOTIFICATION_TRIGGER_DIRECTIONS.map((value) => ({
   value,
@@ -60,9 +59,10 @@ const CONDITION_HINT =
   'an example of each: precise conditions give fewer false alerts.'
 
 const COOLDOWN_HINT =
-  'No repeat alert from this trigger in the same conversation within this time. 0 = no cooldown.'
+  'No repeat alert from this rule in the same conversation within this time. 0 = no cooldown.'
 
-interface TriggerDraft {
+/** The editor's working copy: minutes stay text until saved, so a half-typed number is fine. */
+interface RuleDraft {
   name: string
   direction: NotificationTriggerDirection
   eventKey: NotificationEventKey
@@ -77,40 +77,20 @@ interface TriggerDraft {
   isActive: boolean
 }
 
-function isEventKey(value: string | null): value is NotificationEventKey {
-  return (NOTIFICATION_EVENT_KEYS as readonly string[]).includes(value ?? '')
-}
-
-function draftFrom(trigger: NotificationTrigger | null): TriggerDraft {
-  if (!trigger) {
-    return {
-      name: '',
-      direction: 'inbound',
-      eventKey: 'operator_handoff',
-      condition: '',
-      extractSpec: '',
-      pauseMode: 'none',
-      pauseMinutes: '15',
-      autoResume: true,
-      pauseNotice: '',
-      cooldownMinutes: '60',
-      oncePerConversation: false,
-      isActive: true,
-    }
-  }
+function draftFrom(rule: NotificationRule): RuleDraft {
   return {
-    name: trigger.name,
-    direction: trigger.direction,
-    eventKey: isEventKey(trigger.eventKey) ? trigger.eventKey : 'operator_handoff',
-    condition: trigger.condition,
-    extractSpec: trigger.extractSpec,
-    pauseMode: trigger.pauseMode,
-    pauseMinutes: String(trigger.pauseMinutes),
-    autoResume: trigger.autoResume,
-    pauseNotice: trigger.pauseNotice,
-    cooldownMinutes: String(trigger.cooldownMinutes),
-    oncePerConversation: trigger.oncePerConversation,
-    isActive: trigger.isActive,
+    name: rule.name,
+    direction: rule.direction,
+    eventKey: rule.eventKey ?? 'operator_handoff',
+    condition: rule.condition,
+    extractSpec: rule.extractSpec,
+    pauseMode: rule.pauseMode,
+    pauseMinutes: String(rule.pauseMinutes),
+    autoResume: rule.autoResume,
+    pauseNotice: rule.pauseNotice,
+    cooldownMinutes: String(rule.cooldownMinutes),
+    oncePerConversation: rule.oncePerConversation,
+    isActive: rule.isActive,
   }
 }
 
@@ -142,54 +122,50 @@ function SwitchRow({ id, label, hint, checked, onChange }: SwitchRowProps) {
   )
 }
 
-interface NotificationTriggerModalProps {
+interface NotificationRuleModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  workspaceId: string
-  /** The trigger being edited; null creates a new one. */
-  trigger: NotificationTrigger | null
+  /** The rule being edited, or a fresh one (see `isNew`). */
+  rule: NotificationRule
+  isNew: boolean
+  onSave: (rule: NotificationRule) => void
 }
 
-/** Create or edit one notification trigger. */
-export function NotificationTriggerModal({
+/**
+ * Create or edit one rule of a Notifications block. Saving writes the block's value like any
+ * other field; the rule takes effect when the workflow is deployed.
+ */
+export function NotificationRuleModal({
   open,
   onOpenChange,
-  workspaceId,
-  trigger,
-}: NotificationTriggerModalProps) {
-  const [draft, setDraft] = useState<TriggerDraft>(() => draftFrom(trigger))
+  rule,
+  isNew,
+  onSave,
+}: NotificationRuleModalProps) {
+  const [draft, setDraft] = useState<RuleDraft>(() => draftFrom(rule))
   const [error, setError] = useState<string | null>(null)
-  const createTrigger = useCreateNotificationTrigger(workspaceId)
-  const updateTrigger = useUpdateNotificationTrigger(workspaceId)
-  const isSaving = createTrigger.isPending || updateTrigger.isPending
 
-  /** Seeded when the modal opens, so reopening it on another trigger never shows stale fields. */
-  const [seededFor, setSeededFor] = useState<{ open: boolean; id: string | null }>({
+  /** Seeded when the modal opens, so reopening it on another rule never shows stale fields. */
+  const [seededFor, setSeededFor] = useState<{ open: boolean; id: string }>({
     open,
-    id: trigger?.id ?? null,
+    id: rule.id,
   })
-  if (seededFor.open !== open || seededFor.id !== (trigger?.id ?? null)) {
-    setSeededFor({ open, id: trigger?.id ?? null })
+  if (seededFor.open !== open || seededFor.id !== rule.id) {
+    setSeededFor({ open, id: rule.id })
     if (open) {
-      setDraft(draftFrom(trigger))
+      setDraft(draftFrom(rule))
       setError(null)
     }
   }
 
-  const update = <K extends keyof TriggerDraft>(key: K, value: TriggerDraft[K]) => {
+  const update = <K extends keyof RuleDraft>(key: K, value: RuleDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
     if (error) setError(null)
   }
 
   const isEvent = draft.direction === 'event'
 
-  const handleSave = async () => {
-    if (isSaving) return
-    const name = draft.name.trim()
-    if (!name) return setError('Give the trigger a name')
-    if (!isEvent && !draft.condition.trim()) {
-      return setError('Describe when the alert should fire')
-    }
+  const handleSave = () => {
     const pauseMinutes = parseMinutes(draft.pauseMinutes, 1, NOTIFICATION_MAX_PAUSE_MINUTES)
     if (draft.pauseMode === 'temporary' && pauseMinutes === null) {
       return setError(`Pause must be 1 to ${NOTIFICATION_MAX_PAUSE_MINUTES} minutes`)
@@ -202,49 +178,32 @@ export function NotificationTriggerModal({
     if (cooldownMinutes === null) {
       return setError(`Cooldown must be 0 to ${NOTIFICATION_MAX_COOLDOWN_MINUTES} minutes`)
     }
-
-    const body = {
-      name,
+    const next: NotificationRule = {
+      id: rule.id,
+      name: draft.name.trim(),
       direction: draft.direction,
       eventKey: isEvent ? draft.eventKey : null,
       condition: isEvent ? '' : draft.condition.trim(),
       extractSpec: isEvent ? '' : draft.extractSpec.trim(),
       pauseMode: draft.pauseMode,
-      pauseMinutes: pauseMinutes ?? 15,
+      pauseMinutes: pauseMinutes ?? DEFAULT_NOTIFICATION_PAUSE_MINUTES,
       autoResume: draft.autoResume,
       pauseNotice: draft.pauseMode === 'none' ? '' : draft.pauseNotice.trim(),
       cooldownMinutes,
       oncePerConversation: draft.oncePerConversation,
       isActive: draft.isActive,
     }
-
-    try {
-      if (trigger) {
-        await updateTrigger.mutateAsync({ triggerId: trigger.id, ...body })
-      } else {
-        await createTrigger.mutateAsync(body)
-      }
-      onOpenChange(false)
-    } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Could not save the trigger'))
-    }
+    const problem = notificationRuleProblem(next)
+    if (problem) return setError(problem)
+    onSave(next)
+    onOpenChange(false)
   }
 
-  const close = () => {
-    if (!isSaving) onOpenChange(false)
-  }
-
-  const title = trigger ? 'Edit trigger' : 'New trigger'
+  const close = () => onOpenChange(false)
+  const title = isNew ? 'New rule' : 'Edit rule'
 
   return (
-    <ChipModal
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!isSaving) onOpenChange(nextOpen)
-      }}
-      dismissDisabled={isSaving}
-      srTitle={title}
-    >
+    <ChipModal open={open} onOpenChange={onOpenChange} srTitle={title}>
       <ChipModalHeader onClose={close}>{title}</ChipModalHeader>
       <ChipModalBody>
         <ChipModalField
@@ -259,15 +218,15 @@ export function NotificationTriggerModal({
         />
         <ChipModalField
           type='dropdown'
-          title='Check'
+          title='When'
           value={draft.direction}
           onChange={(value) => update('direction', value as NotificationTriggerDirection)}
           options={DIRECTION_OPTIONS}
           align='start'
           hint={
             isEvent
-              ? 'Fires when a workflow’s Notify block reports the event below.'
-              : 'Every message of this kind in the Inbox is checked against the condition.'
+              ? 'Fires when a Notify block in this workflow reports the event below.'
+              : 'Every message of this kind in this workflow’s Inbox conversations is checked against the condition.'
           }
         />
         {isEvent ? (
@@ -284,7 +243,7 @@ export function NotificationTriggerModal({
           <>
             <ChipModalField
               type='textarea'
-              title='When should it fire?'
+              title='Condition'
               value={draft.condition}
               onChange={(value) => update('condition', value)}
               placeholder={CONDITION_PLACEHOLDER}
@@ -295,7 +254,7 @@ export function NotificationTriggerModal({
             />
             <ChipModalField
               type='textarea'
-              title='Details to collect'
+              title='Details to extract'
               value={draft.extractSpec}
               onChange={(value) => update('extractSpec', value)}
               placeholder='e.g. customer name, phone number, what they asked for'
@@ -306,7 +265,7 @@ export function NotificationTriggerModal({
         )}
         <ChipModalField
           type='dropdown'
-          title='AI replies'
+          title='Pause AI'
           value={draft.pauseMode}
           onChange={(value) => update('pauseMode', value as NotificationPauseMode)}
           options={PAUSE_OPTIONS}
@@ -324,7 +283,7 @@ export function NotificationTriggerModal({
             />
             <ChipModalField type='custom' title='Resume'>
               <SwitchRow
-                id='notification-trigger-auto-resume'
+                id='notification-rule-auto-resume'
                 label='Turn AI back on by itself'
                 hint='Off keeps AI off until an operator turns it on.'
                 checked={draft.autoResume}
@@ -336,7 +295,7 @@ export function NotificationTriggerModal({
         {draft.pauseMode !== 'none' && (
           <ChipModalField
             type='textarea'
-            title='Message to the customer'
+            title='Pause notice'
             value={draft.pauseNotice}
             onChange={(value) => update('pauseNotice', value)}
             placeholder='e.g. Our specialist will reply to you shortly.'
@@ -357,16 +316,16 @@ export function NotificationTriggerModal({
         <ChipModalField type='custom' title='Options'>
           <div className='flex flex-col gap-3'>
             <SwitchRow
-              id='notification-trigger-once'
+              id='notification-rule-once'
               label='Once per conversation'
               hint='Fire at most once in each conversation.'
               checked={draft.oncePerConversation}
               onChange={(checked) => update('oncePerConversation', checked)}
             />
             <SwitchRow
-              id='notification-trigger-active'
+              id='notification-rule-active'
               label='Active'
-              hint='Inactive triggers are kept but never checked.'
+              hint='Inactive rules are kept but never checked.'
               checked={draft.isActive}
               onChange={(checked) => update('isActive', checked)}
             />
@@ -376,13 +335,8 @@ export function NotificationTriggerModal({
       </ChipModalBody>
       <ChipModalFooter
         onCancel={close}
-        cancelDisabled={isSaving}
         defaultAction='none'
-        primaryAction={{
-          label: isSaving ? 'Saving...' : trigger ? 'Save' : 'Create',
-          onClick: () => void handleSave(),
-          disabled: isSaving,
-        }}
+        primaryAction={{ label: isNew ? 'Add rule' : 'Save', onClick: handleSave }}
       />
     </ChipModal>
   )

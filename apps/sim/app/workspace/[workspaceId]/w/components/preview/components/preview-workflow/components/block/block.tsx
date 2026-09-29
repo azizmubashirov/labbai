@@ -9,7 +9,11 @@ import {
   SubBlockRowView,
   WorkflowTypeTag,
 } from '@sim/workflow-renderer'
-import { WORKFLOW_SOURCE_HANDLE_ID, WORKFLOW_TARGET_HANDLE_ID } from '@sim/workflow-types/workflow'
+import {
+  isWorkflowAnnotationOnlyBlockType,
+  WORKFLOW_SOURCE_HANDLE_ID,
+  WORKFLOW_TARGET_HANDLE_ID,
+} from '@sim/workflow-types/workflow'
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react'
 import { resolveCanvasBlockPresentation } from '@/lib/workflows/blocks/canvas-presentation'
 import {
@@ -464,8 +468,10 @@ function WorkflowPreviewBlockInner({ data }: NodeProps<WorkflowPreviewBlockNode>
   const IconComponent = blockConfig.icon
   const isStarterOrTrigger = blockConfig.category === 'triggers' || type === 'starter' || isTrigger
   const isNoteBlock = type === 'note'
+  /** Notes and the Notifications configuration block never join the graph. */
+  const isPortless = isWorkflowAnnotationOnlyBlockType(type)
 
-  const shouldShowDefaultHandles = !isStarterOrTrigger && !isNoteBlock
+  const shouldShowDefaultHandles = !isStarterOrTrigger && !isPortless
   const hasSubBlocks = visibleSubBlocks.length > 0
   /*
    * Gated on rows the preview actually renders. The error row that used to be
@@ -659,7 +665,7 @@ function WorkflowPreviewBlockInner({ data }: NodeProps<WorkflowPreviewBlockNode>
       )}
 
       {/* Source and error handles for non-condition/router/note blocks */}
-      {type !== 'condition' && type !== 'router_v2' && type !== 'response' && !isNoteBlock && (
+      {type !== 'condition' && type !== 'router_v2' && type !== 'response' && !isPortless && (
         <Handle
           type='source'
           position={Position.Right}

@@ -34,6 +34,7 @@ const {
   mockDeleteInactiveDeploymentSchedules,
   mockGetProtectedDeploymentVersionId,
   mockIsDeploymentVersionActive,
+  mockSyncNotificationTriggers,
   mockTx,
 } = vi.hoisted(() => ({
   mockPrepareWebhooks: vi.fn(),
@@ -59,6 +60,7 @@ const {
   mockDeleteInactiveDeploymentSchedules: vi.fn(),
   mockGetProtectedDeploymentVersionId: vi.fn(),
   mockIsDeploymentVersionActive: vi.fn(),
+  mockSyncNotificationTriggers: vi.fn(),
   mockTx: { select: vi.fn(), update: vi.fn(), execute: vi.fn() },
 }))
 
@@ -85,6 +87,10 @@ vi.mock('@/lib/core/outbox/service', () => ({
 
 vi.mock('@/lib/mcp/server-locks', () => ({
   setWorkflowMcpTransactionLockTimeout: mockSetWorkflowMcpTransactionLockTimeout,
+}))
+
+vi.mock('@/lib/notifications/deploy-sync', () => ({
+  syncWorkflowNotificationTriggers: mockSyncNotificationTriggers,
 }))
 
 vi.mock('@/lib/posthog/server', () => ({
@@ -227,6 +233,7 @@ describe('versioned deployment preparation outbox', () => {
     mockCleanupRetiredWebhookRegistrations.mockResolvedValue(undefined)
     mockCreateSchedulesForDeploy.mockResolvedValue({ success: true })
     mockSyncMcpToolsForWorkflow.mockResolvedValue([{ serverId: 'mcp-server-1' }])
+    mockSyncNotificationTriggers.mockResolvedValue({ upserted: 0, removed: 0 })
     mockSetWorkflowMcpTransactionLockTimeout.mockResolvedValue(undefined)
     mockEmitWorkflowDeployedEvent.mockResolvedValue(undefined)
     mockCaptureServerEvent.mockReturnValue(undefined)
@@ -313,6 +320,11 @@ describe('versioned deployment preparation outbox', () => {
         state: { blocks: {} },
       })
     )
+    expect(mockSyncNotificationTriggers).toHaveBeenCalledWith(mockTx, {
+      workflowId: 'workflow-1',
+      workspaceId: 'workspace-1',
+      blocks: {},
+    })
     expect(mockActivateWebhookRegistrations).toHaveBeenCalledWith(mockTx, {
       workflowId: 'workflow-1',
       operationId: 'operation-1',

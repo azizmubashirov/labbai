@@ -17,14 +17,15 @@ export const NOTIFICATION_BOT_REPLIES = {
   welcome:
     'Bu — Labbai bildirishnoma boti.\n\n' +
     'Bu yerga AI-agentingizdagi muhim hodisalar haqida xabar keladi.\n' +
-    "Ulanish uchun Labbai'da Settings → Notifications bo'limidagi «Connect Telegram» tugmasini bosing.",
+    "Ulanish uchun Labbai'da workflow canvasidagi Notifications blokida «Connect Telegram» tugmasini bosing.",
   connected:
     '✅ Ulandi!\n\n' +
     'Endi triggerlaringiz ishga tushganda shu yerga xabar keladi.\n' +
     "To'xtatish uchun /stop yozing.",
   unknownToken:
-    "Bu havola eskirgan yoki noto'g'ri. Labbai sozlamalaridan yangi ulanish havolasini oling.",
-  stopped: "Bildirishnomalar to'xtatildi. Qayta ulash uchun Labbai sozlamalariga kiring.",
+    "Bu havola eskirgan yoki noto'g'ri. Workflow'dagi Notifications blokidan yangi ulanish havolasini oling.",
+  stopped:
+    "Bildirishnomalar to'xtatildi. Qayta ulash uchun Notifications blokidagi ulanish havolasini qayta oching.",
   notConnected: 'Bu chat hech qaysi Labbai workspace’iga ulanmagan.',
 } as const
 

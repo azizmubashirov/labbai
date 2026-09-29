@@ -1544,7 +1544,7 @@ const WorkflowContent = React.memo(
         edges,
         lastExecutionSnapshot
       )
-      const isNoteBlock = block.type === 'note'
+      const isNoteBlock = isAnnotationOnlyBlock(block.type)
       const isInsideSubflow =
         block.parentId && (block.parentType === 'loop' || block.parentType === 'parallel')
 

@@ -1197,7 +1197,15 @@ function SubBlockComponent({
             </div>
           )
         }
-        return <ModalComponent blockId={blockId} isPreview={isPreview} disabled={isDisabled} />
+        return (
+          <ModalComponent
+            blockId={blockId}
+            subBlockId={config.id}
+            isPreview={isPreview}
+            previewValue={previewValue}
+            disabled={isDisabled}
+          />
+        )
       }
       case 'model-fallback-list':
         return (

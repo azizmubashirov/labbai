@@ -5,52 +5,47 @@ import {
   notificationTrigger,
   workflow,
 } from '@sim/db/schema'
-import {
-  and,
-  asc,
-  type Column,
-  count,
-  desc,
-  eq,
-  gte,
-  isNotNull,
-  isNull,
-  or,
-  type SQL,
-} from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, isNotNull, type SQL } from 'drizzle-orm'
 import type { NotificationTriggerDirection } from '@/lib/notifications/constants'
 
 export type NotificationRecipientRecord = typeof notificationRecipient.$inferSelect
 export type NotificationTriggerRecord = typeof notificationTrigger.$inferSelect
-export type NotificationTriggerInsert = typeof notificationTrigger.$inferInsert
 
-/** Rows scoped to one workflow apply to it only; unscoped rows apply to every workflow. */
-function workflowScope(column: Column, workflowId: string | null): SQL | undefined {
-  return workflowId ? or(isNull(column), eq(column, workflowId)) : isNull(column)
+/** The rows of one workflow of one workspace: recipients are always scoped to their workflow. */
+function recipientScope(workspaceId: string, workflowId: string): SQL | undefined {
+  return and(
+    eq(notificationRecipient.workspaceId, workspaceId),
+    eq(notificationRecipient.workflowId, workflowId)
+  )
 }
 
+/** The Telegram chats connected (or waiting to connect) to one workflow's alerts. */
 export async function listNotificationRecipients(
-  workspaceId: string
+  workspaceId: string,
+  workflowId: string
 ): Promise<NotificationRecipientRecord[]> {
   return db
     .select()
     .from(notificationRecipient)
-    .where(eq(notificationRecipient.workspaceId, workspaceId))
+    .where(recipientScope(workspaceId, workflowId))
     .orderBy(asc(notificationRecipient.createdAt), asc(notificationRecipient.id))
 }
 
-export async function countNotificationRecipients(workspaceId: string): Promise<number> {
+export async function countNotificationRecipients(
+  workspaceId: string,
+  workflowId: string
+): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(notificationRecipient)
-    .where(eq(notificationRecipient.workspaceId, workspaceId))
+    .where(recipientScope(workspaceId, workflowId))
   return Number(row?.value ?? 0)
 }
 
 export async function insertNotificationRecipient(values: {
   id: string
   workspaceId: string
-  workflowId: string | null
+  workflowId: string
   title: string
   connectToken: string
   createdBy: string | null
@@ -59,36 +54,28 @@ export async function insertNotificationRecipient(values: {
   return row
 }
 
-/** Removes a recipient of a workspace; false when it is not there. */
+/** Removes a recipient of a workflow; false when it is not there. */
 export async function deleteNotificationRecipient(
   workspaceId: string,
+  workflowId: string,
   recipientId: string
 ): Promise<boolean> {
   const deleted = await db
     .delete(notificationRecipient)
-    .where(
-      and(
-        eq(notificationRecipient.id, recipientId),
-        eq(notificationRecipient.workspaceId, workspaceId)
-      )
-    )
+    .where(and(eq(notificationRecipient.id, recipientId), recipientScope(workspaceId, workflowId)))
     .returning({ id: notificationRecipient.id })
   return deleted.length > 0
 }
 
 export async function getNotificationRecipient(
   workspaceId: string,
+  workflowId: string,
   recipientId: string
 ): Promise<NotificationRecipientRecord | null> {
   const [row] = await db
     .select()
     .from(notificationRecipient)
-    .where(
-      and(
-        eq(notificationRecipient.id, recipientId),
-        eq(notificationRecipient.workspaceId, workspaceId)
-      )
-    )
+    .where(and(eq(notificationRecipient.id, recipientId), recipientScope(workspaceId, workflowId)))
     .limit(1)
   return row ?? null
 }
@@ -120,109 +107,41 @@ export async function deactivateNotificationChat(chatId: string): Promise<number
   return updated.length
 }
 
-/** Connected, active chats that should hear about a conversation of `workflowId`. */
+/** Connected, active chats of one workflow: the only ones its alerts go to. */
 export async function listDeliverableNotificationRecipients(
   workspaceId: string,
-  workflowId: string | null
+  workflowId: string
 ): Promise<Array<{ id: string; chatId: string }>> {
   const rows = await db
     .select({ id: notificationRecipient.id, chatId: notificationRecipient.chatId })
     .from(notificationRecipient)
     .where(
       and(
-        eq(notificationRecipient.workspaceId, workspaceId),
+        recipientScope(workspaceId, workflowId),
         eq(notificationRecipient.isActive, true),
         eq(notificationRecipient.isVerified, true),
-        isNotNull(notificationRecipient.chatId),
-        workflowScope(notificationRecipient.workflowId, workflowId)
+        isNotNull(notificationRecipient.chatId)
       )
     )
     .orderBy(asc(notificationRecipient.createdAt), asc(notificationRecipient.id))
   return rows.flatMap((row) => (row.chatId ? [{ id: row.id, chatId: row.chatId }] : []))
 }
 
-export async function listNotificationTriggers(
-  workspaceId: string
-): Promise<NotificationTriggerRecord[]> {
-  return db
-    .select()
-    .from(notificationTrigger)
-    .where(eq(notificationTrigger.workspaceId, workspaceId))
-    .orderBy(asc(notificationTrigger.createdAt), asc(notificationTrigger.id))
-}
-
-export async function countNotificationTriggers(workspaceId: string): Promise<number> {
-  const [row] = await db
-    .select({ value: count() })
-    .from(notificationTrigger)
-    .where(eq(notificationTrigger.workspaceId, workspaceId))
-  return Number(row?.value ?? 0)
-}
-
-export async function getNotificationTrigger(
-  workspaceId: string,
-  triggerId: string
-): Promise<NotificationTriggerRecord | null> {
-  const [row] = await db
-    .select()
-    .from(notificationTrigger)
-    .where(
-      and(eq(notificationTrigger.id, triggerId), eq(notificationTrigger.workspaceId, workspaceId))
-    )
-    .limit(1)
-  return row ?? null
-}
-
-export async function insertNotificationTrigger(
-  values: NotificationTriggerInsert
-): Promise<NotificationTriggerRecord> {
-  const [row] = await db.insert(notificationTrigger).values(values).returning()
-  return row
-}
-
-export async function updateNotificationTrigger(
-  workspaceId: string,
-  triggerId: string,
-  changes: Partial<Omit<NotificationTriggerInsert, 'id' | 'workspaceId' | 'createdAt'>>
-): Promise<NotificationTriggerRecord | null> {
-  const [row] = await db
-    .update(notificationTrigger)
-    .set({ ...changes, updatedAt: new Date() })
-    .where(
-      and(eq(notificationTrigger.id, triggerId), eq(notificationTrigger.workspaceId, workspaceId))
-    )
-    .returning()
-  return row ?? null
-}
-
-export async function deleteNotificationTrigger(
-  workspaceId: string,
-  triggerId: string
-): Promise<boolean> {
-  const deleted = await db
-    .delete(notificationTrigger)
-    .where(
-      and(eq(notificationTrigger.id, triggerId), eq(notificationTrigger.workspaceId, workspaceId))
-    )
-    .returning({ id: notificationTrigger.id })
-  return deleted.length > 0
-}
-
 /**
- * Active triggers of one direction that apply to a conversation of `workflowId`, oldest first.
- * With `eventKey`, only event triggers watching that event.
+ * Active triggers of one direction of one workflow — the rules its deployed Notifications block
+ * put into effect — oldest first. With `eventKey`, only event triggers watching that event.
  */
 export async function listActiveNotificationTriggers(params: {
   workspaceId: string
   direction: NotificationTriggerDirection
-  workflowId: string | null
+  workflowId: string
   eventKey?: string
 }): Promise<NotificationTriggerRecord[]> {
-  const filters: Array<SQL | undefined> = [
+  const filters: SQL[] = [
     eq(notificationTrigger.workspaceId, params.workspaceId),
+    eq(notificationTrigger.workflowId, params.workflowId),
     eq(notificationTrigger.isActive, true),
     eq(notificationTrigger.direction, params.direction),
-    workflowScope(notificationTrigger.workflowId, params.workflowId),
   ]
   if (params.eventKey) filters.push(eq(notificationTrigger.eventKey, params.eventKey))
   return db
@@ -296,7 +215,7 @@ export async function getWorkflowOwnerId(workflowId: string): Promise<string | n
   return row?.userId ?? null
 }
 
-/** Whether a workflow belongs to a workspace, so a recipient or trigger cannot point elsewhere. */
+/** Whether a workflow belongs to a workspace, so a recipient cannot point elsewhere. */
 export async function isWorkflowInWorkspace(
   workspaceId: string,
   workflowId: string

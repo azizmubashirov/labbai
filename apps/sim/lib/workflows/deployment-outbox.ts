@@ -26,6 +26,7 @@ import {
   removeMcpToolsForWorkflow,
   syncMcpToolsForWorkflow,
 } from '@/lib/mcp/workflow-mcp-sync'
+import { syncWorkflowNotificationTriggers } from '@/lib/notifications/deploy-sync'
 import { captureServerEvent } from '@/lib/posthog/server'
 import {
   cleanupInactiveDeploymentWebhooks,
@@ -536,6 +537,13 @@ async function prepareDeploymentOperation(
         throwOnError: true,
       })
       context.signal.throwIfAborted()
+      /* The Notifications block's rules become this version's notification triggers. */
+      await syncWorkflowNotificationTriggers(tx, {
+        workflowId: payload.workflowId,
+        workspaceId: workflowRecord.workspaceId,
+        blocks,
+      })
+      context.signal.throwIfAborted()
     },
   })
   context.signal.throwIfAborted()
@@ -941,6 +949,13 @@ const syncActiveSideEffects = async (rawPayload: unknown): Promise<void> => {
     state,
   })
 
+  await syncNotificationTriggersIfStillActive({
+    workflowId: payload.workflowId,
+    workspaceId: workflowRecord.workspaceId,
+    deploymentVersionId: payload.deploymentVersionId,
+    blocks,
+  })
+
   if (!(await cleanupStaleDeploymentIfNeeded({ payload, workflow: workflowData, requestId }))) {
     return
   }
@@ -1328,6 +1343,34 @@ async function syncMcpToolsIfStillActive(params: {
     })
   })
   notifyMcpToolServers(tools)
+}
+
+/** Legacy side-effect sync: the active version's Notifications rules become its triggers. */
+async function syncNotificationTriggersIfStillActive(params: {
+  workflowId: string
+  workspaceId: string | null
+  deploymentVersionId: string
+  blocks: Record<string, unknown>
+}): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [versionRow] = await tx
+      .select({ id: workflowDeploymentVersion.id })
+      .from(workflowDeploymentVersion)
+      .where(
+        and(
+          eq(workflowDeploymentVersion.workflowId, params.workflowId),
+          eq(workflowDeploymentVersion.id, params.deploymentVersionId),
+          eq(workflowDeploymentVersion.isActive, true)
+        )
+      )
+      .limit(1)
+    if (!versionRow) return
+    await syncWorkflowNotificationTriggers(tx, {
+      workflowId: params.workflowId,
+      workspaceId: params.workspaceId,
+      blocks: params.blocks,
+    })
+  })
 }
 
 async function createSchedulesIfStillActive(params: {

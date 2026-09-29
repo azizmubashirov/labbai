@@ -60,9 +60,10 @@ function chatReference(input: {
 }
 
 /**
- * `notify_send`: the Notify block. The workspace is never read from the input — it is the
- * workspace of the executor delegation bound from the running workflow, and the conversation is
- * looked up only inside it.
+ * `notify_send`: the Notify block. Neither the workspace nor the workflow is read from the
+ * input — both come from the executor delegation bound from the running workflow; the
+ * conversation is looked up only inside that workspace, and only the rules and recipients of the
+ * run's top-level workflow are used (see `notifyFromWorkflowOperation`).
  */
 export const executeNotifyTool: InternalToolOperationHandler = async (request) => {
   request.signal?.throwIfAborted()
@@ -86,7 +87,6 @@ export const executeNotifyTool: InternalToolOperationHandler = async (request) =
     }
     const data = parsed.data
     const chat = chatReference(data)
-    const workflowId = request.context.workflowId || null
     let input: NotifyFromWorkflowInput
     if (data.kind === 'event') {
       if (!chat) {
@@ -97,7 +97,6 @@ export const executeNotifyTool: InternalToolOperationHandler = async (request) =
       }
       input = {
         workspaceId: principal.workspaceId,
-        workflowId,
         kind: 'event',
         eventKey: data.eventKey,
         ...(data.reason ? { reason: data.reason } : {}),
@@ -106,7 +105,6 @@ export const executeNotifyTool: InternalToolOperationHandler = async (request) =
     } else {
       input = {
         workspaceId: principal.workspaceId,
-        workflowId,
         kind: 'message',
         message: data.message,
         ...(chat ? { chat } : {}),

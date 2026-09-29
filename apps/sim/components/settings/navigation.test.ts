@@ -41,7 +41,7 @@ const HOSTED: DeploymentShape = { ...SELF_HOSTED, hosted: true }
 /** A self-hosted deployment with every feature override on. */
 const SELF_HOSTED_ALL_FEATURES: DeploymentShape = {
   ...SELF_HOSTED,
-  features: { accessControl: true, auditLogs: true, scim: true, notifications: true },
+  features: { accessControl: true, auditLogs: true, scim: true },
 }
 
 /** Every workspace-plane section a self-hosted deployment offers. */
@@ -71,7 +71,6 @@ describe('settings navigation boundaries', () => {
       'mcp',
       'apikeys',
       'workflow-mcp-servers',
-      'notifications',
       'recently-deleted',
       'security',
       'admin',
@@ -80,7 +79,6 @@ describe('settings navigation boundaries', () => {
     expect(WORKSPACE_SETTINGS_ITEMS.map(({ id }) => id)).toEqual([
       'teammates',
       'secrets',
-      'notifications',
       'custom-tools',
       'mcp',
       'workflow-mcp-servers',
@@ -170,7 +168,6 @@ describe('settings navigation boundaries', () => {
       mcp: 'mcp',
       'workflow-mcp-servers': 'workflow-mcp-servers',
       apikeys: 'api-keys',
-      notifications: 'notifications',
       'recently-deleted': 'recently-deleted',
     })
   })
@@ -330,7 +327,6 @@ describe('settings navigation boundaries', () => {
       visible: [
         'teammates',
         'secrets',
-        'notifications',
         'custom-tools',
         'mcp',
         'workflow-mcp-servers',
@@ -345,7 +341,6 @@ describe('settings navigation boundaries', () => {
       visible: [
         'teammates',
         'secrets',
-        'notifications',
         'custom-tools',
         'mcp',
         'workflow-mcp-servers',
@@ -395,27 +390,10 @@ describe('settings navigation boundaries', () => {
 
     expect(items.map(({ id }) => id)).toEqual([
       'teammates',
-      'notifications',
       'workflow-mcp-servers',
       'recently-deleted',
       'requests',
     ])
-  })
-
-  it('offers Notifications only when the deployment has the notification bot', () => {
-    const withoutBot = resolveWorkspaceNavigation({
-      permission: 'admin',
-      permissionConfig: {},
-      deployment: SELF_HOSTED,
-    })
-    expect(withoutBot.some(({ id }) => id === 'notifications')).toBe(false)
-
-    const withBot = resolveWorkspaceNavigation({
-      permission: 'write',
-      permissionConfig: {},
-      deployment: { ...HOSTED, features: { ...HOSTED.features, notifications: true } },
-    })
-    expect(withBot.find(({ id }) => id === 'notifications')).toMatchObject({ canMutate: false })
   })
 
   it('uses server-aligned mutation permissions for workspace settings', () => {
@@ -425,9 +403,5 @@ describe('settings navigation boundaries', () => {
     expect(canMutateWorkspaceSettingsSection('recently-deleted', writer)).toBe(true)
     expect(canMutateWorkspaceSettingsSection('workflow-mcp-servers', writer)).toBe(true)
     expect(canMutateWorkspaceSettingsSection('api-keys', writer)).toBe(false)
-    expect(canMutateWorkspaceSettingsSection('notifications', writer)).toBe(false)
-    expect(
-      canMutateWorkspaceSettingsSection('notifications', { canEdit: true, canAdmin: true })
-    ).toBe(true)
   })
 })

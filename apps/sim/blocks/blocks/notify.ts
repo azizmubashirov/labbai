@@ -10,12 +10,12 @@ function toTrimmedText(value: unknown): string {
 export const NotifyBlock: BlockConfig<NotifySendResponse> = {
   type: 'notify',
   name: 'Notify',
-  description: 'Alert your operators on Telegram',
+  description: 'Alert this workflow’s operators on Telegram',
   longDescription:
-    'Send an alert to the Telegram chats connected in Settings → Notifications, through the Labbai notification bot. Fire event reports a workflow event (operator handoff, booking link sent, payment receipt) in a customer’s Inbox conversation: the workspace’s event triggers for it decide the alert text and whether AI pauses for that customer. Send message delivers your own text to every connected chat.',
+    'Send an alert to the Telegram chats connected in this workflow’s Notifications block, through the Labbai notification bot. Fire event reports a workflow event (operator handoff, booking link sent, payment receipt) in a customer’s Inbox conversation: this workflow’s deployed event rules for it decide the alert text and whether AI pauses for that customer. Send message delivers your own text to this workflow’s connected chats.',
   bestPractices: `
-  - Typical use: an "escalate to human" workflow called by an Agent fires Operator handoff for the customer's chat, so operators get the alert and the handoff trigger can pause the AI.
-  - Fire event needs an event trigger in Settings → Notifications (When: Workflow event); without one nothing is sent and fired = 0.
+  - Uses the Notifications block of the top-level workflow of the run (the agent workflow): its recipients get the alerts, and for Fire event its event rule (When: Workflow event) must be deployed; without one nothing is sent and fired = 0.
+  - Typical use: a shared "escalate_to_human" workflow, called as a tool by each agent workflow, fires Operator handoff for the customer's chat, so the calling agent's operators get the alert and its handoff rule can pause the AI. The shared workflow needs no Notifications block of its own.
   - Pass the customer chat id the trigger delivered, e.g. <telegram.message.chat.id>; only conversations of this workflow's own workspace are used.
   - Send message works without a conversation; with a chat id the alert names the customer and links to the Inbox thread.
   `,

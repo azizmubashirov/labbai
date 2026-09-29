@@ -14,6 +14,7 @@ import { Badge, ChipTag, cn, handleKeyboardActivation, Switch, Tooltip } from '@
 import { Ban, Lock } from '@sim/emcn/icons'
 import { WorkflowTypeTag } from '@sim/workflow-renderer/workflow-type'
 import {
+  isWorkflowAnnotationOnlyBlockType,
   WORKFLOW_SOURCE_HANDLE_ID,
   WORKFLOW_TARGET_HANDLE_ID,
   type WorkflowConnectionSide,
@@ -511,6 +512,8 @@ export function WorkflowBlockView({
   /* Blocks that can emit an error always carry the row; `response` terminates
      the flow and has no error branch. */
   const showErrorRow = shouldShowDefaultHandles && type !== 'response'
+  /* A configuration block (Notifications) sits on the canvas without joining the graph. */
+  const hasSourceHandle = type !== 'response' && !isWorkflowAnnotationOnlyBlockType(type)
   /*
    * The error output is a real, draggable source whenever the toggle is on (a
    * connection forces the toggle on, so connected cards always have it). It
@@ -598,7 +601,7 @@ export function WorkflowBlockView({
           color: tabFill(`router-${route.id}`),
         })
       })
-    } else if (type !== 'response') {
+    } else if (hasSourceHandle) {
       ports.push({
         id: WORKFLOW_SOURCE_HANDLE_ID,
         side: DEFAULT_SOURCE_SIDE,
@@ -1049,7 +1052,7 @@ export function WorkflowBlockView({
           </>
         )}
 
-        {type !== 'condition' && type !== 'router_v2' && type !== 'response' && (
+        {type !== 'condition' && type !== 'router_v2' && hasSourceHandle && (
           <Handle
             type='source'
             position={Position.Right}

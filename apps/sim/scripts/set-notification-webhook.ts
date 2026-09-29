@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 
 /**
- * Points the platform notification bot (Settings → Notifications) at this deployment and says
- * what is wrong when the bot stays silent. Ported from Mehmon's `set_notification_webhook` and
- * `check_notification_bot` commands. Idempotent: Telegram overwrites the previous webhook.
+ * Points the platform notification bot (used by the workflow Notifications block) at this
+ * deployment and says what is wrong when the bot stays silent. Ported from Mehmon's
+ * `set_notification_webhook` and `check_notification_bot` commands. Idempotent: Telegram
+ * overwrites the previous webhook.
  *
  * Usage (from apps/sim, with the deployment's env loaded — bun reads .env itself):
  *   bun run scripts/set-notification-webhook.ts            # register the webhook

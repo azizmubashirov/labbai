@@ -70,7 +70,7 @@ function trigger(overrides: Record<string, unknown> = {}) {
   return {
     id: 'trg-1',
     workspaceId: 'ws-1',
-    workflowId: null,
+    workflowId: 'wf-1',
     name: 'Customer wants a person',
     direction: 'inbound',
     condition: 'Fires when the customer asks for an operator.',
@@ -302,6 +302,39 @@ describe('notification service', () => {
       })
     })
 
+    it('uses only the rules and recipients of the conversation’s workflow', async () => {
+      mocks.getConversation.mockResolvedValue({ ...CONVERSATION, workflowId: 'wf-b' })
+      mocks.listTriggers.mockResolvedValue([trigger({ workflowId: 'wf-b' })])
+      await evaluateInboxMessageForNotifications(INBOUND, { complete: judge(FIRED_RULE_1) })
+      expect(mocks.listTriggers).toHaveBeenCalledWith({
+        workspaceId: 'ws-1',
+        direction: 'inbound',
+        workflowId: 'wf-b',
+      })
+      expect(mocks.listRecipients).toHaveBeenCalledWith('ws-1', 'wf-b')
+      expect(mocks.listRecipients).not.toHaveBeenCalledWith('ws-1', 'wf-1')
+    })
+
+    it('alerts nobody about a conversation of no workflow', async () => {
+      mocks.getConversation.mockResolvedValue({ ...CONVERSATION, workflowId: null })
+      const complete = judge(FIRED_RULE_1)
+      const result = await evaluateInboxMessageForNotifications(INBOUND, { complete })
+      expect(result).toEqual({ fired: [], paused: false })
+      expect(mocks.listTriggers).not.toHaveBeenCalled()
+      expect(complete).not.toHaveBeenCalled()
+      expect(mocks.sendMessage).not.toHaveBeenCalled()
+    })
+
+    it('never delivers a trigger that belongs to no workflow', async () => {
+      mocks.listTriggers.mockResolvedValue([trigger({ workflowId: null })])
+      const result = await evaluateInboxMessageForNotifications(INBOUND, {
+        complete: judge(FIRED_RULE_1),
+      })
+      expect(result.fired).toEqual([])
+      expect(mocks.insertEvent).not.toHaveBeenCalled()
+      expect(mocks.listRecipients).not.toHaveBeenCalled()
+    })
+
     it('fires nothing when the model fires nothing', async () => {
       const result = await evaluateInboxMessageForNotifications(INBOUND, {
         complete: judge('{"fired":[]}'),
@@ -317,6 +350,7 @@ describe('notification service', () => {
       mocks.listTriggers.mockResolvedValue([
         trigger({
           id: 'trg-handoff',
+          workflowId: 'wf-escalate',
           name: 'Handoff',
           direction: 'event',
           condition: '',
@@ -326,15 +360,17 @@ describe('notification service', () => {
       ])
       const result = await fireNotificationEvent({
         conversation: CONVERSATION as never,
+        workflowId: 'wf-escalate',
         eventKey: 'operator_handoff',
       })
 
       expect(mocks.listTriggers).toHaveBeenCalledWith({
         workspaceId: 'ws-1',
         direction: 'event',
-        workflowId: 'wf-1',
+        workflowId: 'wf-escalate',
         eventKey: 'operator_handoff',
       })
+      expect(mocks.listRecipients).toHaveBeenCalledWith('ws-1', 'wf-escalate')
       expect(result.fired).toHaveLength(1)
       expect(result.paused).toBe(true)
       expect(mocks.insertEvent).toHaveBeenCalledWith(
@@ -346,6 +382,7 @@ describe('notification service', () => {
       mocks.listTriggers.mockResolvedValue([])
       const result = await fireNotificationEvent({
         conversation: CONVERSATION as never,
+        workflowId: 'wf-1',
         eventKey: 'payment_receipt',
       })
       expect(result).toEqual({ fired: [], paused: false })
@@ -354,6 +391,17 @@ describe('notification service', () => {
   })
 
   describe('sendWorkflowNotificationMessage', () => {
+    it('sends free text to the running workflow’s chats, not the conversation’s', async () => {
+      await sendWorkflowNotificationMessage({
+        workspaceId: 'ws-1',
+        workflowId: 'wf-escalate',
+        message: 'Handoff',
+        conversation: CONVERSATION as never,
+      })
+      expect(mocks.listRecipients).toHaveBeenCalledWith('ws-1', 'wf-escalate')
+      expect(mocks.listRecipients).not.toHaveBeenCalledWith('ws-1', 'wf-1')
+    })
+
     it('sends free text to every connected chat, with or without a conversation', async () => {
       const result = await sendWorkflowNotificationMessage({
         workspaceId: 'ws-1',

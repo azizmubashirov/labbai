@@ -87,8 +87,10 @@ Gemini / Workers AI.
   (`NOTIFICATION_BOT_*` env) alerts operators: recipients connect with a `t.me` link, triggers are
   the operator's own words judged by an LLM on each Inbox customer / agent message, or workflow
   events from the new Notify block; a trigger can pause AI (for a while or until an operator turns
-  it on) and send the customer a notice. Later: inline buttons on alerts (resume AI, snooze,
-  approve), alert history, condition drafting / dry run.
+  it on) and send the customer a notice. Owner decision 2026-09-29: configured **per workflow on
+  the canvas** with a Notifications block (recipients + rules), not in workspace Settings; rules
+  take effect on deploy (change a rule → redeploy). Later: inline buttons on alerts (resume AI,
+  snooze, approve), alert history, condition drafting / dry run.
 - **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
   provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,

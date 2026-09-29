@@ -49,6 +49,7 @@ import { McpBlock } from '@/blocks/blocks/mcp'
 import { MemoryBlock } from '@/blocks/blocks/memory'
 import { MySQLBlock, MySQLBlockMeta } from '@/blocks/blocks/mysql'
 import { NoteBlock } from '@/blocks/blocks/note'
+import { NotificationsBlock } from '@/blocks/blocks/notifications'
 import { NotifyBlock } from '@/blocks/blocks/notify'
 import {
   NotionBlock,
@@ -144,6 +145,7 @@ export const BLOCK_REGISTRY: Record<string, BlockConfig> = {
   memory: MemoryBlock,
   mysql: MySQLBlock,
   note: NoteBlock,
+  notifications: NotificationsBlock,
   notify: NotifyBlock,
   notion: NotionBlock,
   notion_v2: NotionV2Block,

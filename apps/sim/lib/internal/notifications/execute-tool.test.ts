@@ -67,6 +67,7 @@ describe('executeNotifyTool', () => {
       channel: 'telegram',
       chatId: '555',
       workspaceId: 'ws-other',
+      workflowId: 'wf-other',
     })
 
     expect(response.status).toBe(200)
@@ -79,12 +80,49 @@ describe('executeNotifyTool', () => {
       principal: PRINCIPAL,
       input: {
         workspaceId: 'ws-run',
-        workflowId: 'wf-escalate',
         kind: 'event',
         eventKey: 'operator_handoff',
         reason: 'Wholesale order',
         chat: { channel: 'telegram', externalChatId: '555' },
       },
+    })
+  })
+
+  it('leaves the workflow to the run identity when a child workflow runs Notify', async () => {
+    const childContext: InternalToolOperationContext = {
+      ...CONTEXT,
+      workflowId: 'wf-escalate-shared',
+      executorDelegationOrigin: {
+        workflowId: 'wf-agent',
+        executionId: 'execution-1',
+        currentWorkflow: { workflowId: 'wf-escalate-shared', mode: 'draft' },
+      },
+    }
+    const childPrincipal: WorkflowExecutionDelegatedPrincipal = {
+      ...PRINCIPAL,
+      delegationContext: {
+        kind: 'workflow_execution',
+        workflowId: 'wf-agent',
+        currentWorkflow: { workflowId: 'wf-escalate-shared', mode: 'draft' },
+      },
+    }
+    mocks.createPrincipal.mockResolvedValueOnce(childPrincipal)
+
+    await executeNotifyTool({
+      toolId: 'notify_send',
+      input: { kind: 'message', message: 'Handoff', workflowId: 'wf-other' },
+      headers: new Headers(),
+      context: childContext,
+      requestId: 'request-2',
+    })
+
+    expect(mocks.createPrincipal).toHaveBeenCalledWith({
+      context: childContext,
+      audience: 'sim:notifications',
+    })
+    expect(mocks.notify).toHaveBeenCalledWith({
+      principal: childPrincipal,
+      input: { workspaceId: 'ws-run', kind: 'message', message: 'Handoff' },
     })
   })
 
@@ -116,7 +154,6 @@ describe('executeNotifyTool', () => {
       principal: PRINCIPAL,
       input: {
         workspaceId: 'ws-run',
-        workflowId: 'wf-escalate',
         kind: 'message',
         message: 'New wholesale lead',
       },

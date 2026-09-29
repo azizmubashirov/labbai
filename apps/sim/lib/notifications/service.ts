@@ -66,10 +66,13 @@ export async function shouldFireNotificationTrigger(
   return true
 }
 
-/** Sends one alert to each connected recipient; a failed send is counted, not thrown. */
+/**
+ * Sends one alert to each connected recipient of a workflow — alerts never reach another
+ * workflow's chats. A failed send is counted, not thrown.
+ */
 export async function deliverNotification(
   workspaceId: string,
-  workflowId: string | null,
+  workflowId: string,
   text: string
 ): Promise<NotificationDelivery> {
   const recipients = await listDeliverableNotificationRecipients(workspaceId, workflowId)
@@ -99,10 +102,11 @@ function describeContact(conversation: InboxConversationRecord): string | null {
 }
 
 /**
- * Records and delivers one firing of a trigger in a conversation. The event row is written
- * before delivery is attempted, so a firing that fails to send still counts against its own
- * cooldown and a broken bot cannot turn one event into an alert storm when it comes back.
- * Returns null when the trigger is spent on this conversation.
+ * Records and delivers one firing of a trigger in a conversation, to the recipients of the
+ * trigger's own workflow. The event row is written before delivery is attempted, so a firing
+ * that fails to send still counts against its own cooldown and a broken bot cannot turn one
+ * event into an alert storm when it comes back. Returns null when the trigger is spent on this
+ * conversation (or belongs to no workflow).
  */
 export async function fireNotificationTrigger(params: {
   trigger: NotificationTriggerRecord
@@ -112,6 +116,8 @@ export async function fireNotificationTrigger(params: {
   messageId?: string | null
 }): Promise<FiredNotification | null> {
   const { trigger, conversation } = params
+  const workflowId = trigger.workflowId
+  if (!workflowId) return null
   if (!(await shouldFireNotificationTrigger(trigger, conversation.id))) return null
 
   const eventId = generateId()
@@ -136,11 +142,7 @@ export async function fireNotificationTrigger(params: {
     pauseMinutes: trigger.pauseMinutes,
     conversationUrl: inboxConversationUrl(conversation.workspaceId, conversation.id),
   })
-  const delivery = await deliverNotification(
-    conversation.workspaceId,
-    conversation.workflowId,
-    text
-  )
+  const delivery = await deliverNotification(conversation.workspaceId, workflowId, text)
   await finishNotificationEvent(eventId, {
     status: delivery.deliveredCount > 0 ? 'sent' : 'failed',
     ...delivery,
@@ -238,9 +240,11 @@ function nothingFired(): NotificationCheckResult {
 }
 
 /**
- * Judges one Inbox message against the workspace's active triggers of its direction and acts
- * on what fired: alert, pause, pause notice. Triggers already spent on the conversation are
- * dropped before the model is paid to judge them. Only the first pausing trigger pauses.
+ * Judges one Inbox message against the active rules of its direction of the conversation's
+ * workflow (its deployed Notifications block) and acts on what fired: alert that workflow's
+ * recipients, pause, pause notice. A conversation of no workflow alerts nobody. Triggers already
+ * spent on the conversation are dropped before the model is paid to judge them. Only the first
+ * pausing trigger pauses.
  */
 export async function evaluateInboxMessageForNotifications(
   input: {
@@ -255,12 +259,13 @@ export async function evaluateInboxMessageForNotifications(
   if (!isNotificationsConfigured() || !input.text.trim()) return nothingFired()
 
   const conversation = await getInboxConversation(input.workspaceId, input.conversationId)
-  if (!conversation) return nothingFired()
+  const workflowId = conversation?.workflowId
+  if (!conversation || !workflowId) return nothingFired()
 
   const triggers = await listActiveNotificationTriggers({
     workspaceId: conversation.workspaceId,
     direction: input.direction,
-    workflowId: conversation.workflowId,
+    workflowId,
   })
   const open: NotificationTriggerRecord[] = []
   for (const trigger of triggers) {
@@ -279,7 +284,7 @@ export async function evaluateInboxMessageForNotifications(
     onUsage: (completion) =>
       recordNotificationJudgeUsage({
         workspaceId: conversation.workspaceId,
-        workflowId: conversation.workflowId,
+        workflowId,
         completion,
         referenceId: input.messageId ?? generateId(),
       }),
@@ -307,11 +312,13 @@ export async function evaluateInboxMessageForNotifications(
 }
 
 /**
- * Fires the workspace's `event` triggers watching `eventKey` in a conversation — no model
- * call, the workflow knows it happened — with each trigger's pause and pause notice.
+ * Fires the `event` rules of `workflowId` (the workflow whose Notify block reported the event)
+ * watching `eventKey` in a conversation — no model call, the workflow knows it happened — with
+ * each rule's pause and pause notice. Alerts go to that workflow's recipients only.
  */
 export async function fireNotificationEvent(params: {
   conversation: InboxConversationRecord
+  workflowId: string
   eventKey: NotificationEventKey
   reason?: string
   details?: Record<string, string>
@@ -322,7 +329,7 @@ export async function fireNotificationEvent(params: {
   const triggers = await listActiveNotificationTriggers({
     workspaceId: conversation.workspaceId,
     direction: 'event',
-    workflowId: conversation.workflowId,
+    workflowId: params.workflowId,
     eventKey: params.eventKey,
   })
   const fired: FiredNotification[] = []
@@ -345,13 +352,13 @@ export async function fireNotificationEvent(params: {
 }
 
 /**
- * A free-form alert from a workflow's Notify block: straight to the connected recipients, with
- * the conversation (when there is one) named in the header and linked. Recorded as an event
- * without a trigger, for the audit trail.
+ * A free-form alert from a workflow's Notify block: straight to that workflow's connected
+ * recipients, with the conversation (when there is one) named in the header and linked.
+ * Recorded as an event without a trigger, for the audit trail.
  */
 export async function sendWorkflowNotificationMessage(params: {
   workspaceId: string
-  workflowId: string | null
+  workflowId: string
   message: string
   conversation: InboxConversationRecord | null
 }): Promise<FiredNotification> {
@@ -376,11 +383,7 @@ export async function sendWorkflowNotificationMessage(params: {
       ? inboxConversationUrl(conversation.workspaceId, conversation.id)
       : null,
   })
-  const delivery = await deliverNotification(
-    params.workspaceId,
-    conversation?.workflowId ?? params.workflowId,
-    text
-  )
+  const delivery = await deliverNotification(params.workspaceId, params.workflowId, text)
   await finishNotificationEvent(eventId, {
     status: delivery.deliveredCount > 0 ? 'sent' : 'failed',
     ...delivery,

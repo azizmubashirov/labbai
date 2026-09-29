@@ -10,17 +10,11 @@ const mocks = vi.hoisted(() => ({
   recordAudit: vi.fn(),
   resolveContext: vi.fn(),
   countRecipients: vi.fn(),
-  countTriggers: vi.fn(),
   deleteRecipient: vi.fn(),
-  deleteTrigger: vi.fn(),
   getRecipient: vi.fn(),
-  getTrigger: vi.fn(),
   insertRecipient: vi.fn(),
-  insertTrigger: vi.fn(),
   isWorkflowInWorkspace: vi.fn(),
   listRecipients: vi.fn(),
-  listTriggers: vi.fn(),
-  updateTrigger: vi.fn(),
   sendMessage: vi.fn(),
   findConversationByChat: vi.fn(),
   fireEvent: vi.fn(),
@@ -45,17 +39,11 @@ vi.mock('@/lib/workspaces/application/workspace-context', () => ({
 
 vi.mock('@/lib/notifications/repository', () => ({
   countNotificationRecipients: mocks.countRecipients,
-  countNotificationTriggers: mocks.countTriggers,
   deleteNotificationRecipient: mocks.deleteRecipient,
-  deleteNotificationTrigger: mocks.deleteTrigger,
   getNotificationRecipient: mocks.getRecipient,
-  getNotificationTrigger: mocks.getTrigger,
   insertNotificationRecipient: mocks.insertRecipient,
-  insertNotificationTrigger: mocks.insertTrigger,
   isWorkflowInWorkspace: mocks.isWorkflowInWorkspace,
   listNotificationRecipients: mocks.listRecipients,
-  listNotificationTriggers: mocks.listTriggers,
-  updateNotificationTrigger: mocks.updateTrigger,
 }))
 
 vi.mock('@/lib/notifications/telegram', () => ({ sendNotificationMessage: mocks.sendMessage }))
@@ -75,68 +63,32 @@ vi.mock('@/lib/notifications/service', () => ({
 
 import {
   createNotificationRecipientOperation,
-  createNotificationTriggerOperation,
-  deleteNotificationTriggerOperation,
-  getNotificationSettingsOperation,
+  deleteNotificationRecipientOperation,
+  listNotificationRecipientsOperation,
   testNotificationRecipientOperation,
-  updateNotificationTriggerOperation,
-} from '@/lib/notifications/application/settings'
+} from '@/lib/notifications/application/recipients'
 import { notifyFromWorkflowOperation } from '@/lib/notifications/application/workflow'
 
-const ADMIN = { kind: 'session', userId: 'admin-1', sessionId: 'session-1' } as const
+const EDITOR = { kind: 'session', userId: 'editor-1', sessionId: 'session-1' } as const
 
 const RECIPIENT_ROW = {
   id: 'rec-1',
   workspaceId: 'ws-1',
-  workflowId: null,
+  workflowId: 'wf-agent',
   title: 'Sales',
   chatId: null,
   connectToken: 'tok_abcdefghijklmnop',
   isVerified: false,
   isActive: true,
   connectedAt: null,
-  createdBy: 'admin-1',
+  createdBy: 'editor-1',
   createdAt: new Date('2026-09-28T10:00:00Z'),
   updatedAt: new Date('2026-09-28T10:00:00Z'),
 }
 
-const TRIGGER_ROW = {
-  id: 'trg-1',
-  workspaceId: 'ws-1',
-  workflowId: null,
-  name: 'Needs a person',
-  direction: 'inbound',
-  condition: 'Customer asks for an operator',
-  eventKey: null,
-  extractSpec: '',
-  pauseMode: 'hard',
-  pauseMinutes: 15,
-  autoResume: true,
-  pauseNotice: '',
-  cooldownMinutes: 60,
-  oncePerConversation: false,
-  isActive: true,
-  createdAt: new Date('2026-09-28T10:00:00Z'),
-  updatedAt: new Date('2026-09-28T10:00:00Z'),
-}
+const WORKFLOW_SCOPE = { workspaceId: 'ws-1', workflowId: 'wf-agent' }
 
-const TRIGGER_FIELDS = {
-  name: 'Needs a person',
-  direction: 'inbound' as const,
-  condition: 'Customer asks for an operator',
-  eventKey: null,
-  extractSpec: '',
-  pauseMode: 'hard' as const,
-  pauseMinutes: 15,
-  autoResume: true,
-  pauseNotice: '',
-  cooldownMinutes: 60,
-  oncePerConversation: false,
-  isActive: true,
-  workflowId: null,
-}
-
-describe('notification settings use cases', () => {
+describe('Notifications block recipients', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setEnv({
@@ -148,168 +100,135 @@ describe('notification settings use cases', () => {
       workspaceOrganizationId: null,
       allowPersonalApiKeys: true,
     }))
-    mocks.resolvePermission.mockResolvedValue('admin')
+    mocks.resolvePermission.mockResolvedValue('write')
     mocks.countRecipients.mockResolvedValue(0)
-    mocks.countTriggers.mockResolvedValue(0)
     mocks.insertRecipient.mockResolvedValue(RECIPIENT_ROW)
-    mocks.insertTrigger.mockResolvedValue(TRIGGER_ROW)
     mocks.listRecipients.mockResolvedValue([RECIPIENT_ROW])
-    mocks.listTriggers.mockResolvedValue([TRIGGER_ROW])
     mocks.isWorkflowInWorkspace.mockResolvedValue(true)
   })
 
   afterAll(resetEnvMock)
 
-  it('shows recipients with their connect link and status to an admin', async () => {
-    const result = await getNotificationSettingsOperation.execute({
-      principal: ADMIN,
-      input: { workspaceId: 'ws-1' },
+  it('lists only the workflow’s recipients, with their connect link and status', async () => {
+    const result = await listNotificationRecipientsOperation.execute({
+      principal: EDITOR,
+      input: WORKFLOW_SCOPE,
     })
+    expect(mocks.isWorkflowInWorkspace).toHaveBeenCalledWith('ws-1', 'wf-agent')
+    expect(mocks.listRecipients).toHaveBeenCalledWith('ws-1', 'wf-agent')
     expect(result.configured).toBe(true)
     expect(result.botUsername).toBe('labbai_alerts_bot')
     expect(result.recipients).toEqual([
       expect.objectContaining({
         id: 'rec-1',
+        workflowId: 'wf-agent',
         status: 'pending',
         connectUrl: 'https://t.me/labbai_alerts_bot?start=notify_tok_abcdefghijklmnop',
       }),
     ])
     expect(result.recipients[0]).not.toHaveProperty('chatId')
-    expect(result.triggers).toEqual([expect.objectContaining({ id: 'trg-1' })])
   })
 
   it('reports an unconfigured server without reading anything', async () => {
     setEnv({ NOTIFICATION_BOT_TOKEN: undefined })
-    const result = await getNotificationSettingsOperation.execute({
-      principal: ADMIN,
-      input: { workspaceId: 'ws-1' },
+    const result = await listNotificationRecipientsOperation.execute({
+      principal: EDITOR,
+      input: WORKFLOW_SCOPE,
     })
-    expect(result).toEqual({ configured: false, botUsername: null, recipients: [], triggers: [] })
+    expect(result).toEqual({ configured: false, botUsername: null, recipients: [] })
     expect(mocks.listRecipients).not.toHaveBeenCalled()
   })
 
-  it('is admin-only, reads included', async () => {
-    mocks.resolvePermission.mockResolvedValue('write')
+  it('needs write on the workspace, reads included', async () => {
+    mocks.resolvePermission.mockResolvedValue('read')
     await expect(
-      getNotificationSettingsOperation.execute({ principal: ADMIN, input: { workspaceId: 'ws-1' } })
+      listNotificationRecipientsOperation.execute({ principal: EDITOR, input: WORKFLOW_SCOPE })
     ).rejects.toThrow()
-    await expect(
-      createNotificationTriggerOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', ...TRIGGER_FIELDS },
-      })
-    ).rejects.toThrow()
-    expect(mocks.insertTrigger).not.toHaveBeenCalled()
-  })
-
-  it('creates a recipient with a fresh connect token', async () => {
-    await createNotificationRecipientOperation.execute({
-      principal: ADMIN,
-      input: { workspaceId: 'ws-1', title: ' Sales ' },
-    })
-    const values = mocks.insertRecipient.mock.calls[0][0]
-    expect(values).toMatchObject({ workspaceId: 'ws-1', title: 'Sales', createdBy: 'admin-1' })
-    expect(values.connectToken).toMatch(/^[A-Za-z0-9_-]{24}$/)
-  })
-
-  it('refuses a workflow from another workspace', async () => {
-    mocks.isWorkflowInWorkspace.mockResolvedValue(false)
     await expect(
       createNotificationRecipientOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', title: '', workflowId: 'wf-elsewhere' },
+        principal: EDITOR,
+        input: { ...WORKFLOW_SCOPE, title: 'Sales' },
       })
-    ).rejects.toMatchObject({ code: 'validation' })
+    ).rejects.toThrow()
+    expect(mocks.listRecipients).not.toHaveBeenCalled()
     expect(mocks.insertRecipient).not.toHaveBeenCalled()
   })
 
-  it('caps triggers per workspace', async () => {
-    mocks.countTriggers.mockResolvedValue(10)
+  it('creates a recipient scoped to the workflow, with a fresh connect token', async () => {
+    await createNotificationRecipientOperation.execute({
+      principal: EDITOR,
+      input: { ...WORKFLOW_SCOPE, title: ' Sales ' },
+    })
+    expect(mocks.countRecipients).toHaveBeenCalledWith('ws-1', 'wf-agent')
+    const values = mocks.insertRecipient.mock.calls[0][0]
+    expect(values).toMatchObject({
+      workspaceId: 'ws-1',
+      workflowId: 'wf-agent',
+      title: 'Sales',
+      createdBy: 'editor-1',
+    })
+    expect(values.connectToken).toMatch(/^[A-Za-z0-9_-]{24}$/)
+  })
+
+  it('refuses a workflow of another workspace', async () => {
+    mocks.isWorkflowInWorkspace.mockResolvedValue(false)
     await expect(
-      createNotificationTriggerOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', ...TRIGGER_FIELDS },
+      createNotificationRecipientOperation.execute({
+        principal: EDITOR,
+        input: { workspaceId: 'ws-1', workflowId: 'wf-elsewhere', title: '' },
+      })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    await expect(
+      listNotificationRecipientsOperation.execute({
+        principal: EDITOR,
+        input: { workspaceId: 'ws-1', workflowId: 'wf-elsewhere' },
+      })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(mocks.insertRecipient).not.toHaveBeenCalled()
+    expect(mocks.listRecipients).not.toHaveBeenCalled()
+  })
+
+  it('caps recipients per workflow', async () => {
+    mocks.countRecipients.mockResolvedValue(20)
+    await expect(
+      createNotificationRecipientOperation.execute({
+        principal: EDITOR,
+        input: { ...WORKFLOW_SCOPE, title: 'One more' },
       })
     ).rejects.toMatchObject({ code: 'conflict' })
   })
 
-  it('stores an event trigger without a condition and a message trigger without an event', async () => {
-    await createNotificationTriggerOperation.execute({
-      principal: ADMIN,
-      input: {
-        workspaceId: 'ws-1',
-        ...TRIGGER_FIELDS,
-        direction: 'event',
-        eventKey: 'operator_handoff',
-        condition: 'leftover',
-        extractSpec: 'leftover',
-      },
-    })
-    expect(mocks.insertTrigger).toHaveBeenCalledWith(
-      expect.objectContaining({
-        direction: 'event',
-        eventKey: 'operator_handoff',
-        condition: '',
-        extractSpec: '',
-      })
-    )
-  })
-
-  it('refuses an event trigger without its event', async () => {
+  it('removes and tests a recipient only within its workflow', async () => {
+    mocks.deleteRecipient.mockResolvedValue(false)
     await expect(
-      createNotificationTriggerOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', ...TRIGGER_FIELDS, direction: 'event', eventKey: null },
+      deleteNotificationRecipientOperation.execute({
+        principal: EDITOR,
+        input: { ...WORKFLOW_SCOPE, recipientId: 'rec-of-another-workflow' },
       })
-    ).rejects.toMatchObject({ code: 'validation' })
-  })
-
-  it('validates an update against the trigger it changes', async () => {
-    mocks.getTrigger.mockResolvedValue(TRIGGER_ROW)
-    await expect(
-      updateNotificationTriggerOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', triggerId: 'trg-1', condition: '   ' },
-      })
-    ).rejects.toMatchObject({ code: 'validation' })
-
-    mocks.updateTrigger.mockResolvedValue({ ...TRIGGER_ROW, isActive: false })
-    const result = await updateNotificationTriggerOperation.execute({
-      principal: ADMIN,
-      input: { workspaceId: 'ws-1', triggerId: 'trg-1', isActive: false },
-    })
-    expect(result.trigger.isActive).toBe(false)
-    expect(mocks.updateTrigger).toHaveBeenCalledWith(
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(mocks.deleteRecipient).toHaveBeenCalledWith(
       'ws-1',
-      'trg-1',
-      expect.objectContaining({ isActive: false, condition: 'Customer asks for an operator' })
+      'wf-agent',
+      'rec-of-another-workflow'
     )
-  })
 
-  it('reports a trigger of another workspace as not found', async () => {
-    mocks.getTrigger.mockResolvedValue(null)
+    mocks.getRecipient.mockResolvedValue(null)
     await expect(
-      updateNotificationTriggerOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', triggerId: 'trg-other', isActive: false },
+      testNotificationRecipientOperation.execute({
+        principal: EDITOR,
+        input: { ...WORKFLOW_SCOPE, recipientId: 'rec-of-another-workflow' },
       })
     ).rejects.toMatchObject({ code: 'not_found' })
-
-    mocks.deleteTrigger.mockResolvedValue(false)
-    await expect(
-      deleteNotificationTriggerOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', triggerId: 'trg-other' },
-      })
-    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(mocks.getRecipient).toHaveBeenCalledWith('ws-1', 'wf-agent', 'rec-of-another-workflow')
+    expect(mocks.sendMessage).not.toHaveBeenCalled()
   })
 
   it('sends a test message only to a connected chat', async () => {
     mocks.getRecipient.mockResolvedValue(RECIPIENT_ROW)
     await expect(
       testNotificationRecipientOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', recipientId: 'rec-1' },
+        principal: EDITOR,
+        input: { ...WORKFLOW_SCOPE, recipientId: 'rec-1' },
       })
     ).resolves.toEqual({ delivered: false, error: 'Connect this recipient in Telegram first' })
     expect(mocks.sendMessage).not.toHaveBeenCalled()
@@ -318,8 +237,8 @@ describe('notification settings use cases', () => {
     mocks.sendMessage.mockResolvedValue({ ok: true })
     await expect(
       testNotificationRecipientOperation.execute({
-        principal: ADMIN,
-        input: { workspaceId: 'ws-1', recipientId: 'rec-1' },
+        principal: EDITOR,
+        input: { ...WORKFLOW_SCOPE, recipientId: 'rec-1' },
       })
     ).resolves.toEqual({ delivered: true, error: null })
     expect(mocks.sendMessage).toHaveBeenCalledWith('111', expect.stringContaining('Labbai'))
@@ -355,6 +274,9 @@ const WORKFLOW_PRINCIPAL: WorkflowExecutionDelegatedPrincipal = {
   },
 }
 
+const RUN_CONTEXT = WORKFLOW_PRINCIPAL.delegationContext!
+
+/** The customer's conversation belongs to the agent workflow, not the one running Notify. */
 const CONVERSATION = { id: 'conv-1', workspaceId: 'ws-1', workflowId: 'wf-agent' }
 
 describe('Notify from a workflow', () => {
@@ -391,7 +313,6 @@ describe('Notify from a workflow', () => {
       principal: WORKFLOW_PRINCIPAL,
       input: {
         workspaceId: 'ws-1',
-        workflowId: 'wf-escalate',
         kind: 'event',
         eventKey: 'operator_handoff',
         reason: 'Wholesale order',
@@ -407,6 +328,7 @@ describe('Notify from a workflow', () => {
     })
     expect(mocks.fireEvent).toHaveBeenCalledWith({
       conversation: CONVERSATION,
+      workflowId: 'wf-escalate',
       eventKey: 'operator_handoff',
       reason: 'Wholesale order',
     })
@@ -419,13 +341,60 @@ describe('Notify from a workflow', () => {
     })
   })
 
+  it('alerts for the calling agent when a shared child workflow runs Notify', async () => {
+    const childRun: WorkflowExecutionDelegatedPrincipal = {
+      ...WORKFLOW_PRINCIPAL,
+      delegationContext: {
+        ...RUN_CONTEXT,
+        workflowId: 'wf-agent',
+        currentWorkflow: {
+          workflowId: 'wf-escalate-shared',
+          mode: 'deployment',
+          deploymentVersionId: 'deployment-2',
+        },
+      },
+    }
+    await notifyFromWorkflowOperation.execute({
+      principal: childRun,
+      input: { workspaceId: 'ws-1', kind: 'message', message: 'Hi' },
+    })
+    expect(mocks.sendWorkflowMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ workflowId: 'wf-agent' })
+    )
+
+    await notifyFromWorkflowOperation.execute({
+      principal: childRun,
+      input: {
+        workspaceId: 'ws-1',
+        kind: 'event',
+        eventKey: 'payment_receipt',
+        chat: { channel: 'telegram', externalChatId: '555' },
+      },
+    })
+    expect(mocks.fireEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ workflowId: 'wf-agent', eventKey: 'payment_receipt' })
+    )
+    expect(mocks.fireEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ workflowId: 'wf-escalate-shared' })
+    )
+  })
+
+  it('refuses a delegation that names no workflow', async () => {
+    await expect(
+      notifyFromWorkflowOperation.execute({
+        principal: { ...WORKFLOW_PRINCIPAL, delegationContext: undefined },
+        input: { workspaceId: 'ws-1', kind: 'message', message: 'Hi' },
+      })
+    ).rejects.toThrow()
+    expect(mocks.sendWorkflowMessage).not.toHaveBeenCalled()
+  })
+
   it('fires nothing for a chat without a conversation', async () => {
     mocks.findConversationByChat.mockResolvedValue(null)
     const result = await notifyFromWorkflowOperation.execute({
       principal: WORKFLOW_PRINCIPAL,
       input: {
         workspaceId: 'ws-1',
-        workflowId: 'wf-escalate',
         kind: 'event',
         eventKey: 'operator_handoff',
         chat: { channel: 'telegram', externalChatId: '999' },
@@ -444,7 +413,7 @@ describe('Notify from a workflow', () => {
   it('sends a free-form message even without a chat', async () => {
     const result = await notifyFromWorkflowOperation.execute({
       principal: WORKFLOW_PRINCIPAL,
-      input: { workspaceId: 'ws-1', workflowId: 'wf-escalate', kind: 'message', message: 'Hi' },
+      input: { workspaceId: 'ws-1', kind: 'message', message: 'Hi' },
     })
     expect(mocks.findConversationByChat).not.toHaveBeenCalled()
     expect(mocks.sendWorkflowMessage).toHaveBeenCalledWith({
@@ -462,7 +431,6 @@ describe('Notify from a workflow', () => {
         principal: WORKFLOW_PRINCIPAL,
         input: {
           workspaceId: 'ws-2',
-          workflowId: 'wf-escalate',
           kind: 'event',
           eventKey: 'operator_handoff',
           chat: { channel: 'telegram', externalChatId: '555' },
@@ -476,7 +444,7 @@ describe('Notify from a workflow', () => {
     await expect(
       notifyFromWorkflowOperation.execute({
         principal: { ...WORKFLOW_PRINCIPAL, audience: 'sim:inbox' },
-        input: { workspaceId: 'ws-1', workflowId: null, kind: 'message', message: 'Hi' },
+        input: { workspaceId: 'ws-1', kind: 'message', message: 'Hi' },
       })
     ).rejects.toThrow()
     expect(mocks.sendWorkflowMessage).not.toHaveBeenCalled()
@@ -485,8 +453,8 @@ describe('Notify from a workflow', () => {
   it('is not reachable with a signed-in session', async () => {
     await expect(
       notifyFromWorkflowOperation.execute({
-        principal: ADMIN as never,
-        input: { workspaceId: 'ws-1', workflowId: null, kind: 'message', message: 'Hi' },
+        principal: EDITOR as never,
+        input: { workspaceId: 'ws-1', kind: 'message', message: 'Hi' },
       })
     ).rejects.toThrow()
   })
@@ -496,7 +464,7 @@ describe('Notify from a workflow', () => {
     await expect(
       notifyFromWorkflowOperation.execute({
         principal: WORKFLOW_PRINCIPAL,
-        input: { workspaceId: 'ws-1', workflowId: null, kind: 'message', message: 'Hi' },
+        input: { workspaceId: 'ws-1', kind: 'message', message: 'Hi' },
       })
     ).rejects.toMatchObject({ code: 'validation' })
   })

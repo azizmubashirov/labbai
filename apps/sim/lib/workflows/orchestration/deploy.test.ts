@@ -26,6 +26,8 @@ const {
   mockNotifySocketDeploymentChanged,
   mockLoadWorkflowDeploymentSnapshot,
   mockUpdateDeploymentVersionMetadata,
+  mockUndeployWorkflow,
+  mockRemoveNotificationTriggers,
   mockTx,
 } = vi.hoisted(() => ({
   mockSaveWorkflowToNormalizedTables: vi.fn(),
@@ -42,6 +44,8 @@ const {
   mockNotifySocketDeploymentChanged: vi.fn(),
   mockLoadWorkflowDeploymentSnapshot: vi.fn(),
   mockUpdateDeploymentVersionMetadata: vi.fn(),
+  mockUndeployWorkflow: vi.fn(),
+  mockRemoveNotificationTriggers: vi.fn(),
   /**
    * Sentinel transaction handle the mocked prepare functions hand to the real
    * onPrepareTransaction callback, which only forwards it into the (mocked)
@@ -89,8 +93,12 @@ vi.mock('@/lib/posthog/server', () => ({
 vi.mock('@/lib/workflows/persistence/utils', () => ({
   loadWorkflowDeploymentSnapshot: mockLoadWorkflowDeploymentSnapshot,
   saveWorkflowToNormalizedTables: mockSaveWorkflowToNormalizedTables,
-  undeployWorkflow: vi.fn(),
+  undeployWorkflow: mockUndeployWorkflow,
   updateDeploymentVersionMetadata: mockUpdateDeploymentVersionMetadata,
+}))
+
+vi.mock('@/lib/notifications/deploy-sync', () => ({
+  removeWorkflowNotificationTriggers: mockRemoveNotificationTriggers,
 }))
 
 vi.mock('@/lib/webhooks/deploy', () => ({
@@ -908,5 +916,27 @@ describe('mutation lock on the orchestration entry points', () => {
     await performFullUndeploy({ workflowId: 'wf-1', userId: 'user-1' })
 
     expect(mockAssertMutable).toHaveBeenCalledWith('wf-1')
+  })
+})
+
+describe('performFullUndeploy notification rules', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetDbChainMock()
+    workflowAuthzMockFns.mockAssertWorkflowMutable.mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 200 })))
+  })
+
+  it('removes the workflow’s notification triggers inside the undeploy transaction', async () => {
+    queueTableRows(schemaMock.workflow, [{ id: 'wf-1', name: 'Agent', workspaceId: 'ws-1' }])
+    mockUndeployWorkflow.mockImplementation(async (params) => {
+      await params.onUndeployTransaction?.(mockTx, { deploymentVersionIds: ['dv-1'] })
+      return { success: true }
+    })
+
+    const result = await performFullUndeploy({ workflowId: 'wf-1', userId: 'user-1' })
+
+    expect(result.success).toBe(true)
+    expect(mockRemoveNotificationTriggers).toHaveBeenCalledWith(mockTx, 'wf-1')
   })
 })

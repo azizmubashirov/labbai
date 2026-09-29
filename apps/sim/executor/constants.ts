@@ -46,6 +46,8 @@ export enum BlockType {
   WAIT = 'wait',
 
   NOTE = 'note',
+  /** Labbai: configures a workflow's Telegram alerts; read at deploy time, never executed. */
+  NOTIFICATIONS = 'notifications',
 
   SENTINEL_START = 'sentinel_start',
   SENTINEL_END = 'sentinel_end',
@@ -80,6 +82,7 @@ export const METADATA_ONLY_BLOCK_TYPES = [
   BlockType.LOOP,
   BlockType.PARALLEL,
   BlockType.NOTE,
+  BlockType.NOTIFICATIONS,
 ] as const
 
 export type SentinelType = 'start' | 'end'
@@ -353,8 +356,9 @@ export function isAgentBlockType(blockType: string | undefined): boolean {
   return blockType === BlockType.AGENT
 }
 
+/** Blocks with no ports that never run: the Note and the Notifications configuration block. */
 export function isAnnotationOnlyBlock(blockType: string | undefined): boolean {
-  return blockType === BlockType.NOTE
+  return blockType === BlockType.NOTE || blockType === BlockType.NOTIFICATIONS
 }
 
 export function buildReference(path: string): string {

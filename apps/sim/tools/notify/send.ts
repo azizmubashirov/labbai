@@ -10,7 +10,7 @@ export const notifySendTool: InternalToolConfig<NotifySendParams, NotifySendResp
   id: 'notify_send',
   name: 'Notify Send',
   description:
-    'Alert the workspace’s operators on Telegram through the Labbai notification bot: fire a workflow event (the workspace’s event triggers decide the alert and whether AI pauses) or send a free-form message.',
+    'Alert this workflow’s Telegram recipients through the Labbai notification bot: fire a workflow event (this workflow’s event rules decide the alert and whether AI pauses) or send a free-form message.',
   version: '1.0.0',
 
   params: {

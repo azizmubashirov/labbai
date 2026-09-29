@@ -496,7 +496,11 @@ export function filterUniqueWorkflowEdges<T extends WorkflowEdgeHandles>(
 }
 
 const WORKFLOW_CONTAINER_BLOCK_TYPES = new Set(['loop', 'parallel'])
-const WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPE = 'note'
+/**
+ * Blocks that sit on the canvas without joining the graph: the "note" annotation and Labbai's
+ * "notifications" configuration block (its rules are read at deploy time, never executed).
+ */
+const WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPES: ReadonlySet<string> = new Set(['note', 'notifications'])
 /** Legacy trigger block type — see TRIGGER_TYPES.STARTER in apps/sim/lib/workflows/triggers/triggers.ts. */
 const LEGACY_STARTER_BLOCK_TYPE = 'starter'
 
@@ -538,9 +542,12 @@ export function getWorkflowEdgeScopeDropReason(
   return `blocks are in different scopes (${sourceParent ?? 'root'} -> ${targetParent ?? 'root'})`
 }
 
-/** True when a block's type is the annotation-only "note" block, which cannot participate in edges. */
+/**
+ * True when a block's type is annotation-only — the "note" block or the "notifications"
+ * configuration block — which cannot participate in edges.
+ */
 export function isWorkflowAnnotationOnlyBlockType(blockType: string | undefined): boolean {
-  return blockType === WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPE
+  return blockType !== undefined && WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPES.has(blockType)
 }
 
 export interface WorkflowTriggerCapableBlock {

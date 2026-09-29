@@ -2,43 +2,46 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import {
   type CreateNotificationRecipientBody,
-  type CreateNotificationTriggerBody,
   createNotificationRecipientContract,
-  createNotificationTriggerContract,
   deleteNotificationRecipientContract,
-  deleteNotificationTriggerContract,
-  getNotificationSettingsContract,
+  listNotificationRecipientsContract,
   type NotificationRecipient,
-  type NotificationSettings,
-  type NotificationTrigger,
   testNotificationRecipientContract,
-  type UpdateNotificationTriggerBody,
-  updateNotificationTriggerContract,
+  type WorkflowNotificationRecipients,
 } from '@/lib/api/contracts/notifications'
 
-export type { NotificationRecipient, NotificationSettings, NotificationTrigger }
+export type { NotificationRecipient, WorkflowNotificationRecipients }
 
-export const NOTIFICATION_SETTINGS_STALE_TIME = 30 * 1000
+export const NOTIFICATION_RECIPIENTS_STALE_TIME = 30 * 1000
 /** While a recipient waits for its chat to open the link, the list checks again this often. */
 export const NOTIFICATION_PENDING_POLL_INTERVAL_MS = 5 * 1000
 
 export const notificationKeys = {
   all: ['notifications'] as const,
-  settings: (workspaceId: string) => [...notificationKeys.all, 'settings', workspaceId] as const,
+  recipients: (workspaceId: string, workflowId: string) =>
+    [...notificationKeys.all, 'recipients', workspaceId, workflowId] as const,
 }
 
 /**
- * Recipients, triggers and whether the platform bot is configured. Admin-only on the server, so
- * callers pass `enabled: false` for everyone else. Polls while a recipient is still waiting to
- * connect, so the row turns "Connected" soon after the operator presses Start in Telegram.
+ * A workflow's Telegram recipients and whether the platform bot is configured. Needs write on the
+ * workspace, so callers pass `enabled: false` for read-only members. Polls while a recipient is
+ * still waiting to connect, so the row turns "Connected" soon after the operator presses Start in
+ * Telegram.
  */
-export function useNotificationSettings(workspaceId: string, options: { enabled: boolean }) {
+export function useWorkflowNotificationRecipients(
+  workspaceId: string,
+  workflowId: string,
+  options: { enabled: boolean }
+) {
   return useQuery({
-    queryKey: notificationKeys.settings(workspaceId),
+    queryKey: notificationKeys.recipients(workspaceId, workflowId),
     queryFn: ({ signal }) =>
-      requestJson(getNotificationSettingsContract, { params: { id: workspaceId }, signal }),
-    enabled: Boolean(workspaceId) && options.enabled,
-    staleTime: NOTIFICATION_SETTINGS_STALE_TIME,
+      requestJson(listNotificationRecipientsContract, {
+        params: { id: workspaceId, workflowId },
+        signal,
+      }),
+    enabled: Boolean(workspaceId && workflowId) && options.enabled,
+    staleTime: NOTIFICATION_RECIPIENTS_STALE_TIME,
     refetchInterval: (query) =>
       query.state.data?.recipients.some((recipient) => recipient.status === 'pending')
         ? NOTIFICATION_PENDING_POLL_INTERVAL_MS
@@ -46,68 +49,42 @@ export function useNotificationSettings(workspaceId: string, options: { enabled:
   })
 }
 
-function useInvalidateNotificationSettings(workspaceId: string) {
+function useInvalidateNotificationRecipients(workspaceId: string, workflowId: string) {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: notificationKeys.settings(workspaceId) })
+  return () =>
+    queryClient.invalidateQueries({
+      queryKey: notificationKeys.recipients(workspaceId, workflowId),
+    })
 }
 
-export function useCreateNotificationRecipient(workspaceId: string) {
-  const invalidate = useInvalidateNotificationSettings(workspaceId)
+export function useCreateNotificationRecipient(workspaceId: string, workflowId: string) {
+  const invalidate = useInvalidateNotificationRecipients(workspaceId, workflowId)
   return useMutation({
     mutationFn: (body: CreateNotificationRecipientBody) =>
-      requestJson(createNotificationRecipientContract, { params: { id: workspaceId }, body }),
-    onSettled: invalidate,
-  })
-}
-
-export function useDeleteNotificationRecipient(workspaceId: string) {
-  const invalidate = useInvalidateNotificationSettings(workspaceId)
-  return useMutation({
-    mutationFn: (recipientId: string) =>
-      requestJson(deleteNotificationRecipientContract, {
-        params: { id: workspaceId, recipientId },
-      }),
-    onSettled: invalidate,
-  })
-}
-
-export function useTestNotificationRecipient(workspaceId: string) {
-  return useMutation({
-    mutationFn: (recipientId: string) =>
-      requestJson(testNotificationRecipientContract, {
-        params: { id: workspaceId, recipientId },
-      }),
-  })
-}
-
-export function useCreateNotificationTrigger(workspaceId: string) {
-  const invalidate = useInvalidateNotificationSettings(workspaceId)
-  return useMutation({
-    mutationFn: (body: CreateNotificationTriggerBody) =>
-      requestJson(createNotificationTriggerContract, { params: { id: workspaceId }, body }),
-    onSettled: invalidate,
-  })
-}
-
-export function useUpdateNotificationTrigger(workspaceId: string) {
-  const invalidate = useInvalidateNotificationSettings(workspaceId)
-  return useMutation({
-    mutationFn: ({ triggerId, ...body }: UpdateNotificationTriggerBody & { triggerId: string }) =>
-      requestJson(updateNotificationTriggerContract, {
-        params: { id: workspaceId, triggerId },
+      requestJson(createNotificationRecipientContract, {
+        params: { id: workspaceId, workflowId },
         body,
       }),
     onSettled: invalidate,
   })
 }
 
-export function useDeleteNotificationTrigger(workspaceId: string) {
-  const invalidate = useInvalidateNotificationSettings(workspaceId)
+export function useDeleteNotificationRecipient(workspaceId: string, workflowId: string) {
+  const invalidate = useInvalidateNotificationRecipients(workspaceId, workflowId)
   return useMutation({
-    mutationFn: (triggerId: string) =>
-      requestJson(deleteNotificationTriggerContract, {
-        params: { id: workspaceId, triggerId },
+    mutationFn: (recipientId: string) =>
+      requestJson(deleteNotificationRecipientContract, {
+        params: { id: workspaceId, workflowId, recipientId },
       }),
     onSettled: invalidate,
+  })
+}
+
+export function useTestNotificationRecipient(workspaceId: string, workflowId: string) {
+  return useMutation({
+    mutationFn: (recipientId: string) =>
+      requestJson(testNotificationRecipientContract, {
+        params: { id: workspaceId, workflowId, recipientId },
+      }),
   })
 }

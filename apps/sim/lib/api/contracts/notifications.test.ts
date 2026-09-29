@@ -3,81 +3,41 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  createNotificationTriggerBodySchema,
-  notificationTriggerShapeError,
-  updateNotificationTriggerBodySchema,
+  createNotificationRecipientBodySchema,
+  notificationRecipientParamsSchema,
+  notificationWorkflowParamsSchema,
 } from '@/lib/api/contracts/notifications'
 
-describe('notification trigger contracts', () => {
-  it('fills defaults for a message trigger', () => {
+describe('notification recipient contracts', () => {
+  it('scopes every recipient route to a workflow of the workspace', () => {
+    expect(notificationWorkflowParamsSchema.safeParse({ id: 'ws-1' }).success).toBe(false)
     expect(
-      createNotificationTriggerBodySchema.parse({
-        name: ' Needs a person ',
-        condition: 'Customer asks for an operator',
-      })
-    ).toEqual({
-      name: 'Needs a person',
-      direction: 'inbound',
-      condition: 'Customer asks for an operator',
-      eventKey: null,
-      extractSpec: '',
-      pauseMode: 'none',
-      pauseMinutes: 15,
-      autoResume: true,
-      pauseNotice: '',
-      cooldownMinutes: 60,
-      oncePerConversation: false,
-      isActive: true,
-      workflowId: null,
-    })
-  })
-
-  it('needs a condition for message triggers and an event for event triggers', () => {
-    expect(createNotificationTriggerBodySchema.safeParse({ name: 'X' }).success).toBe(false)
+      notificationWorkflowParamsSchema.safeParse({ id: 'ws-1', workflowId: 'wf-1' }).success
+    ).toBe(true)
     expect(
-      createNotificationTriggerBodySchema.safeParse({ name: 'X', direction: 'event' }).success
+      notificationRecipientParamsSchema.safeParse({ id: 'ws-1', workflowId: 'wf-1' }).success
     ).toBe(false)
     expect(
-      createNotificationTriggerBodySchema.safeParse({
-        name: 'X',
-        direction: 'event',
-        eventKey: 'operator_handoff',
+      notificationRecipientParamsSchema.safeParse({
+        id: 'ws-1',
+        workflowId: 'wf-1',
+        recipientId: 'rec-1',
       }).success
     ).toBe(true)
   })
 
-  it('rejects unknown events, pause modes and out-of-range minutes', () => {
-    const base = { name: 'X', condition: 'c' }
-    for (const body of [
-      { ...base, direction: 'event', eventKey: 'order_paid' },
-      { ...base, pauseMode: 'forever' },
-      { ...base, pauseMinutes: 0 },
-      { ...base, pauseMinutes: 24 * 60 + 1 },
-      { ...base, cooldownMinutes: -1 },
-      { ...base, name: '' },
-    ]) {
-      expect(createNotificationTriggerBodySchema.safeParse(body).success).toBe(false)
-    }
+  it('trims the recipient name and defaults it to empty', () => {
+    expect(createNotificationRecipientBodySchema.parse({ title: ' Sales ' })).toEqual({
+      title: 'Sales',
+    })
+    expect(createNotificationRecipientBodySchema.parse({})).toEqual({ title: '' })
+    const tooLong = createNotificationRecipientBodySchema.safeParse({ title: 'x'.repeat(121) })
+    expect(tooLong.success).toBe(false)
   })
 
-  it('accepts a partial update but not an empty one', () => {
-    expect(updateNotificationTriggerBodySchema.safeParse({ isActive: false }).success).toBe(true)
-    expect(updateNotificationTriggerBodySchema.safeParse({}).success).toBe(false)
-  })
-
-  it('names the missing field of a trigger', () => {
+  it('never takes the workflow from the body', () => {
     expect(
-      notificationTriggerShapeError({ direction: 'outbound', condition: ' ', eventKey: null })
-    ).toMatchObject({ path: 'condition' })
-    expect(
-      notificationTriggerShapeError({ direction: 'event', condition: '', eventKey: null })
-    ).toMatchObject({ path: 'eventKey' })
-    expect(
-      notificationTriggerShapeError({
-        direction: 'event',
-        condition: '',
-        eventKey: 'booking_link_sent',
-      })
-    ).toBeNull()
+      createNotificationRecipientBodySchema.parse({ title: 'Sales', workflowId: 'wf-other' })
+    ).toEqual({ title: 'Sales' })
   })
 })

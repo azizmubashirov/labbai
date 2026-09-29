@@ -1,7 +1,20 @@
 /**
  * Labbai operator notifications: the shared vocabulary of triggers, events and pause modes.
- * Client-safe (no server imports) so contracts, the settings page and the Notify block share it.
+ * Client-safe (no server imports) so contracts, the Notifications block and the Notify block
+ * share it.
  */
+
+/**
+ * The canvas block that configures a workflow's notifications. It never runs: its rules become
+ * the workflow's `notification_trigger` rows when the workflow is deployed.
+ */
+export const NOTIFICATIONS_BLOCK_TYPE = 'notifications'
+
+/** Sub-block of the Notifications block that holds its rules (a `NotificationRule[]`). */
+export const NOTIFICATION_RULES_SUBBLOCK_ID = 'rules'
+
+/** Sub-block of the Notifications block that manages its Telegram recipients (no stored value). */
+export const NOTIFICATION_RECIPIENTS_SUBBLOCK_ID = 'recipients'
 
 /** Which messages a trigger judges: the customer's, the agent's, or a workflow event. */
 export const NOTIFICATION_TRIGGER_DIRECTIONS = ['inbound', 'outbound', 'event'] as const
@@ -43,10 +56,10 @@ export const NOTIFICATION_PAUSE_MODE_LABELS: Record<NotificationPauseMode, strin
   hard: 'Turn AI off until an operator turns it on',
 }
 
-/** Triggers per workspace. One LLM call judges them all, so the prompt must stay small. */
+/** Rules per workflow. One LLM call judges them all, so the prompt must stay small. */
 export const NOTIFICATION_MAX_TRIGGERS = 10
 
-/** Recipients (Telegram chats) per workspace. */
+/** Recipients (Telegram chats) per workflow. */
 export const NOTIFICATION_MAX_RECIPIENTS = 20
 
 /** Longest pause a temporary trigger can set: one day. */

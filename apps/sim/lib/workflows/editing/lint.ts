@@ -1,3 +1,4 @@
+import { isWorkflowAnnotationOnlyBlockType } from '@sim/workflow-types/workflow'
 import { getBlock } from '@/blocks'
 import { isTriggerBlockType } from '@/executor/constants'
 import {
@@ -190,19 +191,21 @@ export function lintEditedWorkflowState(workflowState: Pick<WorkflowState, 'bloc
   }
 
   const orphanBlocks = Object.entries(blocks)
-    .filter(([, block]) => block.type !== 'note' && !isWorkflowEntryBlock(block))
+    .filter(
+      ([, block]) => !isWorkflowAnnotationOnlyBlockType(block.type) && !isWorkflowEntryBlock(block)
+    )
     .filter(([blockId]) => !incomingEdgesByTarget.has(blockId))
     .map(([blockId, block]) => blockRef(blockId, block))
 
   // Structural descriptors (advisory, not "issues"): sources have no incoming
   // edge (trigger blocks are naturally sources), sinks have no outgoing edge.
   const sources = Object.entries(blocks)
-    .filter(([, block]) => block.type !== 'note')
+    .filter(([, block]) => !isWorkflowAnnotationOnlyBlockType(block.type))
     .filter(([blockId]) => !incomingEdgesByTarget.has(blockId))
     .map(([blockId, block]) => blockRef(blockId, block))
 
   const sinks = Object.entries(blocks)
-    .filter(([, block]) => block.type !== 'note')
+    .filter(([, block]) => !isWorkflowAnnotationOnlyBlockType(block.type))
     .filter(([blockId]) => !outgoingEdgesBySource.has(blockId))
     .map(([blockId, block]) => blockRef(blockId, block))
 

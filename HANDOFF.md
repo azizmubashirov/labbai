@@ -217,11 +217,17 @@ alerts for every workspace; workspace owners never see its token. Written withou
 verify with CI (tsc + vitest) and a real bot before relying on it. Inline buttons on alerts
 (resume / snooze / approve) are **phase 2, not built**.
 
+**Per workflow, on the canvas (owner decision 2026-09-29).** Notifications are configured with a
+**Notifications block** placed on an agent workflow's canvas — not in workspace Settings (that
+section was removed). Each workflow has its own recipients and rules: a workspace with two agent
+workflows can alert from one and stay silent in the other. A workflow without the block alerts
+nobody; a conversation with no workflow alerts nobody.
+
 - Env (server only, `lib/core/config/env.ts`, `.env.example`): `NOTIFICATION_BOT_TOKEN`,
   `NOTIFICATION_BOT_USERNAME` (without @), `NOTIFICATION_BOT_WEBHOOK_SECRET` (A-Z a-z 0-9 _ -,
   e.g. `openssl rand -hex 24`), optional `NOTIFICATION_MODEL` (default `gpt-4.1-mini`, judged on
   the platform `OPENAI_API_KEY` / `OPENAI_BASE_URL`). Token + username unset → the feature is off:
-  the settings section is hidden (deployment feature `notifications`), every hook returns before
+  the Notifications block shows a "not set up on this server" help text, every hook returns before
   touching the DB or the model, the Notify block fails with a clear error.
 - Register the webhook once per deployment (and whenever the URL or secret changes), from
   `apps/sim` with the deployment's env: `bun run scripts/set-notification-webhook.ts`
@@ -232,26 +238,61 @@ verify with CI (tsc + vitest) and a real bot before relying on it. Inline button
 - Bot (`lib/notifications/bot.ts`, route `app/api/notifications/telegram/[secret]`): the path
   secret must match (else 404) and Telegram's `X-Telegram-Bot-Api-Secret-Token`, when sent, too
   (else 403). `/start notify_<token>` connects that chat (private or group, `/start@bot` works) to
-  the recipient row; bare `/start` → welcome; `/stop` → deactivates that chat's recipients.
+  the recipient row; bare `/start` → welcome (points to the Notifications block); `/stop` →
+  deactivates that chat's recipients (of every workflow).
   Replies are Uzbek and say "Labbai". It never runs an agent or touches a conversation.
-- Data (migration `0383_labbai_notifications`, additive): `notification_recipient` (workspace,
-  optional workflow, title, chat_id, connect_token, verified/active, connected_at),
+- Data (migration `0383_labbai_notifications`, additive; **no new migration** for the per-workflow
+  move — `workflow_id` stays nullable in the schema, the code always sets and filters it; rows
+  with a null workflow, e.g. from the removed Settings page, are ignored): `notification_recipient`
+  (workspace, workflow, title, chat_id, connect_token, verified/active, connected_at),
   `notification_trigger` (name, direction inbound|outbound|event, condition, event_key,
   extract_spec, pause_mode none|temporary|hard, pause_minutes, auto_resume, pause_notice,
-  cooldown_minutes, once_per_conversation, is_active, optional workflow), `notification_event`
+  cooldown_minutes, once_per_conversation, is_active, workflow), `notification_event`
   (audit + dedup source of truth; written before delivery so a failed send still counts), and
   `inbox_conversation.ai_paused_until`.
+- **Notifications block** (`blocks/blocks/notifications.ts`, type `notifications`, category
+  `blocks`, `singleInstance`, no tools / inputs / outputs). A configuration block like the Note:
+  it has no ports, edges to or from it are dropped (`isWorkflowAnnotationOnlyBlockType` in
+  `@sim/workflow-types`, `isAnnotationOnlyBlock` in `executor/constants.ts`), it is in
+  `METADATA_ONLY_BLOCK_TYPES` so the DAG builder skips it, lint does not call it an orphan, and
+  "run from block" is off for it. Both fields are `type: 'modal'` sub-blocks (the existing
+  custom-component slot, `sub-block/components/modal-registry.ts`), `hideFromCopilot` +
+  `hideFromPreview`:
+  - **Recipients** (`modalId: 'notification-recipients'`, no stored value): "Connect Telegram"
+    creates a recipient of THIS workflow at once and shows `t.me/<bot>?start=notify_<token>` plus
+    the group command; the list shows Connected / Pending / Stopped (polls every 5 s while one is
+    pending) with copy link, send test message, remove. Needs write on the workspace (same as
+    editing the workflow). Shows a help text when the bot is not configured on the server.
+  - **Rules** (`modalId: 'notification-rules'`, value = `NotificationRule[]`,
+    `lib/notifications/rules.ts`): add / edit (modal) / turn on-off / delete. Per rule: name, when
+    (customer message | agent reply | workflow event), condition (message rules), event
+    (operator_handoff | booking_link_sent | payment_receipt, event rules), details to extract,
+    pause AI (none | for a while | until an operator), pause minutes, auto resume, pause notice,
+    cooldown minutes, once per conversation, active. Max 10 per workflow. The value is versioned
+    with the workflow like any field.
+- **Deploy sync** (`lib/notifications/deploy-sync.ts`): rules only take effect from the deployed
+  version — **change a rule → redeploy**, like the rest of the workflow. Inside the deployment's
+  activation transaction (`lib/workflows/deployment-outbox.ts`, next to the MCP tool sync; also
+  the legacy side-effect sync path) the enabled Notifications block's valid rules become the
+  workflow's `notification_trigger` rows: replace-all per workflow and idempotent — rows no rule
+  backs are deleted, the rest upserted under a deterministic id
+  `ntr_<workflowId>_<blockId>_<ruleId>`, so a redeploy keeps each rule's alert history (cooldown /
+  once-per-conversation survive; event rows cascade only when a rule is removed). Activating an
+  older version syncs that version's rules. Undeploy (`performFullUndeploy`, inside the undeploy
+  transaction) deletes the workflow's triggers. Removing the block and redeploying removes them
+  too. Recipients are not touched by deploys (they belong to the workflow; deleting the workflow
+  cascades them).
 - Evaluation (`lib/notifications/{hooks,service,evaluator}.ts`): after each customer message
   recorded by `lib/inbox/webhook.ts` (inbound) and each agent send recorded by
-  `lib/inbox/outbound.ts` (outbound), the workspace's active triggers of that direction (and of the
-  conversation's workflow or all workflows) are judged in the background — fire-and-forget, errors
+  `lib/inbox/outbound.ts` (outbound), only the active triggers of that direction of the
+  conversation's workflow (`inbox_conversation.workflow_id`) are judged in the background — fire-and-forget, errors
   logged, never blocking or failing delivery. Triggers already spent (once-per-conversation or
   inside the cooldown) are dropped before the model call; one JSON call (Mehmon's prompt, English)
   judges all remaining triggers and extracts the requested details; malformed output = no alert.
   The judge's cost goes to the usage ledger (source `workflow`, the conversation's workflow owner).
 - On fire: an HTML alert (title, customer, channel, reason, details, pause line, "Chatni ochish"
-  link to the Inbox thread) to every verified active recipient of the workspace (workflow-scoped
-  recipients only for their workflow). Pause: `hard` (or `temporary` without auto-resume) = AI off
+  link to the Inbox thread) to every verified active recipient of the trigger's workflow — never
+  another workflow's chats. Pause: `hard` (or `temporary` without auto-resume) = AI off
   until an operator turns it on; `temporary` = `ai_enabled=false` + `ai_paused_until`, AI answers
   again by itself after it (checked by the inbound AI-off gate; reads settle an expired pause, the
   thread header shows "AI paused until HH:mm"; any operator toggle clears it; never shortens a
@@ -268,18 +309,31 @@ verify with CI (tsc + vitest) and a real bot before relying on it. Inline button
   booking_link_sent | payment_receipt; Message = optional reason) or `Send message` (Message
   required); Channel, Customer Chat ID (required for events, optional for messages), advanced
   Account ID. The conversation is resolved like the Inbox block, only inside the run's workspace.
-  Outputs `found`, `conversationId`, `fired`, `delivered`, `paused`. An event only alerts when an
-  event trigger watches it (no trigger → `fired = 0`). Generated tool files updated by hand (pure
-  insertion of `notify_send`); run `bun run tool-metadata:check` when bun is available.
-- UI: Settings → Notifications (workspace group; admin-only, reads included, since a connect link
-  lets whoever opens it receive alerts): "Connect Telegram" creates a recipient and shows the
-  `t.me/<bot>?start=notify_<token>` link plus the group command; rows show Connected / Pending /
-  Stopped, with copy link, send test message and remove; triggers list with create / edit /
-  turn on-off / delete. API: `lib/api/contracts/notifications.ts`, routes under
-  `app/api/workspaces/[id]/notifications/**`. Workflow scoping exists in the API/DB but has no UI.
-- Limits: 10 triggers and 20 recipients per workspace; only Telegram as alert channel; no alert
-  history page yet (rows are in `notification_event`); no condition drafting / dry run (Mehmon
-  phase 3) and no starter templates; alerts are not audited in the activity log.
+  Outputs `found`, `conversationId`, `fired`, `delivered`, `paused`. **Scoped to the TOP-LEVEL
+  workflow of the run** (the executor delegation's root `workflowId` — a child run keeps it and
+  only swaps `currentWorkflow`; never an id from the input): Fire event uses that workflow's
+  deployed event rules, Send message goes to that workflow's recipients. So one shared
+  `escalate_to_human` child workflow, called as a tool by several agent workflows, alerts the
+  calling agent's recipients with the calling agent's event rules; the child needs no
+  Notifications block. Used directly in an agent workflow, the root is that workflow. Caveat: a
+  child started over HTTP (a separate execution, e.g. the API) is its own root. An event only alerts
+  when an event rule watches it (no rule → `fired = 0`). Generated tool files updated by hand
+  (insertion of `notify_send`; its description was reworded on 2026-09-29 in `tools/notify/send.ts`
+  and `tools/generated/tool-metadata.ts` alike); run `bun run tool-metadata:check` when bun is
+  available.
+- API (recipients only — rules have no API, they are block values synced on deploy):
+  `lib/api/contracts/notifications.ts`, use cases `lib/notifications/application/recipients.ts`
+  (operations `notifications.recipients.{list,create,delete,test}`, session-only, **write** role,
+  the workflow must belong to the workspace), routes
+  `app/api/workspaces/[id]/notifications/workflows/[workflowId]/recipients` (GET list + configured
+  + bot username + limits, POST create), `.../recipients/[recipientId]` (DELETE),
+  `.../recipients/[recipientId]/test` (POST). The workspace-wide settings/trigger routes and the
+  Settings → Notifications page were removed.
+- Limits: 10 rules and 20 recipients per workflow; only Telegram as alert channel; rules are not
+  editable by Copilot (hidden fields); no alert history page yet (rows are in
+  `notification_event`); no condition drafting / dry run (Mehmon phase 3) and no starter
+  templates; alerts are not audited in the activity log. The canvas card shows only the block
+  header (both fields are hidden from the card).
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

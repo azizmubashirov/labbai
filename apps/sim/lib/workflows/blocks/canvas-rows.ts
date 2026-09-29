@@ -1,3 +1,4 @@
+import { isWorkflowAnnotationOnlyBlockType } from '@sim/workflow-types/workflow'
 import type { BlockConfig, SubBlockConfig } from '@/blocks/types'
 
 /**
@@ -49,7 +50,12 @@ export function showsCanvasDefaultHandles(
   type: string,
   displayTriggerMode: boolean
 ): boolean {
-  return config.category !== 'triggers' && type !== 'starter' && !displayTriggerMode
+  return (
+    config.category !== 'triggers' &&
+    type !== 'starter' &&
+    !displayTriggerMode &&
+    !isWorkflowAnnotationOnlyBlockType(type)
+  )
 }
 
 /**

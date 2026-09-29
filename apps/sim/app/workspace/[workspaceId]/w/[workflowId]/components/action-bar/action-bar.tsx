@@ -20,6 +20,7 @@ import {
   NOTE_COLOR_OPTIONS,
   type NoteColor,
 } from '@sim/workflow-renderer'
+import { isWorkflowAnnotationOnlyBlockType } from '@sim/workflow-types/workflow'
 import { useShallow } from 'zustand/react/shallow'
 import { isInputDefinitionTrigger } from '@/lib/workflows/triggers/input-definition-triggers'
 import { useUserPermissionsContext } from '@/app/workspace/[workspaceId]/providers/workspace-permissions-provider'
@@ -260,8 +261,12 @@ export const ActionBar = memo(
     const isInsideSubflow = parentId && (parentType === 'loop' || parentType === 'parallel')
 
     const { dependenciesSatisfied } = getRunFromBlockDependencyState(blockId, edges, snapshot)
+    /* Notes and the Notifications configuration block never run, so nothing runs from them. */
     const canRunFromBlock =
-      dependenciesSatisfied && !isNoteBlock && !isInsideSubflow && !isWorkflowRunning
+      dependenciesSatisfied &&
+      !isWorkflowAnnotationOnlyBlockType(blockType) &&
+      !isInsideSubflow &&
+      !isWorkflowRunning
     /*
      * One rule per action, shared by the button's `disabled` and its handler —
      * previously the handler cancelled unconditionally while `disabled` only
