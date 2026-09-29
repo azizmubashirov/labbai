@@ -45,6 +45,21 @@ const AUDIO_FIELD = ['audioFile', 'audioRef', 'audio'] as const
 const ANIMATION_FIELD = ['animationFile', 'animationRef', 'animation'] as const
 const DOCUMENT_FIELD = ['attachmentFiles', 'files'] as const
 
+/** Operations the Bot API can run on behalf of a Telegram Business account. */
+const BUSINESS_CONNECTION_OPERATIONS = [
+  'telegram_message',
+  'telegram_send_photo',
+  'telegram_send_video',
+  'telegram_send_audio',
+  'telegram_send_animation',
+  'telegram_send_document',
+  'telegram_send_location',
+  'telegram_send_contact',
+  'telegram_send_poll',
+  'telegram_send_chat_action',
+  'telegram_edit_message_text',
+]
+
 export const TelegramBlock: BlockConfig<TelegramResponse> = {
   type: 'telegram',
   name: 'Telegram',
@@ -588,6 +603,16 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
       required: { field: 'operation', value: 'telegram_get_chat_member' },
       condition: { field: 'operation', value: 'telegram_get_chat_member' },
     },
+    {
+      id: 'businessConnectionId',
+      title: 'Business connection ID',
+      type: 'short-input',
+      placeholder: 'e.g. <telegram.businessConnectionId>',
+      description:
+        'Reply in a Telegram Business chat as the connected business account: map the Telegram trigger output businessConnectionId here. Leave empty to send as the bot.',
+      mode: 'advanced',
+      condition: { field: 'operation', value: BUSINESS_CONNECTION_OPERATIONS },
+    },
     ...getTrigger('telegram_webhook').subBlocks,
   ],
   tools: {
@@ -622,9 +647,14 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
           throw new Error('Chat ID is required.')
         }
 
+        const businessConnectionId =
+          typeof params.businessConnectionId === 'string' ? params.businessConnectionId.trim() : ''
         const commonParams = {
           botToken: params.botToken,
           chatId,
+          ...(businessConnectionId && BUSINESS_CONNECTION_OPERATIONS.includes(params.operation)
+            ? { businessConnectionId }
+            : {}),
         }
 
         /** Coerce string/number input to a finite number, throwing with a labeled message. */
@@ -850,6 +880,10 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
     isBig: { type: 'string', description: 'Whether to show a big reaction animation' },
     disableNotification: { type: 'string', description: 'Pin the message silently' },
     userId: { type: 'string', description: 'Target user ID for chat member lookup' },
+    businessConnectionId: {
+      type: 'string',
+      description: 'Telegram Business connection to send on (empty sends as the bot)',
+    },
   },
   outputs: {
     // Send message operation outputs

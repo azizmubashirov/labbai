@@ -83,3 +83,50 @@ describe('Telegram media params', () => {
     }
   })
 })
+
+describe('Telegram Business connection param', () => {
+  it('passes a mapped business connection id to send operations', () => {
+    expect(
+      mapParams({ operation: 'telegram_message', text: 'Salom', businessConnectionId: ' BC1 ' })
+    ).toEqual({
+      botToken: 'bot-token',
+      chatId: '12345',
+      text: 'Salom',
+      businessConnectionId: 'BC1',
+    })
+    expect(
+      mapParams({
+        operation: 'telegram_send_chat_action',
+        action: 'typing',
+        businessConnectionId: 'BC1',
+      })
+    ).toMatchObject({ businessConnectionId: 'BC1' })
+  })
+
+  it('sends as the bot when the business connection id is empty', () => {
+    const mapped = mapParams({
+      operation: 'telegram_message',
+      text: 'Hi',
+      businessConnectionId: '',
+    })
+    expect(mapped).not.toHaveProperty('businessConnectionId')
+  })
+
+  it('never passes it to operations the Bot API cannot run for a business account', () => {
+    const mapped = mapParams({
+      operation: 'telegram_delete_message',
+      messageId: '5',
+      businessConnectionId: 'BC1',
+    })
+    expect(mapped).not.toHaveProperty('businessConnectionId')
+  })
+
+  it('offers the field as an advanced option on send operations only', () => {
+    const field = TelegramBlock.subBlocks.find((s) => s.id === 'businessConnectionId')
+    expect(field?.mode).toBe('advanced')
+    expect(field?.condition).toMatchObject({ field: 'operation' })
+    const operations = (field?.condition as { value: string[] }).value
+    expect(operations).toContain('telegram_send_photo')
+    expect(operations).not.toContain('telegram_forward_message')
+  })
+})

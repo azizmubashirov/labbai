@@ -1,4 +1,4 @@
-import type { ToolRetryConfig } from '@/tools/types'
+import type { ToolConfig, ToolRetryConfig } from '@/tools/types'
 
 /**
  * Connections to api.telegram.org are occasionally reset mid-handshake on some networks;
@@ -9,6 +9,30 @@ export const TELEGRAM_REQUEST_RETRY: ToolRetryConfig = {
   maxRetries: 2,
   initialDelayMs: 300,
   maxDelayMs: 2000,
+}
+
+/**
+ * Optional `businessConnectionId` param of the send tools. Set it (e.g. from the Telegram
+ * trigger's `businessConnectionId` output) to send in a Telegram Business chat as the connected
+ * business account; leave it empty to send as the bot.
+ */
+export const TELEGRAM_BUSINESS_CONNECTION_PARAM: ToolConfig['params'][string] = {
+  type: 'string',
+  required: false,
+  visibility: 'user-only',
+  description:
+    'Telegram Business connection ID to send on behalf of the connected business account (the trigger businessConnectionId output). Leave empty to send as the bot.',
+}
+
+/**
+ * `business_connection_id` for a Bot API request body: present only when the send goes out on
+ * a Telegram Business connection, so ordinary bot sends are unchanged.
+ */
+export function businessConnectionField(businessConnectionId?: string | null): {
+  business_connection_id?: string
+} {
+  const id = businessConnectionId?.trim()
+  return id ? { business_connection_id: id } : {}
 }
 
 /**

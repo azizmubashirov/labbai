@@ -4,7 +4,12 @@ import type {
   TelegramSendAnimationParams,
   TelegramSendMediaResponse,
 } from '@/tools/telegram/types'
-import { convertMarkdownToHTML, TELEGRAM_REQUEST_RETRY } from '@/tools/telegram/utils'
+import {
+  businessConnectionField,
+  convertMarkdownToHTML,
+  TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_REQUEST_RETRY,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendAnimationTool: ToolConfig<
@@ -42,6 +47,7 @@ export const telegramSendAnimationTool: ToolConfig<
       visibility: 'user-or-llm',
       description: 'Animation caption (optional)',
     },
+    businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
   request: {
@@ -55,6 +61,7 @@ export const telegramSendAnimationTool: ToolConfig<
     body: (params: TelegramSendAnimationParams) => {
       const body: Record<string, any> = {
         chat_id: params.chatId,
+        ...businessConnectionField(params.businessConnectionId),
         animation: params.animation,
       }
 

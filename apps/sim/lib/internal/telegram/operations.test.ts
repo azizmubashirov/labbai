@@ -82,6 +82,26 @@ describe('sendTelegramDocument', () => {
     })
   })
 
+  it('sends on a Telegram Business connection only when one is given', async () => {
+    mocks.fetch.mockImplementation(async () =>
+      Response.json({ ok: true, result: { message_id: 1 } })
+    )
+    const file = { key: 'workspace/file.pdf', name: 'file.pdf', size: 3 }
+    await sendTelegramDocument(
+      { botToken: 'token', chatId: 'chat-1', files: [file], businessConnectionId: ' BC1 ' },
+      { userId: 'user-1', requestId: 'request-1' }
+    )
+    await sendTelegramDocument(
+      { botToken: 'token', chatId: 'chat-1', files: [file] },
+      { userId: 'user-1', requestId: 'request-1' }
+    )
+
+    const business = mocks.fetch.mock.calls[0][1].body as FormData
+    const plain = mocks.fetch.mock.calls[1][1].body as FormData
+    expect(business.get('business_connection_id')).toBe('BC1')
+    expect(plain.has('business_connection_id')).toBe(false)
+  })
+
   it('fails closed before materialization when file access is denied', async () => {
     mocks.assertToolFileAccess.mockResolvedValue(new Response(null, { status: 404 }))
 

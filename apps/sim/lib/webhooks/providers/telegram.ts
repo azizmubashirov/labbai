@@ -6,9 +6,19 @@ import { generateShortId } from '@sim/utils/id'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
+import {
+  isTelegramBusinessBotEcho,
+  isTelegramBusinessOwnerMessage,
+  isTelegramBusinessUpdate,
+  shouldSkipTelegramUpdate,
+  telegramAllowedUpdates,
+  telegramMessageSource,
+} from '@/lib/webhooks/providers/telegram-business'
 import type {
   AuthContext,
   DeleteSubscriptionContext,
+  EventFilterContext,
+  EventMatchContext,
   FormatInputContext,
   FormatInputResult,
   SubscriptionContext,
@@ -48,6 +58,49 @@ export const telegramHandler: WebhookProviderHandler = {
     return null
   },
 
+  /** Drops updates from chats the trigger's "Messages to receive" setting does not cover. */
+  shouldSkipEvent({ body, providerConfig }: EventFilterContext) {
+    return shouldSkipTelegramUpdate(telegramMessageSource(providerConfig), body)
+  },
+
+  /**
+   * Telegram Business updates that must not start the workflow: connection changes (stored),
+   * edits and deletions, the bot's own replies coming back, and messages the account's own
+   * person sent (recorded in the Inbox as operator messages, pausing the AI for that chat).
+   */
+  async matchEvent({
+    webhook: webhookRecord,
+    workflow,
+    body,
+    requestId,
+    providerConfig,
+  }: EventMatchContext) {
+    if (!isTelegramBusinessUpdate(body)) return true
+    const webhookId = webhookRecord.id
+    const workflowId = workflow.id
+    const userId = workflow.userId
+    const workspaceId = workflow.workspaceId
+    if (typeof webhookId !== 'string' || typeof workflowId !== 'string') return true
+    if (typeof userId !== 'string') return true
+
+    const { handleTelegramBusinessDelivery } = await import('@/lib/inbox/telegram-business')
+    const decision = await handleTelegramBusinessDelivery({
+      webhook: { id: webhookId, providerConfig },
+      workflow: {
+        id: workflowId,
+        userId,
+        workspaceId: typeof workspaceId === 'string' ? workspaceId : null,
+      },
+      body,
+      requestId,
+    })
+    if (decision.run) return true
+    return NextResponse.json({
+      message: 'Telegram Business update handled without running the workflow',
+      reason: decision.reason,
+    })
+  },
+
   extractIdempotencyId(body: unknown): string | null {
     const obj = body as Record<string, unknown>
     const updateId = obj.update_id
@@ -59,10 +112,30 @@ export const telegramHandler: WebhookProviderHandler = {
 
   async formatInput({ body }: FormatInputContext): Promise<FormatInputResult> {
     const b = body as Record<string, unknown>
+
+    if (b.business_connection || b.edited_business_message || b.deleted_business_messages) {
+      return {
+        input: null,
+        skip: { message: 'Telegram Business update does not start the workflow' },
+      }
+    }
+    const businessMessage = b.business_message as Record<string, unknown> | undefined
+    if (
+      businessMessage &&
+      (isTelegramBusinessBotEcho(businessMessage) ||
+        isTelegramBusinessOwnerMessage(businessMessage))
+    ) {
+      return {
+        input: null,
+        skip: { message: 'Telegram Business message sent by the account itself' },
+      }
+    }
+
     const rawMessage = (b?.message ||
       b?.edited_message ||
       b?.channel_post ||
-      b?.edited_channel_post) as Record<string, unknown> | undefined
+      b?.edited_channel_post ||
+      businessMessage) as Record<string, unknown> | undefined
 
     const updateType = b.message
       ? 'message'
@@ -72,7 +145,13 @@ export const telegramHandler: WebhookProviderHandler = {
           ? 'channel_post'
           : b.edited_channel_post
             ? 'edited_channel_post'
-            : 'unknown'
+            : businessMessage
+              ? 'business_message'
+              : 'unknown'
+    const isBusiness = updateType === 'business_message'
+    const rawConnectionId = businessMessage?.business_connection_id
+    const businessConnectionId =
+      isBusiness && typeof rawConnectionId === 'string' ? rawConnectionId : ''
 
     if (rawMessage) {
       const messageType = rawMessage.photo
@@ -117,6 +196,8 @@ export const telegramHandler: WebhookProviderHandler = {
             : null,
           updateId: b.update_id,
           updateType,
+          businessConnectionId,
+          isBusiness,
         },
       }
     }
@@ -130,6 +211,8 @@ export const telegramHandler: WebhookProviderHandler = {
       input: {
         updateId: b.update_id,
         updateType,
+        businessConnectionId: '',
+        isBusiness: false,
       },
     }
   },
@@ -156,7 +239,11 @@ export const telegramHandler: WebhookProviderHandler = {
           'Content-Type': 'application/json',
           'User-Agent': 'TelegramBot/1.0',
         },
-        body: JSON.stringify({ url: notificationUrl, secret_token: secretToken }),
+        body: JSON.stringify({
+          url: notificationUrl,
+          secret_token: secretToken,
+          allowed_updates: telegramAllowedUpdates(telegramMessageSource(config)),
+        }),
       })
 
       const responseBody = await telegramResponse.json()

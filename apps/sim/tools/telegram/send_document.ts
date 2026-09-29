@@ -2,6 +2,7 @@ import type {
   TelegramSendDocumentParams,
   TelegramSendDocumentResponse,
 } from '@/tools/telegram/types'
+import { TELEGRAM_BUSINESS_CONNECTION_PARAM } from '@/tools/telegram/utils'
 import type { InternalToolConfig } from '@/tools/types'
 
 export const telegramSendDocumentTool: InternalToolConfig<
@@ -39,6 +40,7 @@ export const telegramSendDocumentTool: InternalToolConfig<
       visibility: 'user-or-llm',
       description: 'Document caption (optional)',
     },
+    businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
   operation: {
@@ -48,11 +50,13 @@ export const telegramSendDocumentTool: InternalToolConfig<
         normalizedFiles = Array.isArray(params.files) ? params.files : [params.files]
       }
 
+      const businessConnectionId = params.businessConnectionId?.trim()
       return {
         botToken: params.botToken,
         chatId: params.chatId,
         files: normalizedFiles,
         caption: params.caption,
+        ...(businessConnectionId ? { businessConnectionId } : {}),
       }
     },
   },

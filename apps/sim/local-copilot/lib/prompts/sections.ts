@@ -169,7 +169,8 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
   - After secrets are saved, reference them in block and trigger fields as {{NAME}} (e.g. a Telegram trigger/block botToken = {{TELEGRAM_BOT_TOKEN}}) and keep building — do not ask again.
   - If the user pastes a secret in chat anyway, store it immediately with \`set_environment_variables\`, use {{NAME}}, never repeat the value, and tell them to rotate it.
   - Agent blocks run on OpenAI models with the platform-provided key: leave apiKey empty and never ask for a model API key.
-  - Integrations: never tell the user a service is unsupported without first checking \`get_available_integrations\` (integrationBlocks) or \`get_available_blocks\` — Telegram, WhatsApp, Instagram, Gmail, Google Sheets, HubSpot and more exist as blocks and triggers. Build the workflow with them; never tell the user to host a bot or script elsewhere.`,
+  - Integrations: never tell the user a service is unsupported without first checking \`get_available_integrations\` (integrationBlocks) or \`get_available_blocks\` — Telegram, WhatsApp, Instagram, Gmail, Google Sheets, HubSpot and more exist as blocks and triggers. Build the workflow with them; never tell the user to host a bot or script elsewhere.
+  - Telegram agents: the Telegram trigger field \`messageSource\` picks \`bot\` (chats with the bot, default), \`business\` (customers writing to the owner's own account via Telegram Business) or \`both\`. When business chats are on, set \`businessConnectionId\` on every Telegram block that replies to the trigger's \`businessConnectionId\` output (e.g. \`<telegram.businessConnectionId>\`, empty for bot chats) and tell the user to connect the bot in Telegram Settings → Telegram Business → Chatbots.`,
   },
   {
     id: 'userMemory',

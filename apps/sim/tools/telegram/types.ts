@@ -92,31 +92,37 @@ interface TelegramAuthParams {
   chatId: string
 }
 
-export interface TelegramSendMessageParams extends TelegramAuthParams {
+/** Sends that can go out as a connected Telegram Business account. */
+interface TelegramBusinessParams {
+  /** Telegram Business connection to send on; empty sends as the bot. */
+  businessConnectionId?: string
+}
+
+export interface TelegramSendMessageParams extends TelegramAuthParams, TelegramBusinessParams {
   text: string
 }
 
-export interface TelegramSendPhotoParams extends TelegramAuthParams {
+export interface TelegramSendPhotoParams extends TelegramAuthParams, TelegramBusinessParams {
   photo: string
   caption?: string
 }
 
-export interface TelegramSendVideoParams extends TelegramAuthParams {
+export interface TelegramSendVideoParams extends TelegramAuthParams, TelegramBusinessParams {
   video: string
   caption?: string
 }
 
-export interface TelegramSendAudioParams extends TelegramAuthParams {
+export interface TelegramSendAudioParams extends TelegramAuthParams, TelegramBusinessParams {
   audio: string
   caption?: string
 }
 
-export interface TelegramSendAnimationParams extends TelegramAuthParams {
+export interface TelegramSendAnimationParams extends TelegramAuthParams, TelegramBusinessParams {
   animation: string
   caption?: string
 }
 
-export interface TelegramSendDocumentParams extends TelegramAuthParams {
+export interface TelegramSendDocumentParams extends TelegramAuthParams, TelegramBusinessParams {
   files?: UserFile[]
   caption?: string
 }
@@ -125,7 +131,7 @@ export interface TelegramDeleteMessageParams extends TelegramAuthParams {
   messageId: number
 }
 
-export interface TelegramEditMessageTextParams extends TelegramAuthParams {
+export interface TelegramEditMessageTextParams extends TelegramAuthParams, TelegramBusinessParams {
   messageId: number
   text: string
 }
@@ -141,19 +147,19 @@ export interface TelegramCopyMessageParams extends TelegramAuthParams {
   caption?: string
 }
 
-export interface TelegramSendLocationParams extends TelegramAuthParams {
+export interface TelegramSendLocationParams extends TelegramAuthParams, TelegramBusinessParams {
   latitude: number
   longitude: number
 }
 
-export interface TelegramSendContactParams extends TelegramAuthParams {
+export interface TelegramSendContactParams extends TelegramAuthParams, TelegramBusinessParams {
   phoneNumber: string
   firstName: string
   lastName?: string
   vcard?: string
 }
 
-export interface TelegramSendPollParams extends TelegramAuthParams {
+export interface TelegramSendPollParams extends TelegramAuthParams, TelegramBusinessParams {
   question: string
   options: string[]
   isAnonymous?: boolean
@@ -175,7 +181,7 @@ export interface TelegramSetMessageReactionParams extends TelegramAuthParams {
   isBig?: boolean
 }
 
-export interface TelegramSendChatActionParams extends TelegramAuthParams {
+export interface TelegramSendChatActionParams extends TelegramAuthParams, TelegramBusinessParams {
   action: string
 }
 

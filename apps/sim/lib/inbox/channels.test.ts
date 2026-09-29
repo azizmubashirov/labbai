@@ -6,6 +6,8 @@ import {
   extractInboundInboxMessages,
   inboxChannelForProvider,
   telegramBotIdFromToken,
+  telegramBusinessConnectionIdFromAccountId,
+  telegramInboxAccountId,
 } from '@/lib/inbox/channels'
 
 describe('telegramBotIdFromToken', () => {
@@ -291,5 +293,66 @@ describe('Instagram attachments', () => {
       ['image', 'https://lookaside.fbsbx.com/a'],
       ['link', 'https://www.instagram.com/p/x'],
     ])
+  })
+})
+
+describe('Telegram Business chats', () => {
+  const customer = {
+    business_connection_id: 'BC1',
+    message_id: 50,
+    date: 1_790_000_000,
+    chat: { id: 555, type: 'private', first_name: 'Dilnoza', username: 'dilnoza' },
+    from: { id: 555, first_name: 'Dilnoza', username: 'dilnoza' },
+    text: 'Narxi qancha?',
+  }
+
+  it('keeps a Business thread apart from the bot thread and knows its connection', () => {
+    expect(telegramInboxAccountId('777')).toBe('777')
+    expect(telegramInboxAccountId('777', 'BC1')).toBe('777:business:BC1')
+    expect(telegramBusinessConnectionIdFromAccountId('777:business:BC1')).toBe('BC1')
+    expect(telegramBusinessConnectionIdFromAccountId('777')).toBeNull()
+  })
+
+  it("records a customer's Business message on the Business account", () => {
+    const [message] = extractInboundInboxMessages(
+      'telegram',
+      { update_id: 1, business_message: customer },
+      '777'
+    )
+    expect(message).toMatchObject({
+      accountId: '777:business:BC1',
+      externalChatId: '555',
+      externalMessageId: '50',
+      text: 'Narxi qancha?',
+      contactName: 'Dilnoza',
+      contactHandle: '@dilnoza',
+    })
+  })
+
+  it('does not treat what the account itself sent as a customer message', () => {
+    const owner = { ...customer, from: { id: 9001, first_name: 'Owner' } }
+    const echo = { ...owner, sender_business_bot: { id: 777, is_bot: true } }
+    for (const businessMessage of [owner, echo]) {
+      expect(
+        extractInboundInboxMessages(
+          'telegram',
+          { update_id: 2, business_message: businessMessage },
+          '777'
+        )
+      ).toEqual([])
+    }
+  })
+
+  it('ignores edited Business messages and connection updates', () => {
+    expect(
+      extractInboundInboxMessages(
+        'telegram',
+        { update_id: 3, edited_business_message: customer },
+        '777'
+      )
+    ).toEqual([])
+    expect(
+      extractInboundInboxMessages('telegram', { update_id: 4, business_connection: {} }, '777')
+    ).toEqual([])
   })
 })

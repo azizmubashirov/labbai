@@ -43,6 +43,9 @@ const SYSTEM_MANAGED_FIELDS = new Set([
   // createSubscription (not a user trigger field), so it must not count as a
   // config change that forces delete/recreate.
   'apiDomain',
+  // Telegram Business connections the bot reported at runtime (owner, reply rights), stored
+  // by the delivery path, not a trigger field.
+  'businessConnections',
 ])
 
 /**

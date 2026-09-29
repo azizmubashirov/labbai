@@ -1,6 +1,5 @@
 import { createLogger } from '@sim/logger'
 import { toRecord } from '@sim/utils/object'
-import { getEffectiveDecryptedEnv } from '@/lib/environment/utils'
 import {
   extractInboundInboxMessages,
   inboxChannelForProvider,
@@ -8,9 +7,9 @@ import {
 } from '@/lib/inbox/channels'
 import { type RecordInboundResult, recordInboundInboxMessages } from '@/lib/inbox/ingest'
 import { fillInstagramContactNames } from '@/lib/inbox/instagram-profile'
+import { resolveTelegramBotToken } from '@/lib/inbox/telegram-business'
 import { scheduleInboxNotificationChecks } from '@/lib/notifications/hooks'
 import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
-import { resolveEnvVarReferences } from '@/executor/utils/reference-validation'
 
 const logger = createLogger('InboxWebhook')
 
@@ -22,14 +21,9 @@ interface InboxWebhookDelivery {
 }
 
 async function resolveTelegramBotId(delivery: InboxWebhookDelivery): Promise<string | null> {
-  const botToken = delivery.webhook.providerConfig.botToken
-  if (typeof botToken !== 'string') return null
-  if (!botToken.includes('{{')) return telegramBotIdFromToken(botToken)
-  const envVars = await getEffectiveDecryptedEnv(
-    delivery.workflow.userId,
-    delivery.workflow.workspaceId ?? undefined
+  return telegramBotIdFromToken(
+    await resolveTelegramBotToken(delivery.webhook.providerConfig, delivery.workflow)
   )
-  return telegramBotIdFromToken(resolveEnvVarReferences(botToken, envVars))
 }
 
 /**

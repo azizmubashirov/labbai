@@ -22,6 +22,8 @@ export interface TelegramSendDocumentInput {
   chatId: string
   files?: RawFileInput[] | null
   caption?: string | null
+  /** Telegram Business connection to send on; absent sends as the bot. */
+  businessConnectionId?: string
 }
 
 export interface TelegramOperationContext {
@@ -94,6 +96,8 @@ export async function sendTelegramDocument(
   const mimeType = contentType || userFile.type || 'application/octet-stream'
   const form = new FormData()
   form.append('chat_id', input.chatId)
+  const businessConnectionId = input.businessConnectionId?.trim()
+  if (businessConnectionId) form.append('business_connection_id', businessConnectionId)
   form.append('document', new Blob([new Uint8Array(buffer)], { type: mimeType }), userFile.name)
   if (input.caption) {
     form.append('caption', convertMarkdownToHTML(input.caption))

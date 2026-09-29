@@ -2,6 +2,10 @@ import { toStringOrNull } from '@sim/utils/coerce'
 import { toArray, toRecord } from '@sim/utils/object'
 import type { InboxAttachment, InboxAttachmentKind } from '@/lib/inbox/attachments'
 import { getInstagramDirectMessages } from '@/lib/webhooks/providers/instagram'
+import {
+  isTelegramBusinessBotEcho,
+  isTelegramBusinessOwnerMessage,
+} from '@/lib/webhooks/providers/telegram-business'
 
 /** Messaging channels that feed the Inbox; mirrors the `inbox_channel` database enum. */
 export const INBOX_CHANNELS = ['telegram', 'whatsapp', 'instagram'] as const
@@ -39,6 +43,29 @@ export function telegramBotIdFromToken(botToken: unknown): string | null {
   if (typeof botToken !== 'string') return null
   const [botId] = botToken.split(':')
   return botId && /^\d+$/.test(botId) ? botId : null
+}
+
+/** Separates the bot id from the Business connection id in a Telegram Business account id. */
+const TELEGRAM_BUSINESS_ACCOUNT_SEPARATOR = ':business:'
+
+/**
+ * Inbox account id of a Telegram chat: the bot id for chats with the bot, and
+ * `<bot id>:business:<connection id>` for Telegram Business chats. A customer's Business chat
+ * and their chat with the bot share one chat id but are different Telegram chats, so they are
+ * kept as separate threads, and a Business thread knows the connection its replies go out on.
+ */
+export function telegramInboxAccountId(botId: string, businessConnectionId?: string | null) {
+  return businessConnectionId
+    ? `${botId}${TELEGRAM_BUSINESS_ACCOUNT_SEPARATOR}${businessConnectionId}`
+    : botId
+}
+
+/** The Business connection id of a Telegram Inbox account id, or null for a bot chat. */
+export function telegramBusinessConnectionIdFromAccountId(accountId: string): string | null {
+  const index = accountId.indexOf(TELEGRAM_BUSINESS_ACCOUNT_SEPARATOR)
+  if (index < 0) return null
+  const connectionId = accountId.slice(index + TELEGRAM_BUSINESS_ACCOUNT_SEPARATOR.length)
+  return connectionId.length > 0 ? connectionId : null
 }
 
 function secondsToDate(value: unknown): Date {
@@ -156,17 +183,20 @@ function telegramFallbackText(message: Record<string, unknown>): string {
   return placeholderFor(kind ?? null)
 }
 
-function extractTelegram(body: unknown, botId: string | null): InboundInboxMessage[] {
-  if (!botId) return []
-  const update = toRecord(body)
-  const message = toRecord(update.message)
+/**
+ * Normalizes one Telegram message into an Inbox message. The contact is the sender in a private
+ * chat; with `contactFromChat` it is read from the chat instead, for messages the business
+ * account itself sent (the chat is still the customer).
+ */
+export function parseTelegramInboxMessage(
+  message: Record<string, unknown>,
+  accountId: string,
+  options: { contactFromChat?: boolean } = {}
+): InboundInboxMessage | null {
   const chat = toRecord(message.chat)
   const chatId = chat.id === undefined ? null : String(chat.id)
   const messageId = message.message_id === undefined ? null : String(message.message_id)
-  if (!chatId || !messageId) return []
-
-  const from = toRecord(message.from)
-  if (from.is_bot === true) return []
+  if (!chatId || !messageId) return null
 
   const attachments = telegramAttachments(message)
   const text =
@@ -174,23 +204,48 @@ function extractTelegram(body: unknown, botId: string | null): InboundInboxMessa
     toStringOrNull(message.caption) ??
     (attachments.length > 0 ? '' : telegramFallbackText(message))
   const isPrivate = chat.type === 'private'
-  const username = toStringOrNull(from.username)
+  const contact = options.contactFromChat ? chat : toRecord(message.from)
+  const username = toStringOrNull(contact.username)
 
-  return [
-    {
-      channel: 'telegram',
-      accountId: botId,
-      externalChatId: chatId,
-      externalMessageId: messageId,
-      text,
-      attachments,
-      contactName: isPrivate
-        ? joinName(toStringOrNull(from.first_name), toStringOrNull(from.last_name))
-        : toStringOrNull(chat.title),
-      contactHandle: isPrivate && username ? `@${username}` : null,
-      sentAt: secondsToDate(message.date),
-    },
-  ]
+  return {
+    channel: 'telegram',
+    accountId,
+    externalChatId: chatId,
+    externalMessageId: messageId,
+    text,
+    attachments,
+    contactName: isPrivate
+      ? joinName(toStringOrNull(contact.first_name), toStringOrNull(contact.last_name))
+      : toStringOrNull(chat.title),
+    contactHandle: isPrivate && username ? `@${username}` : null,
+    sentAt: secondsToDate(message.date),
+  }
+}
+
+/**
+ * The customer message of a Telegram update: a message to the bot, or a Business message a
+ * customer wrote to the connected account. Business messages the account itself sent (the owner
+ * typing, or the bot's own replies coming back) are not customer messages.
+ */
+function extractTelegram(body: unknown, botId: string | null): InboundInboxMessage[] {
+  if (!botId) return []
+  const update = toRecord(body)
+  const businessMessage = toRecord(update.business_message)
+  const isBusiness = update.message === undefined && update.business_message !== undefined
+  const message = isBusiness ? businessMessage : toRecord(update.message)
+
+  if (toRecord(message.from).is_bot === true) return []
+  if (
+    isBusiness &&
+    (isTelegramBusinessBotEcho(message) || isTelegramBusinessOwnerMessage(message))
+  ) {
+    return []
+  }
+
+  const connectionId = isBusiness ? toStringOrNull(message.business_connection_id) : null
+  if (isBusiness && !connectionId) return []
+  const parsed = parseTelegramInboxMessage(message, telegramInboxAccountId(botId, connectionId))
+  return parsed ? [parsed] : []
 }
 
 const WHATSAPP_MEDIA_KINDS: Record<string, InboxAttachmentKind> = {

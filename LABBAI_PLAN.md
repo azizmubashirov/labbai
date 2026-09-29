@@ -91,6 +91,14 @@ Gemini / Workers AI.
   the canvas** with a Notifications block (recipients + rules), not in workspace Settings; rules
   take effect on deploy (change a rule → redeploy). Later: inline buttons on alerts (resume AI,
   snooze, approve), alert history, condition drafting / dry run.
+- **Telegram Business** (coded 2026-09-29; see HANDOFF.md) — owner decision: inside the existing
+  Telegram trigger and Telegram tools, not a separate trigger (one bot has one webhook). Trigger
+  setting "Messages to receive": Bot chats (default) | Business chats | Both; Business messages
+  get the same trigger output plus `businessConnectionId` / `isBusiness`. Messages the account
+  owner types to a customer never run the workflow: they are recorded in the Inbox as operator
+  messages and pause the AI in that chat for 15 minutes (a person's OFF stays off). Edited
+  Business messages are not answered again. Telegram send tools and the Inbox reply through the
+  Business connection.
 - **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
   provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,

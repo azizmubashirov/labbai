@@ -21,6 +21,16 @@ describe('parseOutboundToolMessage', () => {
     })
   })
 
+  it('files a Telegram Business send under the Business account', () => {
+    expect(
+      parseOutboundToolMessage(
+        'telegram_message',
+        { botToken: '777:secret', chatId: '555', text: 'Salom!', businessConnectionId: 'BC1' },
+        { data: { message_id: 91 } }
+      )
+    ).toMatchObject({ accountId: '777:business:BC1', externalChatId: '555' })
+  })
+
   it('normalizes a formatted WhatsApp recipient to the digits webhooks use', () => {
     expect(
       parseOutboundToolMessage(

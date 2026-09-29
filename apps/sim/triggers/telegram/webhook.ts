@@ -5,7 +5,7 @@ export const telegramWebhookTrigger: TriggerConfig = {
   id: 'telegram_webhook',
   name: 'Telegram Webhook',
   provider: 'telegram',
-  description: 'Trigger workflow from Telegram bot messages and events',
+  description: 'Trigger workflow from Telegram bot messages, Telegram Business chats and events',
   version: '1.0.0',
   icon: TelegramIcon,
 
@@ -31,6 +31,20 @@ export const telegramWebhookTrigger: TriggerConfig = {
       mode: 'trigger',
     },
     {
+      id: 'messageSource',
+      title: 'Messages to receive',
+      type: 'dropdown',
+      options: [
+        { label: 'Bot chats', id: 'bot' },
+        { label: 'Business chats', id: 'business' },
+        { label: 'Both', id: 'both' },
+      ],
+      defaultValue: 'bot',
+      description:
+        'Bot chats: messages sent to the bot. Business chats: messages customers send to your own Telegram account once you connect this bot in Telegram Settings → Telegram Business → Chatbots (Telegram Premium). Redeploy after changing it.',
+      mode: 'trigger',
+    },
+    {
       id: 'triggerInstructions',
       title: 'Setup Instructions',
       hideFromPreview: true,
@@ -39,6 +53,7 @@ export const telegramWebhookTrigger: TriggerConfig = {
         'Message "/newbot" to <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="text-muted-foreground underline transition-colors hover:text-muted-foreground/80">@BotFather</a> in Telegram to create a bot and copy its token.',
         'Enter your Bot Token above.',
         'Any message sent to your bot will trigger the workflow once deployed.',
+        'For Telegram Business chats, pick "Business chats" or "Both" above, deploy, then in Telegram open Settings → Telegram Business → Chatbots, add this bot and allow it to reply. Map <code>&lt;telegram.businessConnectionId&gt;</code> into the Business connection ID field of the Telegram block that replies. Messages you type to a customer yourself never run the workflow; they pause the AI in that chat for 15 minutes.',
       ]
         .map(
           (instruction, index) =>
@@ -124,7 +139,16 @@ export const telegramWebhookTrigger: TriggerConfig = {
     updateType: {
       type: 'string',
       description:
-        'Type of update: message, edited_message, channel_post, edited_channel_post, unknown',
+        'Type of update: message, edited_message, channel_post, edited_channel_post, business_message, unknown',
+    },
+    businessConnectionId: {
+      type: 'string',
+      description:
+        'Telegram Business connection the message arrived on; pass it to the Telegram block to reply as the business account. Empty for messages sent to the bot itself',
+    },
+    isBusiness: {
+      type: 'boolean',
+      description: 'Whether the message came from a Telegram Business chat',
     },
   },
 

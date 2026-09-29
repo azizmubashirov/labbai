@@ -4,7 +4,12 @@ import type {
   TelegramSendMediaResponse,
   TelegramSendVideoParams,
 } from '@/tools/telegram/types'
-import { convertMarkdownToHTML, TELEGRAM_REQUEST_RETRY } from '@/tools/telegram/utils'
+import {
+  businessConnectionField,
+  convertMarkdownToHTML,
+  TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_REQUEST_RETRY,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendVideoTool: ToolConfig<TelegramSendVideoParams, TelegramSendMediaResponse> =
@@ -40,6 +45,7 @@ export const telegramSendVideoTool: ToolConfig<TelegramSendVideoParams, Telegram
         visibility: 'user-or-llm',
         description: 'Video caption (optional)',
       },
+      businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
     },
 
     request: {
@@ -53,6 +59,7 @@ export const telegramSendVideoTool: ToolConfig<TelegramSendVideoParams, Telegram
       body: (params: TelegramSendVideoParams) => {
         const body: Record<string, any> = {
           chat_id: params.chatId,
+          ...businessConnectionField(params.businessConnectionId),
           video: params.video,
         }
 

@@ -4,7 +4,12 @@ import type {
   TelegramSendAudioParams,
   TelegramSendAudioResponse,
 } from '@/tools/telegram/types'
-import { convertMarkdownToHTML, TELEGRAM_REQUEST_RETRY } from '@/tools/telegram/utils'
+import {
+  businessConnectionField,
+  convertMarkdownToHTML,
+  TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_REQUEST_RETRY,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendAudioTool: ToolConfig<TelegramSendAudioParams, TelegramSendAudioResponse> =
@@ -40,6 +45,7 @@ export const telegramSendAudioTool: ToolConfig<TelegramSendAudioParams, Telegram
         visibility: 'user-or-llm',
         description: 'Audio caption (optional)',
       },
+      businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
     },
 
     request: {
@@ -53,6 +59,7 @@ export const telegramSendAudioTool: ToolConfig<TelegramSendAudioParams, Telegram
       body: (params: TelegramSendAudioParams) => {
         const body: Record<string, any> = {
           chat_id: params.chatId,
+          ...businessConnectionField(params.businessConnectionId),
           audio: params.audio,
         }
 

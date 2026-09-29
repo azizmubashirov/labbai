@@ -1,6 +1,11 @@
 import { ErrorExtractorId } from '@/tools/error-extractors'
 import type { TelegramBooleanResponse, TelegramSendChatActionParams } from '@/tools/telegram/types'
-import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
+import {
+  businessConnectionField,
+  TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_REQUEST_RETRY,
+  telegramApiUrl,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendChatActionTool: ToolConfig<
@@ -34,6 +39,7 @@ export const telegramSendChatActionTool: ToolConfig<
       description:
         'Type of action to broadcast (e.g. typing, upload_photo, record_video, upload_document, find_location)',
     },
+    businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
   request: {
@@ -45,6 +51,7 @@ export const telegramSendChatActionTool: ToolConfig<
     }),
     body: (params) => ({
       chat_id: params.chatId,
+      ...businessConnectionField(params.businessConnectionId),
       action: params.action,
     }),
   },

@@ -4,7 +4,12 @@ import type {
   TelegramSendContactParams,
   TelegramSendMessageResponse,
 } from '@/tools/telegram/types'
-import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
+import {
+  businessConnectionField,
+  TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_REQUEST_RETRY,
+  telegramApiUrl,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendContactTool: ToolConfig<
@@ -54,6 +59,7 @@ export const telegramSendContactTool: ToolConfig<
       visibility: 'user-or-llm',
       description: 'Additional data about the contact in the form of a vCard',
     },
+    businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
   request: {
@@ -66,6 +72,7 @@ export const telegramSendContactTool: ToolConfig<
     body: (params) => {
       const body: Record<string, unknown> = {
         chat_id: params.chatId,
+        ...businessConnectionField(params.businessConnectionId),
         phone_number: params.phoneNumber,
         first_name: params.firstName,
       }

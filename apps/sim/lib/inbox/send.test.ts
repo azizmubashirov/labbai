@@ -395,3 +395,79 @@ describe('sendInboxReply with a file', () => {
     })
   })
 })
+
+describe('sendInboxReply in a Telegram Business thread', () => {
+  const businessConversation = {
+    id: 'c4',
+    workspaceId: 'ws',
+    channel: 'telegram',
+    accountId: '777:business:BC1',
+    externalChatId: '555',
+    webhookId: 'wh',
+  } as never
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('sends a text reply through the Business connection', async () => {
+    mocks.resolveConfig.mockResolvedValue({ ok: true, providerConfig: { botToken: '1:tok' } })
+    mocks.executeTool.mockResolvedValue({
+      success: true,
+      output: { message: 'Message sent successfully', data: { message_id: 77 } },
+    })
+
+    const outcome = await sendInboxReply({
+      conversation: businessConversation,
+      text: 'Salom',
+      operatorUserId: 'op-1',
+    })
+
+    expect(mocks.executeTool).toHaveBeenCalledWith('telegram_message', {
+      botToken: '1:tok',
+      chatId: '555',
+      text: 'Salom',
+      businessConnectionId: 'BC1',
+      _context: { userId: 'op-1', workspaceId: 'ws', enforceCredentialAccess: true },
+    })
+    expect(outcome).toEqual({ status: 'sent', externalMessageId: '77' })
+  })
+
+  it('keeps bot-chat replies free of a Business connection', async () => {
+    mocks.resolveConfig.mockResolvedValue({ ok: true, providerConfig: { botToken: '1:tok' } })
+    mocks.executeTool.mockResolvedValue({ success: true, output: { data: { message_id: 1 } } })
+
+    await sendInboxReply({ conversation: telegramConversation, text: 'Hi', operatorUserId: 'op-1' })
+
+    expect(mocks.executeTool.mock.calls[0][1]).not.toHaveProperty('businessConnectionId')
+  })
+
+  it('sends an operator file through the Business connection', async () => {
+    mocks.resolveConfig.mockResolvedValue({ ok: true, providerConfig: { botToken: '1:tok' } })
+    fetchMock.mockResolvedValue(Response.json({ ok: true, result: { message_id: 43 } }))
+
+    const outcome = await sendInboxReply({
+      conversation: businessConversation,
+      text: '',
+      operatorUserId: 'op-1',
+      media: media(),
+    })
+
+    const form = formOf(fetchMock.mock.calls[0])
+    expect(form.get('chat_id')).toBe('555')
+    expect(form.get('business_connection_id')).toBe('BC1')
+    expect(outcome).toEqual({ status: 'sent', externalMessageId: '43' })
+  })
+
+  it('explains a Business connection that can no longer reply', () => {
+    expect(friendlyChannelError('telegram', 'Bad Request: BUSINESS_PEER_INVALID')).toContain(
+      'Telegram Business'
+    )
+  })
+})

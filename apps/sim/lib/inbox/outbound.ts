@@ -5,7 +5,11 @@ import { toStringOrNull } from '@sim/utils/coerce'
 import { generateId } from '@sim/utils/id'
 import { toRecord } from '@sim/utils/object'
 import { and, desc, eq } from 'drizzle-orm'
-import { type InboxChannel, telegramBotIdFromToken } from '@/lib/inbox/channels'
+import {
+  type InboxChannel,
+  telegramBotIdFromToken,
+  telegramInboxAccountId,
+} from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
 import { scheduleInboxNotificationChecks } from '@/lib/notifications/hooks'
 import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
@@ -43,9 +47,11 @@ export function parseOutboundToolMessage(
       const text = toStringOrNull(params.text)
       if (!chatId || !text) return null
       const messageId = toRecord(result.data).message_id
+      const botId = telegramBotIdFromToken(params.botToken)
+      const businessConnectionId = toStringOrNull(params.businessConnectionId)?.trim()
       return {
         channel: 'telegram',
-        accountId: telegramBotIdFromToken(params.botToken),
+        accountId: botId ? telegramInboxAccountId(botId, businessConnectionId) : null,
         externalChatId: chatId,
         externalMessageId: messageId === undefined ? null : String(messageId),
         text,

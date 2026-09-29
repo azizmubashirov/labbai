@@ -14,6 +14,7 @@ const inputSchema = z.object({
   chatId: z.string().min(1, 'Chat ID is required'),
   files: RawFileInputArraySchema.optional().nullable(),
   caption: z.string().optional().nullable(),
+  businessConnectionId: z.string().max(256).optional(),
 })
 
 export const executeTelegramTool: InternalToolOperationHandler<

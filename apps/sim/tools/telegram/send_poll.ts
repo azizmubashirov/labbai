@@ -4,7 +4,12 @@ import type {
   TelegramSendMessageResponse,
   TelegramSendPollParams,
 } from '@/tools/telegram/types'
-import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
+import {
+  businessConnectionField,
+  TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_REQUEST_RETRY,
+  telegramApiUrl,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 /**
@@ -73,6 +78,7 @@ export const telegramSendPollTool: ToolConfig<TelegramSendPollParams, TelegramSe
         visibility: 'user-or-llm',
         description: 'Whether the poll allows multiple answers',
       },
+      businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
     },
 
     request: {
@@ -89,6 +95,7 @@ export const telegramSendPollTool: ToolConfig<TelegramSendPollParams, TelegramSe
         }
         const body: Record<string, unknown> = {
           chat_id: params.chatId,
+          ...businessConnectionField(params.businessConnectionId),
           question: params.question,
           options: optionList.map((text) => ({ text })),
         }

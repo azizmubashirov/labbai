@@ -10,6 +10,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  like,
   or,
   type SQL,
   sql,
@@ -90,10 +91,16 @@ export async function getInboxConversation(
   return row ? settleInboxAiPause(row) : null
 }
 
+/** Wraps text for `LIKE` as a literal prefix, escaping its own wildcards. */
+function likePrefix(prefix: string): string {
+  return `${prefix.replace(/[\\%_]/g, '\\$&')}%`
+}
+
 /**
  * The conversation a customer chat belongs to in a workspace, or null when there is none. With
- * `accountId` only that bot / phone number / Instagram account's thread matches; without it the
- * most recently active thread of that chat wins (one chat can reach several accounts).
+ * `accountId` only that bot / phone number / Instagram account's thread matches (a Telegram bot
+ * id also matches that bot's Telegram Business threads); without it the most recently active
+ * thread of that chat wins (one chat can reach several accounts).
  */
 export async function findInboxConversationByChat(params: {
   workspaceId: string
@@ -106,7 +113,16 @@ export async function findInboxConversationByChat(params: {
     eq(inboxConversation.channel, params.channel),
     eq(inboxConversation.externalChatId, params.externalChatId),
   ]
-  if (params.accountId) filters.push(eq(inboxConversation.accountId, params.accountId))
+  if (params.accountId) {
+    const accountMatch =
+      params.channel === 'telegram' && /^\d+$/.test(params.accountId)
+        ? or(
+            eq(inboxConversation.accountId, params.accountId),
+            like(inboxConversation.accountId, likePrefix(`${params.accountId}:business:`))
+          )
+        : eq(inboxConversation.accountId, params.accountId)
+    if (accountMatch) filters.push(accountMatch)
+  }
 
   const [row] = await db
     .select()

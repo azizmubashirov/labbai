@@ -4,7 +4,12 @@ import type {
   TelegramSendLocationParams,
   TelegramSendMessageResponse,
 } from '@/tools/telegram/types'
-import { TELEGRAM_REQUEST_RETRY, telegramApiUrl } from '@/tools/telegram/utils'
+import {
+  businessConnectionField,
+  TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_REQUEST_RETRY,
+  telegramApiUrl,
+} from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
 export const telegramSendLocationTool: ToolConfig<
@@ -42,6 +47,7 @@ export const telegramSendLocationTool: ToolConfig<
       visibility: 'user-or-llm',
       description: 'Longitude of the location',
     },
+    businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
   request: {
@@ -53,6 +59,7 @@ export const telegramSendLocationTool: ToolConfig<
     }),
     body: (params) => ({
       chat_id: params.chatId,
+      ...businessConnectionField(params.businessConnectionId),
       latitude: params.latitude,
       longitude: params.longitude,
     }),

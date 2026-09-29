@@ -8,7 +8,7 @@ import {
   isChannelVoiceFormat,
 } from '@/lib/inbox/attachments'
 import { configString, resolveConversationChannelConfig } from '@/lib/inbox/channel-config'
-import type { InboxChannel } from '@/lib/inbox/channels'
+import { type InboxChannel, telegramBusinessConnectionIdFromAccountId } from '@/lib/inbox/channels'
 import { parseOutboundToolMessage } from '@/lib/inbox/outbound'
 import type { InboxConversationRecord } from '@/lib/inbox/repository'
 import { executeTool } from '@/tools'
@@ -61,6 +61,12 @@ const FRIENDLY_CHANNEL_ERRORS: Array<{
   },
   {
     channels: ['telegram'],
+    pattern: /business[ _]connection|BUSINESS_PEER|BOT_BUSINESS/i,
+    message:
+      'The Telegram Business connection is off or not allowed to reply. The account owner must connect the bot again in Telegram Settings → Telegram Business → Chatbots with permission to reply.',
+  },
+  {
+    channels: ['telegram'],
     pattern: /user is deactivated/i,
     message: "The customer's Telegram account is deleted.",
   },
@@ -101,9 +107,17 @@ function toolCall(
       if (!botToken) {
         return 'The Telegram trigger has no bot token.'
       }
+      const businessConnectionId = telegramBusinessConnectionIdFromAccountId(
+        conversation.accountId
+      )
       return {
         toolId: 'telegram_message',
-        params: { botToken, chatId: conversation.externalChatId, text },
+        params: {
+          botToken,
+          chatId: conversation.externalChatId,
+          text,
+          ...(businessConnectionId ? { businessConnectionId } : {}),
+        },
       }
     }
     case 'whatsapp': {
@@ -210,9 +224,13 @@ const TELEGRAM_MEDIA_METHODS: Record<InboxOutgoingKind, { method: string; field:
   document: { method: 'sendDocument', field: 'document' },
 }
 
+/**
+ * Sends an operator file on Telegram. In a Telegram Business thread the file goes out through
+ * the Business connection, as the connected account rather than as the bot.
+ */
 async function sendTelegramMedia(
   botToken: string,
-  chatId: string,
+  conversation: InboxConversationRecord,
   media: InboxOutgoingMedia,
   caption: string
 ): Promise<InboxSendOutcome> {
@@ -222,7 +240,9 @@ async function sendTelegramMedia(
       : media.kind
   const { method, field } = TELEGRAM_MEDIA_METHODS[kind]
   const form = new FormData()
-  form.append('chat_id', chatId)
+  form.append('chat_id', conversation.externalChatId)
+  const businessConnectionId = telegramBusinessConnectionIdFromAccountId(conversation.accountId)
+  if (businessConnectionId) form.append('business_connection_id', businessConnectionId)
   form.append(field, fileBlob(media), media.fileName)
   if (caption) form.append('caption', caption)
 
@@ -434,7 +454,7 @@ async function sendMedia(
     case 'telegram': {
       const botToken = configString(providerConfig, 'botToken')
       if (!botToken) return unavailable('The Telegram trigger has no bot token.')
-      return sendTelegramMedia(botToken, conversation.externalChatId, media, caption)
+      return sendTelegramMedia(botToken, conversation, media, caption)
     }
     case 'whatsapp': {
       const accessToken = configString(providerConfig, 'accessToken')

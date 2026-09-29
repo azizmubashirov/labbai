@@ -31,6 +31,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | Branding, part 2: UZ/RU interface (i18n) + real logo | todo — owner: at the very end |
 | Inbox (customer conversations from Telegram / WhatsApp / Instagram) | done (see below) |
 | Notifications (operator alerts via one platform Telegram bot) | phase 1 done (see below); alert buttons later |
+| Telegram Business (agent answers in the owner's own Telegram account) | coded 2026-09-29 (see below); verify in CI and with a real Premium account |
 
 LICENSE RULE (critical): `apps/sim/ee` was under the Sim Enterprise License. Never read,
 copy or restore `ee` source from git history. Requirements come only from Apache code.
@@ -334,6 +335,75 @@ nobody; a conversation with no workflow alerts nobody.
   `notification_event`); no condition drafting / dry run (Mehmon phase 3) and no starter
   templates; alerts are not audited in the activity log. The canvas card shows only the block
   header (both fields are hidden from the card).
+
+### Telegram Business (2026-09-29)
+
+Owner decision: Telegram Business lives **inside** the existing Telegram trigger and Telegram
+tools (one bot has one webhook), not in a separate trigger. Written without local builds: verify
+with CI (tsc + vitest) and a real Telegram Premium account before relying on it. No migration.
+
+How to enable:
+1. Telegram trigger → **Messages to receive**: `Bot chats` (default, the old behaviour) |
+   `Business chats` | `Both` (`providerConfig.messageSource`). Deploy (changing it redeploys the
+   webhook; `setWebhook` now always sends `allowed_updates`: `[]` = Telegram's default set for bot
+   chats, the three Business types for Business chats, message/edited/channel types + Business
+   types for Both).
+2. The account owner (Telegram **Premium** is required for Telegram Business) opens Telegram
+   Settings → Telegram Business → Chatbots, adds the bot and allows it to reply, and picks which
+   chats it serves.
+3. In the replying Telegram block (advanced field **Business connection ID**) map
+   `<telegram.businessConnectionId>`. Empty = normal bot send, so one workflow answers both kinds
+   of chat. The copilot is told to do this.
+
+Behaviour:
+- Trigger output for a `business_message` is the same shape as a `message`, `updateType:
+  'business_message'`, plus new outputs `businessConnectionId` ('' for bot chats) and `isBusiness`.
+- `lib/webhooks/providers/telegram.ts`: `shouldSkipEvent` drops updates the "Messages to receive"
+  setting does not cover (a bot-chats trigger ignores all Business updates, so a bot connected to
+  Business by mistake no longer runs empty workflows); `matchEvent` calls
+  `lib/inbox/telegram-business.ts#handleTelegramBusinessDelivery` for Business updates only.
+  Pure rules are in `lib/webhooks/providers/telegram-business.ts`.
+- `business_connection` updates are stored on the webhook row, `providerConfig.businessConnections
+  [<id>] = { ownerUserId, ownerChatId, canReply (Bot API 9 rights.can_reply or legacy can_reply),
+  isEnabled, updatedAt }` (atomic JSON merge; `businessConnections` is a system-managed key, so it
+  never counts as a config change). A connection the row does not know yet (e.g. after a redeploy
+  recreated the row) is looked up once with `getBusinessConnection` (3 s timeout) and stored. No
+  workflow run. A customer message on a connection that is disabled or may not reply does not
+  run the workflow (`business-cannot-reply`).
+- Owner filter (Mehmon's rule): in a private chat the customer's user id is the chat id, so a
+  Business message whose `from.id` differs from `chat.id` (or equals the stored owner id) was sent
+  by the account itself and never runs the workflow — decided without the database, so a failed
+  write can never make the AI answer the owner. Messages the bot itself sent through the
+  connection (`sender_business_bot` set: agent replies, Inbox operator replies) are dropped
+  silently.
+- Owner typing to a customer: recorded in the Inbox as an **operator** message (no operator user,
+  shown as "Operator"; photos/voice/files kept as attachments) and the AI is paused for that
+  thread for **15 minutes** (Mehmon `OPERATOR_PAUSE_MINUTES`) through the existing
+  `pauseInboxConversationAi` temporary pause: never shortens a longer pause and never touches a
+  conversation a person switched off (a person's OFF is sticky). Echoes of what Labbai sent in the
+  last 150 s (same Telegram message id, or the same text as an agent / Inbox-operator message)
+  are not recorded and do not pause, so a reply never pauses its own thread.
+- Edited Business messages (`edited_business_message`) and `deleted_business_messages` never run
+  the workflow (Mehmon: an edit is never answered a second time) and are not recorded.
+- Inbox: a Business chat is its own thread, account id `<bot id>:business:<connection id>`
+  (`telegramInboxAccountId` in `lib/inbox/channels.ts`), separate from the same customer's chat
+  with the bot. Operator text replies (`telegram_message` with `businessConnectionId`) and
+  operator files (multipart `business_connection_id`) go out through the connection as the
+  owner. Agent sends with `businessConnectionId` are filed under the Business thread. The Inbox /
+  Notify blocks' Account ID accepts the bot id and then also match that bot's Business threads.
+  A plain-words error when the connection is off or may not reply.
+- Tools: optional user-only `businessConnectionId` param on `telegram_message`, `send_photo`,
+  `send_video`, `send_audio`, `send_animation`, `send_document` (internal operation, multipart),
+  `send_location`, `send_contact`, `send_poll`, `send_chat_action`, `edit_message_text`; the body
+  carries `business_connection_id` only when set. Retry config unchanged. Not added where the Bot
+  API has no such field (forward, copy, delete, reaction, get chat/member) or to pin/unpin.
+  `tools/generated/tool-metadata.ts` was updated by hand with a script (pure insertion of the param,
+  last in each tool's params); run `bun run tool-metadata:check` when bun is available.
+- Limits: Business chats are private chats only; a reconnect gives a new connection id, so the
+  thread continues as a new Inbox thread; the bot only sees chats the owner allowed in
+  Telegram's Chatbots settings; Telegram Business needs Premium on the owner's account; the owner
+  pause is 15 min fixed (not configurable yet); Business message deletions are not reflected in
+  the Inbox.
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 
