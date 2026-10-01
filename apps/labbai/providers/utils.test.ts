@@ -325,7 +325,7 @@ describe('Model Pricing Validation', () => {
   })
 
   it('should price legacy chat ids at their resolved curated model', () => {
-    expect(getModelPricing('gpt-4o')).toEqual(getModelPricing(OPENAI_MODEL_GPT_5_MINI))
+    expect(getModelPricing('gpt-3.5-turbo')).toEqual(getModelPricing(OPENAI_MODEL_GPT_5_MINI))
   })
 
   it('should price knowledge-base embeddings', () => {
