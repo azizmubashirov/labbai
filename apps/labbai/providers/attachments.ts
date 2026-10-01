@@ -21,8 +21,11 @@ import {
 } from '@/providers/models'
 import type { ProviderId } from '@/providers/types'
 
-/** Labbai: OpenAI is the only provider (Responses API input parts). */
-export type AttachmentProvider = 'openai'
+/**
+ * Labbai: `openai` (Responses API input parts) and `cloudflare` (Chat Completions
+ * `image_url` parts through Cloudflare's unified endpoint; images only).
+ */
+export type AttachmentProvider = 'openai' | 'cloudflare'
 
 export interface PreparedProviderAttachment {
   file: UserFile
@@ -114,10 +117,12 @@ const OPENAI_DOCUMENT_MIME_TYPES = new Set([...DOCUMENT_MIME_TYPES, 'application
 
 const PROVIDER_SUPPORTED_LABELS: Record<AttachmentProvider, string> = {
   openai: 'images and documents through the Responses API input_image/input_file parts',
+  cloudflare: 'images through image_url message parts on multimodal models',
 }
 
 export function getAttachmentProvider(providerId: ProviderId | string): AttachmentProvider | null {
   if (providerId === 'openai') return 'openai'
+  if (providerId === 'cloudflare') return 'cloudflare'
   return null
 }
 
@@ -293,6 +298,8 @@ function isMimeTypeSupportedByProvider(
   switch (provider) {
     case 'openai':
       return isImageMimeType(mimeType) || isOpenAIDocumentMimeType(mimeType)
+    case 'cloudflare':
+      return isImageMimeType(mimeType)
     default: {
       const _exhaustive: never = provider
       return _exhaustive

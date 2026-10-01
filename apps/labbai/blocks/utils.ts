@@ -1,6 +1,6 @@
 import { toError } from '@labbai/utils/errors'
 import { getDeploymentShape } from '@/lib/core/config/deployment-shape'
-import { platformLlmProviders } from '@/lib/core/config/env-flags'
+import { isCloudflareAIEnabled, platformLlmProviders } from '@/lib/core/config/env-flags'
 import { containsReference } from '@/lib/workflows/sanitization/references'
 import type { SubBlockConfig } from '@/blocks/types'
 import {
@@ -33,8 +33,9 @@ export const SERVICE_ACCOUNT_SUBBLOCKS: SubBlockConfig[] = [
 ]
 
 /**
- * Returns model options for combobox subblocks: the curated OpenAI catalog
- * (Labbai runs on OpenAI only — no dynamic providers, no local model servers).
+ * Returns model options for combobox subblocks: the curated catalog — OpenAI always,
+ * plus the Cloudflare models (Anthropic, Google, Workers AI) in Cloudflare mode. No
+ * dynamic providers, no local model servers.
  */
 export function getModelOptions() {
   return buildModelOptions(false)
@@ -46,8 +47,10 @@ export function getAgentModelOptions() {
 }
 
 function buildModelOptions(includeEvaluation: boolean) {
-  return Object.values(PROVIDER_DEFINITIONS)
-    .flatMap((provider) => provider.models.map((model) => model.id))
+  return Object.entries(PROVIDER_DEFINITIONS)
+    // Cloudflare models (Anthropic, Google, Workers AI) only run in Cloudflare mode.
+    .filter(([providerId]) => providerId !== 'cloudflare' || isCloudflareAIEnabled)
+    .flatMap(([, provider]) => provider.models.map((model) => model.id))
     .filter(
       (model) =>
         getModelSunsetStatus(model) !== 'deprecated' &&
@@ -70,9 +73,11 @@ function buildModelVisibilityCondition(model: string, shouldShow: boolean) {
 /**
  * Whether the block must show an API Key field for `model`.
  *
- * Labbai: every model runs on OpenAI with the server's `OPENAI_API_KEY`, and
- * `platformLlmProviders` always covers `openai` — so this is false for every model. Kept as a function for the model-fallback and
- * validation callers.
+ * Labbai: OpenAI models run on the server's `OPENAI_API_KEY` (or the Cloudflare gateway
+ * token) and Cloudflare models on CLOUDFLARE_API_TOKEN; `platformLlmProviders` covers
+ * `openai` always and `cloudflare` in Cloudflare mode (outside it a Cloudflare id resolves
+ * to `openai`) — so this is false for every model. Kept as a function for the
+ * model-fallback and validation callers.
  */
 export function shouldRequireApiKeyForModel(model: string): boolean {
   const normalizedModel = model.trim()

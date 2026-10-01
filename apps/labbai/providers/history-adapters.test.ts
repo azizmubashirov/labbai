@@ -136,9 +136,10 @@ describe('canonical provider wire adapters', () => {
     }
   })
 
-  it('replays OpenAI history through the Responses protocol without portable projection', () => {
-    expect(providerHistoryProtocols).toEqual({ openai: 'responses' })
+  it('replays OpenAI history through Responses and Cloudflare through Chat Completions', () => {
+    expect(providerHistoryProtocols).toEqual({ openai: 'responses', cloudflare: 'chat-completions' })
     expect(requiresNativeToolHistory('openai')).toBe(false)
+    expect(requiresNativeToolHistory('cloudflare')).toBe(false)
     expect(requiresNativeToolHistory(undefined)).toBe(false)
   })
 })

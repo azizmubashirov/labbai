@@ -35,6 +35,7 @@ export interface EnvFlagsMockState {
   isDocSandboxEnabled: boolean
   isAzureConfigured: boolean
   isCohereConfigured: boolean
+  isCloudflareAIEnabled: boolean
   platformLlmProviders: ReadonlySet<string>
   isInvitationsDisabled: boolean
   isPublicApiDisabled: boolean
@@ -74,6 +75,7 @@ const defaultEnvFlagsState: EnvFlagsMockState = {
   isDocSandboxEnabled: false,
   isAzureConfigured: false,
   isCohereConfigured: false,
+  isCloudflareAIEnabled: false,
   platformLlmProviders: new Set(['openai']),
   isInvitationsDisabled: false,
   isPublicApiDisabled: false,

@@ -6,6 +6,7 @@ import { LRUCache } from 'lru-cache'
 import { isOrganizationBYOKEntitledCached } from '@/lib/api-key/byok-entitlement'
 import { getRotatingApiKey } from '@/lib/core/config/api-keys'
 import { decryptSecret } from '@/lib/core/security/encryption'
+import { CLOUDFLARE_PLATFORM_API_KEY, isCloudflareAIMode } from '@/providers/cloudflare/config'
 import { isOpenAIGatewayMode, OPENAI_GATEWAY_API_KEY } from '@/providers/openai/client-config'
 import type { BYOKProviderId } from '@/tools/types'
 
@@ -187,9 +188,13 @@ export async function getBYOKKey(
  * for LLMs; `workspaceId` and `userProvidedKey` are accepted for call-site
  * compatibility and ignored.
  *
- * In Cloudflare AI Gateway mode (`CLOUDFLARE_AIG_TOKEN`) no OpenAI key is needed:
- * the placeholder {@link OPENAI_GATEWAY_API_KEY} is returned and the request
- * headers carry the gateway token instead of any key.
+ * In Cloudflare AI Gateway mode (`CLOUDFLARE_AIG_TOKEN`, or Cloudflare mode) no OpenAI
+ * key is needed: the placeholder {@link OPENAI_GATEWAY_API_KEY} is returned and the
+ * request headers carry the gateway token instead of any key.
+ *
+ * `cloudflare` (Cloudflare mode only) returns the placeholder
+ * {@link CLOUDFLARE_PLATFORM_API_KEY}: the provider reads CLOUDFLARE_API_TOKEN from the
+ * server env, and the usage is paid from Cloudflare credits and billed to the workspace.
  */
 export async function getApiKeyWithBYOK(
   provider: string,
@@ -197,6 +202,10 @@ export async function getApiKeyWithBYOK(
   _workspaceId?: string | undefined | null,
   _userProvidedKey?: string
 ): Promise<{ apiKey: string; isBYOK: boolean; scope?: BYOKKeyScopeName }> {
+  if (provider === 'cloudflare' && isCloudflareAIMode()) {
+    return { apiKey: CLOUDFLARE_PLATFORM_API_KEY, isBYOK: false }
+  }
+
   if (provider !== 'openai') {
     throw new Error(`Provider "${provider}" is not available for ${model}`)
   }

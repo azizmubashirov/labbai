@@ -31,6 +31,8 @@ import {
   resolveModelCostPolicy,
   withoutToolCost,
 } from '@/providers/cost-policy'
+import { isCloudflareAIMode } from '@/providers/cloudflare/config'
+import { isCloudflareModelId, resolveCloudflareModelId } from '@/providers/cloudflare/model-ids'
 import {
   attachLargeFileRemoteUrls,
   uploadLargeFilesToProvider,
@@ -162,14 +164,28 @@ function normalizeModelLevel(value: string | undefined): string | undefined {
   return normalized || undefined
 }
 
-function sanitizeRequest(request: ProviderRequest): ProviderRequest {
+/**
+ * The provider that executes a model on this deployment. Curated Cloudflare ids
+ * (`anthropic/…`, `google/…`, `@cf/…`) run on `cloudflare` in Cloudflare mode; every other
+ * id — plain OpenAI ids included, so existing workflows keep the Responses API path —
+ * runs on `openai` (through the Cloudflare gateway in Cloudflare mode).
+ */
+export function resolveExecutionProviderId(model: string | undefined): ProviderId {
+  return isCloudflareAIMode() && isCloudflareModelId(model) ? 'cloudflare' : 'openai'
+}
+
+function sanitizeRequest(request: ProviderRequest, providerId: ProviderId): ProviderRequest {
   const sanitizedRequest = { ...request }
   /**
    * Labbai: stored workflows and callers may still carry retired or non-OpenAI model
-   * ids (`gpt-4o`, `claude-sonnet-4-6`, `gemini-2.5-pro`, `azure/…`). They run on the
-   * closest curated OpenAI model instead of failing.
+   * ids (`gpt-4o`, `claude-sonnet-4-6`, `gemini-2.5-pro`, `azure/…`). On `openai` they run
+   * on the closest curated OpenAI model instead of failing. Curated Cloudflare ids on
+   * `cloudflare` pass through in their canonical spelling.
    */
-  if (sanitizedRequest.model) {
+  if (sanitizedRequest.model && providerId === 'cloudflare') {
+    sanitizedRequest.model =
+      resolveCloudflareModelId(sanitizedRequest.model) ?? sanitizedRequest.model
+  } else if (sanitizedRequest.model) {
     const resolved = resolveOpenAIModelId(sanitizedRequest.model)
     if (resolved !== sanitizedRequest.model) {
       logger.info('Mapped model id onto a curated OpenAI model', {
@@ -258,11 +274,15 @@ export async function executeProviderRequest(
   request: ProviderRequest,
   runtimeContext?: ProviderRuntimeContext
 ): Promise<ProviderResponse | ReadableStream | StreamingExecution> {
-  /** Labbai: OpenAI is the only provider; legacy provider ids route there. */
-  const providerId: ProviderId = 'openai'
+  /**
+   * Labbai: the model decides the provider (see {@link resolveExecutionProviderId});
+   * legacy provider ids, and Cloudflare ids outside Cloudflare mode, route to OpenAI.
+   */
+  const providerId: ProviderId = resolveExecutionProviderId(request.model)
   if (requestedProviderId !== providerId) {
-    logger.info('Routing legacy provider id to OpenAI', {
+    logger.info('Routing provider request', {
       requested: requestedProviderId,
+      provider: providerId,
     })
   }
   const provider = await getProviderExecutor(providerId as ProviderId)
@@ -278,7 +298,7 @@ export async function executeProviderRequest(
     throw new Error('The selected model and request must use the same evaluation or chat modality')
   }
 
-  let resolvedRequest = sanitizeRequest(request)
+  let resolvedRequest = sanitizeRequest(request, providerId)
   let isBYOK = false
 
   if (request.workspaceId) {

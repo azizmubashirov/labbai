@@ -254,14 +254,32 @@ export const isAzureConfigured = false as boolean
 export const isCohereConfigured = isTruthy(getEnv('NEXT_PUBLIC_COHERE_CONFIGURED'))
 
 /**
+ * Browser-visible mirror of Cloudflare mode. Never set by hand: the root layout's public
+ * env (`app/_shell/public-env-script.tsx`) adds it when the server has
+ * CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN.
+ */
+const CLOUDFLARE_AI_PUBLIC_FLAG = 'NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED'
+
+/**
+ * Labbai: Cloudflare mode — every model (OpenAI, Anthropic, Google, Workers AI) runs
+ * through Cloudflare (Unified Billing). On the server: CLOUDFLARE_ACCOUNT_ID and
+ * CLOUDFLARE_API_TOKEN are both set. In the browser: {@link CLOUDFLARE_AI_PUBLIC_FLAG}.
+ * Gates the Cloudflare (non-OpenAI) models in model pickers and provider routing.
+ */
+export const isCloudflareAIEnabled =
+  Boolean(env.CLOUDFLARE_ACCOUNT_ID?.trim() && env.CLOUDFLARE_API_TOKEN?.trim()) ||
+  isTruthy(getEnv(CLOUDFLARE_AI_PUBLIC_FLAG))
+
+/**
  * Labbai: LLM providers whose credentials the platform supplies server-side.
- * Blocks on these providers never show an API key field. `openai` (the only LLM
- * provider) is always included: its key (`OPENAI_API_KEY`) lives in the server
- * env. `NEXT_PUBLIC_PLATFORM_LLM_PROVIDERS` is still read (comma-separated
- * provider ids) so a deployment can list more.
+ * Blocks on these providers never show an API key field. `openai` is always
+ * included: its key (`OPENAI_API_KEY`, or the Cloudflare gateway token) lives in
+ * the server env; `cloudflare` is included in Cloudflare mode. `NEXT_PUBLIC_PLATFORM_LLM_PROVIDERS`
+ * is still read (comma-separated provider ids) so a deployment can list more.
  */
 export const platformLlmProviders: ReadonlySet<string> = new Set([
   'openai',
+  ...(isCloudflareAIEnabled ? ['cloudflare'] : []),
   ...(getEnv('NEXT_PUBLIC_PLATFORM_LLM_PROVIDERS') ?? '')
     .split(',')
     .map((id) => id.trim().toLowerCase())

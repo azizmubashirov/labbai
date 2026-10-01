@@ -15,9 +15,10 @@ ported in. We do not sync with upstream Sim; we develop it ourselves from here.
   stay off; the internal cost ledger (`usage_log`) keeps recording what runs cost.
 - Integrations: keep ~10% (list below), remove the rest with their tools, triggers,
   OAuth providers and knowledge connectors
-- LLM providers: keep only OpenAI for now; remove all others. OpenAI traffic runs through
-  the Cloudflare AI Gateway (Unified Billing, one account) — done 2026-10-01, transport only
-  (`CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL`, see HANDOFF.md "Cloudflare AI Gateway").
+- LLM providers: the old per-vendor providers stay removed. All models are managed from one
+  place — Cloudflare (one account, one token, one balance via Unified Billing, gateway `labbai`):
+  OpenAI plus Anthropic / Google / Workers AI through Cloudflare (coded 2026-10-01, see
+  "Models" and HANDOFF.md "Cloudflare AI (one account for every model)").
 - Sim cloud copilot path (Go mothership client) and the Local/Cloud switch — local copilot only
 - Copilot providers other than the OpenAI-compatible one (Bedrock, Vertex, Gemini)
 - PII service (`apps/pii`), Pi / A2A / Mothership blocks, video generation,
@@ -63,12 +64,23 @@ Commerce: Shopify, WordPress · Voice: ElevenLabs.
 Knowledge connectors: Google Drive, Google Docs, Notion.
 Later: amoCRM, Bitrix24, Exely (not in Sim) — our own integrations.
 
-## Models (OpenAI only for now)
+## Models (Cloudflare multi-provider)
 
-Strong: `gpt-5.5` · Fast (default for Agent blocks): `gpt-5-mini` ·
-Embeddings: `text-embedding-3-small`. All served through the Cloudflare AI Gateway
-(Unified Billing) since 2026-10-01. Later through the same gateway: add Claude /
-Gemini / Workers AI.
+Owner decision 2026-10-01: manage every model from Cloudflare (one account, one token, one
+balance via Unified Billing, AI Gateway `labbai`). Env: `CLOUDFLARE_ACCOUNT_ID`,
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_AI_GATEWAY` (default `labbai`) — "Cloudflare mode".
+
+- OpenAI (provider `openai`, Responses API through the gateway's `/openai` path, plain ids so
+  existing workflows are unchanged): strong `gpt-5.5` · fast, default for Agent blocks
+  `gpt-5-mini` · `gpt-4.1` · `gpt-4.1-mini` · embeddings `text-embedding-3-small`.
+- Anthropic / Google / Workers AI (provider `cloudflare`, Cloudflare's unified
+  `/ai/v1/chat/completions`, Cloudflare mode only): `anthropic/claude-sonnet-5`,
+  `anthropic/claude-haiku-4.5`, `google/gemini-2.5-pro`, `google/gemini-2.5-flash`,
+  `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (strong open model),
+  `@cf/zai-org/glm-4.7-flash` (cheap and fast). Selectable in the Agent block and the copilot
+  picker without any user key; hidden (and a stored id runs on `gpt-5-mini`) outside
+  Cloudflare mode.
+- Without the Cloudflare vars: OpenAI directly with `OPENAI_API_KEY`, OpenAI models only.
 
 ## Build (new, after cleanup)
 
@@ -99,10 +111,13 @@ Gemini / Workers AI.
   messages and pause the AI in that chat for 15 minutes (a person's OFF stays off). Edited
   Business messages are not answered again. Telegram send tools and the Inbox reply through the
   Business connection.
-- **Cloudflare AI Gateway** — done (2026-10-01), transport only: every OpenAI call goes
-  through the gateway with Unified Billing when `CLOUDFLARE_AIG_TOKEN` is set
-  (`OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openai`); same
-  OpenAI models. Rollback and details: HANDOFF.md "Cloudflare AI Gateway".
+- **Cloudflare AI** — coded 2026-10-01 (not deployed): one Cloudflare account for every model.
+  `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (+ optional `CLOUDFLARE_AI_GATEWAY`) route
+  OpenAI (gateway `/openai`: Agent, copilot, wand, notifications, embeddings, vision, images,
+  speech) and the new Claude / Gemini / Workers AI models (unified chat completions) through
+  Cloudflare Unified Billing. The earlier `CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL` setup still
+  works as a legacy alias. Rollback and details: HANDOFF.md "Cloudflare AI (one account for
+  every model)".
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,
   UZ / RU interface.
 - Own integrations: amoCRM, Bitrix24, Exely.

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { envFlagsMockFns, resetEnvFlagsMock } from '@labbai/testing'
+import { envFlagsMockFns, resetEnvFlagsMock, resetEnvMock, setEnv } from '@labbai/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -2034,6 +2034,82 @@ describe('executeProviderRequest — model level normalization', () => {
       expect(sentRequest().thinkingLevel).toBeUndefined()
     }
   )
+})
+
+describe('executeProviderRequest — Cloudflare routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetApiKeyWithBYOK.mockResolvedValue({
+      apiKey: 'cloudflare-unified-billing',
+      isBYOK: false,
+    })
+    mockExecuteRequest.mockResolvedValue({
+      content: 'hi',
+      model: 'anthropic/claude-haiku-4.5',
+      tokens: { input: 1000, output: 1000, total: 2000 },
+    } as ProviderResponse)
+  })
+
+  afterEach(resetEnvMock)
+
+  const sentRequest = () => mockExecuteRequest.mock.calls[0][0] as Record<string, unknown>
+
+  it('runs a curated Cloudflare id on the cloudflare provider unchanged in Cloudflare mode', async () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+
+    const response = await executeProviderRequest('cloudflare', {
+      model: 'anthropic/claude-haiku-4.5',
+      workspaceId: 'ws-1',
+      temperature: 0.4,
+      reasoningEffort: 'high',
+    })
+
+    expect(getProviderExecutor).toHaveBeenCalledWith('cloudflare')
+    expect(mockGetApiKeyWithBYOK).toHaveBeenCalledWith(
+      'cloudflare',
+      'anthropic/claude-haiku-4.5',
+      'ws-1',
+      undefined
+    )
+    expect(sentRequest()).toMatchObject({ model: 'anthropic/claude-haiku-4.5', temperature: 0.4 })
+    expect(sentRequest().reasoningEffort).toBeUndefined()
+    // Billed at the catalog price ($1 in / $5 out per 1M tokens).
+    expect((response as ProviderResponse).cost?.total).toBeGreaterThan(0)
+  })
+
+  it('drops temperature for a Cloudflare model that rejects it (Claude Sonnet 5)', async () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+
+    await executeProviderRequest('cloudflare', {
+      model: 'anthropic/claude-sonnet-5',
+      workspaceId: 'ws-1',
+      temperature: 0.4,
+    })
+
+    expect(sentRequest()).toMatchObject({ model: 'anthropic/claude-sonnet-5' })
+    expect(sentRequest().temperature).toBeUndefined()
+  })
+
+  it('keeps plain OpenAI ids on the OpenAI provider in Cloudflare mode', async () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+
+    await executeProviderRequest('openai', { model: 'gpt-4.1', workspaceId: 'ws-1' })
+
+    expect(getProviderExecutor).toHaveBeenCalledWith('openai')
+    expect(sentRequest()).toMatchObject({ model: 'gpt-4.1' })
+  })
+
+  it('runs a Cloudflare id on the default OpenAI model outside Cloudflare mode', async () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
+
+    await executeProviderRequest('cloudflare', {
+      model: 'google/gemini-2.5-pro',
+      workspaceId: 'ws-1',
+    })
+
+    expect(getProviderExecutor).toHaveBeenCalledWith('openai')
+    expect(sentRequest()).toMatchObject({ model: 'gpt-5-mini' })
+  })
 })
 
 describe('native evaluation provider boundary', () => {

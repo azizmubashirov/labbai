@@ -14,9 +14,19 @@
  *                            `Authorization` header (a provider key would make the
  *                            gateway bill/forward it as a BYO OpenAI key), and
  *                            `OPENAI_API_KEY` is not required.
+ *
+ * Cloudflare mode (`CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`, see
+ * `providers/cloudflare/config.ts`) implies gateway mode: the base URL is the gateway's
+ * OpenAI path built from the account and `CLOUDFLARE_AI_GATEWAY` (OPENAI_BASE_URL is
+ * ignored) and the gateway token is `CLOUDFLARE_AIG_TOKEN` when set, else
+ * `CLOUDFLARE_API_TOKEN` — so the three Cloudflare vars alone configure every OpenAI path.
  */
 import { createLogger } from '@labbai/logger'
 import { env } from '@/lib/core/config/env'
+import {
+  getCloudflareAIConfig,
+  getCloudflareGatewayOpenAIBaseUrl,
+} from '@/providers/cloudflare/config'
 
 const logger = createLogger('OpenAIClientConfig')
 
@@ -35,8 +45,13 @@ export const OPENAI_GATEWAY_API_KEY = 'cloudflare-ai-gateway'
 /** `fetch` signature accepted by the `openai` SDK's `fetch` client option. */
 export type OpenAIFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
-/** OpenAI API base URL without a trailing slash. */
+/**
+ * OpenAI API base URL without a trailing slash. In Cloudflare mode, the gateway's
+ * OpenAI path (`https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openai`).
+ */
 export function getOpenAIBaseUrl(): string {
+  const cloudflare = getCloudflareAIConfig()
+  if (cloudflare) return getCloudflareGatewayOpenAIBaseUrl(cloudflare)
   const configured = env.OPENAI_BASE_URL?.trim()
   return (configured || DEFAULT_OPENAI_BASE_URL).replace(/\/+$/, '')
 }
@@ -63,10 +78,13 @@ export function getOpenAIExtraHeaders(): Record<string, string> {
 }
 
 function getCloudflareAigToken(): string | undefined {
-  return env.CLOUDFLARE_AIG_TOKEN?.trim() || undefined
+  return env.CLOUDFLARE_AIG_TOKEN?.trim() || getCloudflareAIConfig()?.apiToken || undefined
 }
 
-/** True when CLOUDFLARE_AIG_TOKEN is set: OpenAI traffic goes through Cloudflare AI Gateway. */
+/**
+ * True when OpenAI traffic goes through Cloudflare AI Gateway: CLOUDFLARE_AIG_TOKEN is
+ * set, or Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN) is on.
+ */
 export function isOpenAIGatewayMode(): boolean {
   return Boolean(getCloudflareAigToken())
 }

@@ -56,6 +56,23 @@ describe('model options', () => {
   it('offers no auto-routing pseudo-model', () => {
     expect(getModelOptions().map((option) => option.id)).not.toContain('sim-auto')
   })
+
+  it('adds the Cloudflare models (no API key field) only in Cloudflare mode', () => {
+    const openai = getProviderModels('openai')
+    const cloudflare = getProviderModels('cloudflare')
+    expect(cloudflare).toContain('anthropic/claude-sonnet-5')
+
+    setEnvFlags({ isCloudflareAIEnabled: true, platformLlmProviders: new Set(['openai', 'cloudflare']) })
+    try {
+      expect(getAgentModelOptions().map((option) => option.id)).toEqual([...openai, ...cloudflare])
+      for (const id of cloudflare) expect(shouldRequireApiKeyForModel(id)).toBe(false)
+    } finally {
+      resetEnvFlagsMock()
+    }
+
+    expect(getAgentModelOptions().map((option) => option.id)).toEqual(openai)
+    for (const id of cloudflare) expect(shouldRequireApiKeyForModel(id)).toBe(false)
+  })
 })
 
 describe('provider family credentials', () => {

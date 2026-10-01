@@ -7,6 +7,8 @@ import type {
   LocalCopilotProvider,
 } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
+import { toCloudflareUnifiedModelId } from '@/providers/cloudflare/model-ids'
+import { isKnownModelId, supportsTemperature } from '@/providers/models'
 import { getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import { isOpenAIReasoningModelId } from '@/providers/openai/model-ids'
 
@@ -15,6 +17,9 @@ const logger = createLogger('LocalCopilotOpenAIProvider')
 function resolveBaseUrl(config: LocalCopilotConfig): string {
   if (config.baseUrl) return config.baseUrl.replace(/\/$/, '')
   if (config.provider === 'openai') return getOpenAIBaseUrl()
+  if (config.provider === 'cloudflare') {
+    throw new Error('Cloudflare requires CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to be set.')
+  }
   if (config.provider === 'azure-openai') {
     throw new Error('Azure OpenAI requires COPILOT_BASE_URL to be set.')
   }
@@ -68,6 +73,23 @@ export function isOpenAiReasoningModel(provider: string, model: string): boolean
   return isOpenAIReasoningModelId(id)
 }
 
+/**
+ * The model id sent on the wire. Cloudflare's unified endpoint takes provider-namespaced
+ * ids, so a bare OpenAI id (`gpt-5.5`) becomes `openai/gpt-5.5`; other transports get the
+ * id unchanged.
+ */
+export function resolveWireModelId(config: LocalCopilotConfig, model: string): string {
+  return config.provider === 'cloudflare' ? toCloudflareUnifiedModelId(model) : model
+}
+
+/**
+ * Whether to send `temperature`: always, except for catalog models that reject it
+ * (e.g. Claude Sonnet 5 on Cloudflare).
+ */
+function acceptsTemperature(model: string): boolean {
+  return !isKnownModelId(model) || supportsTemperature(model)
+}
+
 export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): LocalCopilotProvider {
   const baseUrl = resolveBaseUrl(config)
 
@@ -75,8 +97,9 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
     id: config.provider,
     async *chatCompletionStream(request: ChatCompletionRequest) {
       const url = `${baseUrl}/chat/completions`
+      const model = resolveWireModelId(config, request.model || config.model)
       const body = {
-        model: request.model || config.model,
+        model,
         messages: request.messages.map((message) => {
           if (message.role === 'tool') {
             return {
@@ -104,13 +127,15 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
         stream_options: { include_usage: true },
         // OpenAI reasoning models (gpt-5+, o-series) reject `max_tokens` and any
         // non-default temperature; their budget also covers hidden reasoning tokens.
-        ...(isOpenAiReasoningModel(config.provider, request.model || config.model)
+        ...(isOpenAiReasoningModel(config.provider, model)
           ? {
               max_completion_tokens: Math.max(request.maxTokens ?? 0, 32768),
               ...(config.thinkingLevel ? { reasoning_effort: config.thinkingLevel } : {}),
             }
           : {
-              temperature: request.temperature ?? 0.2,
+              ...(acceptsTemperature(request.model || config.model)
+                ? { temperature: request.temperature ?? 0.2 }
+                : {}),
               max_tokens: request.maxTokens ?? 4096,
             }),
         // OpenAI automatic prompt caching: stable key improves prefix reuse across turns.

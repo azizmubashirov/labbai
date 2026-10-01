@@ -198,3 +198,46 @@ describe('createOpenAIFetch', () => {
     })
   })
 })
+
+describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () => {
+  it('routes OpenAI through the gateway /openai path with the API token, ignoring OPENAI_BASE_URL', () => {
+    setEnv({
+      CLOUDFLARE_ACCOUNT_ID: 'acct',
+      CLOUDFLARE_API_TOKEN: 'cf-api-token',
+      CLOUDFLARE_AI_GATEWAY: undefined,
+      CLOUDFLARE_AIG_TOKEN: undefined,
+      OPENAI_BASE_URL: 'https://api.openai.com/v1',
+      OPENAI_EXTRA_HEADERS: undefined,
+    })
+
+    expect(isOpenAIGatewayMode()).toBe(true)
+    expect(getOpenAIBaseUrl()).toBe('https://gateway.ai.cloudflare.com/v1/acct/labbai/openai')
+    expect(getOpenAIAuthHeaders('sk-should-not-be-sent')).toEqual({
+      'cf-aig-authorization': 'Bearer cf-api-token',
+    })
+  })
+
+  it('uses CLOUDFLARE_AI_GATEWAY and prefers a legacy CLOUDFLARE_AIG_TOKEN when both are set', () => {
+    setEnv({
+      CLOUDFLARE_ACCOUNT_ID: 'acct',
+      CLOUDFLARE_API_TOKEN: 'cf-api-token',
+      CLOUDFLARE_AI_GATEWAY: 'gw',
+      CLOUDFLARE_AIG_TOKEN: 'legacy-token',
+      OPENAI_EXTRA_HEADERS: undefined,
+    })
+
+    expect(getOpenAIBaseUrl()).toBe(GATEWAY)
+    expect(getOpenAIAuthHeaders()).toEqual({ 'cf-aig-authorization': 'Bearer legacy-token' })
+  })
+
+  it('needs both the account id and the token', () => {
+    setEnv({
+      CLOUDFLARE_ACCOUNT_ID: 'acct',
+      CLOUDFLARE_API_TOKEN: undefined,
+      CLOUDFLARE_AIG_TOKEN: undefined,
+      OPENAI_BASE_URL: undefined,
+    })
+    expect(isOpenAIGatewayMode()).toBe(false)
+    expect(getOpenAIBaseUrl()).toBe(DEFAULT_OPENAI_BASE_URL)
+  })
+})

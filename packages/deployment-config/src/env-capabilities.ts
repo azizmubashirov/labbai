@@ -1227,7 +1227,8 @@ const OPENAI_EMBEDDING_WIDTHS = [768, 1024, 1536] as const
 /**
  * Which credential serves knowledge-base embeddings. Labbai: the platform OpenAI
  * key (optionally behind OPENAI_BASE_URL) is the only transport, or the
- * Cloudflare AI Gateway token (CLOUDFLARE_AIG_TOKEN), which needs no OpenAI key.
+ * Cloudflare AI Gateway token (CLOUDFLARE_AIG_TOKEN, or CLOUDFLARE_API_TOKEN in
+ * Cloudflare mode together with CLOUDFLARE_ACCOUNT_ID), which needs no OpenAI key.
  */
 export const KNOWLEDGE_EMBEDDINGS_CAPABILITY = defineCapability({
   strategy: 'fallback',
@@ -1245,6 +1246,7 @@ export const KNOWLEDGE_EMBEDDINGS_CAPABILITY = defineCapability({
           'OPENAI_API_KEY_2',
           'OPENAI_API_KEY_3',
           'CLOUDFLARE_AIG_TOKEN',
+          'CLOUDFLARE_API_TOKEN',
         ],
       },
       activeWhen: embeddingFamilyIs('openai'),
@@ -1253,7 +1255,8 @@ export const KNOWLEDGE_EMBEDDINGS_CAPABILITY = defineCapability({
         envField('OPENAI_API_KEY_1'),
         envField('OPENAI_API_KEY_2'),
         envField('OPENAI_API_KEY_3'),
-        envField('CLOUDFLARE_AIG_TOKEN')
+        envField('CLOUDFLARE_AIG_TOKEN'),
+        envField('CLOUDFLARE_API_TOKEN')
       ),
       optionalFields: [
         envField('KB_EMBEDDING_MODEL'),

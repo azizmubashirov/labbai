@@ -1,5 +1,13 @@
 import type { LocalCopilotProviderId } from '@/local-copilot/lib/types'
 import {
+  CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+  CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+  CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+  CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+  CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+  CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+} from '@/providers/cloudflare/model-ids'
+import {
   OPENAI_MODEL_GPT_5_5,
   OPENAI_MODEL_GPT_5_MINI,
   resolveOpenAIModelId,
@@ -7,16 +15,19 @@ import {
 
 /**
  * Default catalog selection for new local chats and new user-access rows.
- * Labbai runs on OpenAI only, so picker ids are plain OpenAI model ids.
+ * OpenAI picker ids are plain OpenAI model ids; Cloudflare picker ids are Cloudflare's
+ * catalog ids (`anthropic/…`, `google/…`, `@cf/…`).
  */
 export const DEFAULT_LOCAL_COPILOT_CATALOG_ID = OPENAI_MODEL_GPT_5_5
 
 /** Top-level picker groups shown when Local is selected. */
-export type LocalCopilotProviderGroup = 'openai'
+export type LocalCopilotProviderGroup = 'openai' | 'anthropic' | 'google' | 'workers-ai'
 
 /**
  * Allowlisted Local Copilot models selectable in chat. Clients store/send these
- * ids; the server maps them to provider + model.
+ * ids; the server maps them to provider + model. Entries on `cloudflare` (the same
+ * non-OpenAI models the Agent block offers) are only offered and only run in
+ * Cloudflare mode.
  */
 export const LOCAL_COPILOT_CATALOG = [
   {
@@ -33,6 +44,48 @@ export const LOCAL_COPILOT_CATALOG = [
     label: 'GPT-5 mini',
     provider: 'openai' as LocalCopilotProviderId,
     model: OPENAI_MODEL_GPT_5_MINI as string | null,
+  },
+  {
+    id: CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+    providerGroup: 'anthropic',
+    label: 'Claude Sonnet 5',
+    provider: 'cloudflare' as LocalCopilotProviderId,
+    model: CLOUDFLARE_MODEL_CLAUDE_SONNET_5 as string | null,
+  },
+  {
+    id: CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+    providerGroup: 'anthropic',
+    label: 'Claude Haiku 4.5',
+    provider: 'cloudflare' as LocalCopilotProviderId,
+    model: CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5 as string | null,
+  },
+  {
+    id: CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+    providerGroup: 'google',
+    label: 'Gemini 2.5 Pro',
+    provider: 'cloudflare' as LocalCopilotProviderId,
+    model: CLOUDFLARE_MODEL_GEMINI_2_5_PRO as string | null,
+  },
+  {
+    id: CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+    providerGroup: 'google',
+    label: 'Gemini 2.5 Flash',
+    provider: 'cloudflare' as LocalCopilotProviderId,
+    model: CLOUDFLARE_MODEL_GEMINI_2_5_FLASH as string | null,
+  },
+  {
+    id: CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+    providerGroup: 'workers-ai',
+    label: 'Llama 3.3 70B',
+    provider: 'cloudflare' as LocalCopilotProviderId,
+    model: CLOUDFLARE_MODEL_LLAMA_3_3_70B as string | null,
+  },
+  {
+    id: CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+    providerGroup: 'workers-ai',
+    label: 'GLM-4.7 Flash',
+    provider: 'cloudflare' as LocalCopilotProviderId,
+    model: CLOUDFLARE_MODEL_GLM_4_7_FLASH as string | null,
   },
 ] as const
 
@@ -59,12 +112,21 @@ const CATALOG_BY_ID = new Map<string, (typeof LOCAL_COPILOT_CATALOG)[number]>(
  * pre-OpenAI-only catalog and cannot change without a migration. Each curated
  * model is stored under one existing enum value (its "slot"); reads decode the
  * slot back. `openai` holds the default GPT-5.5; `gemini-3.8-flash` (the old
- * fast tier) is reused for GPT-5 mini because no enum value names it — replace
- * these slots with real values in the next DB migration.
+ * fast tier) is reused for GPT-5 mini because no enum value names it. The
+ * Cloudflare models reuse the closest old values (`bedrock-claude-sonnet-4-6`
+ * holds Claude Haiku 4.5, `vertex-gemini-3.8-flash` Gemini 2.5 Flash,
+ * `bedrock-zai-glm-5` GLM-4.7 Flash) — replace these slots with real values in
+ * the next DB migration.
  */
 export const LOCAL_COPILOT_DEFAULT_MODEL_ENUM_SLOTS = {
   [OPENAI_MODEL_GPT_5_5]: 'openai',
   [OPENAI_MODEL_GPT_5_MINI]: 'gemini-3.8-flash',
+  [CLOUDFLARE_MODEL_CLAUDE_SONNET_5]: 'bedrock-claude-sonnet-5',
+  [CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5]: 'bedrock-claude-sonnet-4-6',
+  [CLOUDFLARE_MODEL_GEMINI_2_5_PRO]: 'gemini-2.5-pro',
+  [CLOUDFLARE_MODEL_GEMINI_2_5_FLASH]: 'vertex-gemini-3.8-flash',
+  [CLOUDFLARE_MODEL_LLAMA_3_3_70B]: 'bedrock-llama-3.3-70b',
+  [CLOUDFLARE_MODEL_GLM_4_7_FLASH]: 'bedrock-zai-glm-5',
 } as const
 
 export type LocalCopilotDefaultModelEnumValue =
@@ -176,7 +238,27 @@ export function resolveLocalCopilotCatalogEntry(catalogId: string): {
 export const LOCAL_COPILOT_PROVIDER_GROUPS: Array<{
   id: LocalCopilotProviderGroup
   label: string
-}> = [{ id: 'openai', label: 'OpenAI' }]
+}> = [
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'google', label: 'Google' },
+  { id: 'workers-ai', label: 'Workers AI' },
+]
+
+/**
+ * Picker groups offered on this deployment: OpenAI always, the Cloudflare groups
+ * (Anthropic, Google, Workers AI) only in Cloudflare mode.
+ */
+export function getAvailableLocalCopilotProviderGroups(
+  cloudflareEnabled: boolean
+): Array<{ id: LocalCopilotProviderGroup; label: string }> {
+  if (cloudflareEnabled) return LOCAL_COPILOT_PROVIDER_GROUPS
+  return LOCAL_COPILOT_PROVIDER_GROUPS.filter((group) =>
+    getLocalCopilotCatalogEntriesForGroup(group.id).every(
+      (entry) => entry.provider !== 'cloudflare'
+    )
+  )
+}
 
 /** Leaf models for a provider group. */
 export function getLocalCopilotCatalogEntriesForGroup(

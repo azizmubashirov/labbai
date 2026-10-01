@@ -22,7 +22,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | 1 Docs, landing, desktop, CLI/SDK, helm, PII, sandboxes (JS-only Function), Pi/A2A/Mothership/video blocks, enrichments, Sim Mailer | done |
 | 2 Integrations trimmed to ~10% (list in LABBAI_PLAN.md) | done |
 | 3 Stripe and all payments removed; entitlements permissive; cost ledger kept | done |
-| 4 LLM: OpenAI only (gpt-5.5, gpt-5-mini default, gpt-4.1, gpt-4.1-mini, text-embedding-3-small); transport switchable to Cloudflare AI Gateway (see "Cloudflare AI Gateway") | done |
+| 4 LLM: OpenAI (gpt-5.5, gpt-5-mini default, gpt-4.1, gpt-4.1-mini, text-embedding-3-small) + in Cloudflare mode Claude / Gemini / Workers AI, all from one Cloudflare account (see "Cloudflare AI (one account for every model)") | done (Cloudflare multi-provider coded 2026-10-01, not deployed) |
 | 6 Remove `apps/labbai/ee`; access control, audit logs, credential groups, access requests, SCIM re-implemented clean-room (`lib/labbai/**`), always on | done |
 | 7 Organization UI layer (`/o/**`), Sim Search, org Search MCP, org Assistant removed; kept org-backed features live in workspace settings; DB tables kept | done |
 | + Sim cloud copilot path (Go mothership client, BYOK/API-key routes) and Local/Cloud switch removed — local copilot only | done |
@@ -419,45 +419,94 @@ Behaviour:
   pause is 15 min fixed (not configurable yet); Business message deletions are not reflected in
   the Inbox.
 
-### Cloudflare AI Gateway (2026-10-01)
+### Cloudflare AI (one account for every model) (2026-10-01)
 
-Owner decision: all OpenAI usage goes through the **Cloudflare AI Gateway with Unified Billing**
-(Cloudflare credits pay; the OpenAI balance is no longer used). Transport only — the models are the
-same OpenAI models (gpt-5.5, gpt-5-mini, gpt-4.1, gpt-4.1-mini, text-embedding-3-small, gpt-image-1,
-vision / audio models), with plain OpenAI model names.
+Owner decision: manage **all** AI models from one place — Cloudflare: one account, one token, one
+balance (Unified Billing, credits pay; OpenAI/Anthropic/Google balances are not used), AI Gateway
+`labbai` — and offer non-OpenAI models in Labbai.
 
-Server `.env`:
+**Server `.env` (the only three vars; "Cloudflare mode" = account id + token set):**
 
 ```
-OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway_id>/openai
-CLOUDFLARE_AIG_TOKEN=<gateway token>
-# OPENAI_API_KEY may stay or be removed — it is not used in gateway mode
+CLOUDFLARE_ACCOUNT_ID=<account id>
+CLOUDFLARE_API_TOKEN=<API token: Account > Workers AI > Read  +  Account > AI Gateway > Run>
+CLOUDFLARE_AI_GATEWAY=labbai        # optional, default labbai
+# OPENAI_API_KEY / OPENAI_BASE_URL / CLOUDFLARE_AIG_TOKEN may stay or go — not needed
 ```
 
-`CLOUDFLARE_AIG_TOKEN` set = gateway mode: every OpenAI request goes to `OPENAI_BASE_URL` with
-`cf-aig-authorization: Bearer <token>` and **no** `Authorization` header (a provider key would make
-the gateway treat the call as a BYO OpenAI key). `OPENAI_API_KEY` is then not required; every
-"OpenAI is not configured" check accepts the token. `OPENAI_EXTRA_HEADERS` still merges in (an
-`Authorization` inside it is dropped in gateway mode). Unset = exactly the old behaviour.
+Dashboard once: AI > AI Gateway > create gateway `labbai`, turn on Authenticated Gateway, load
+credits (Credits Available > Manage; optional auto top-up), and set the gateway's **Workers AI
+billing** to **Unified billing** (otherwise `@cf/...` models bill the Workers AI plan instead).
+Cloudflare adds a 5% fee on credit purchases; provider prices pass through without markup.
 
-One helper decides the transport: `apps/labbai/providers/openai/client-config.ts`
-(`getOpenAIBaseUrl`, `getOpenAIAuthHeaders(apiKey)`, `isOpenAIGatewayMode`, and
-`createOpenAIFetch` — a `fetch` for the `openai` SDK that deletes the `Authorization` header the SDK
-always builds from its `apiKey`; the SDK gets the placeholder key `OPENAI_GATEWAY_API_KEY`). Routed
-through it: Agent/Router/Evaluator provider (`/responses`) and its Files API uploads, local copilot
-(main + specialists + engagement status, `/chat/completions`), wand (SDK), notification evaluator,
-knowledge/tool embeddings, vision, copilot image generation, Image Generator block (v1 tool + v2
-OpenAI path), OpenAI TTS and Whisper STT. Not routed: a copilot pinned to
-`COPILOT_PROVIDER=azure-openai|openai-compatible` (its own `COPILOT_BASE_URL` / key).
+**Two Cloudflare endpoints, chosen per model:**
 
-In gateway mode a key a user pasted into a block (Vision, Image Generator, TTS, STT, Embeddings) or
-a workspace BYOK key is **not sent** — those calls are paid from the platform's Cloudflare credits.
-Embeddings are then billed to the workspace (`isBYOK: false`); Vision / Image Generator / TTS / STT
-with a pasted key are **not** metered per workspace (any non-empty "key" works) — gate or meter
-those blocks before customers get them.
+| Models | Labbai provider | Endpoint | Auth |
+|---|---|---|---|
+| Plain OpenAI ids (`gpt-5.5`, `gpt-5-mini`, `gpt-4.1`, `gpt-4.1-mini`) + embeddings, images, TTS, STT, Files, wand, notification evaluator, vision | `openai` (Responses API, unchanged) | `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openai` | `cf-aig-authorization: Bearer <token>`, no `Authorization` |
+| `anthropic/claude-sonnet-5`, `anthropic/claude-haiku-4.5`, `google/gemini-2.5-pro`, `google/gemini-2.5-flash`, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, `@cf/zai-org/glm-4.7-flash` | `cloudflare` (new) | `POST https://api.cloudflare.com/client/v4/accounts/<account>/ai/v1/chat/completions` | `Authorization: Bearer <token>` + `cf-aig-gateway-id: <gateway>` |
 
-Roll back: unset `CLOUDFLARE_AIG_TOKEN`, restore `OPENAI_BASE_URL` (remove it or set
-`https://api.openai.com/v1`) and make sure `OPENAI_API_KEY` is set; restart the app (and workers).
+Why OpenAI stays on its own path: existing workflows store plain ids (`gpt-4.1`) and their Agent
+memory is stored in the Responses protocol; keeping OpenAI on the Responses API through the
+gateway changes only the transport (no request-format change, Files API for large attachments,
+reasoning summaries, structured outputs all unchanged). The unified endpoint has no
+embeddings/images/speech/Files for OpenAI, so those must use the `/openai` path anyway.
+
+Code:
+- `providers/cloudflare/config.ts` — reads the three vars (`getCloudflareAIConfig`,
+  `isCloudflareAIMode`, unified / gateway URLs, headers). `providers/openai/client-config.ts` folds
+  Cloudflare mode into the 1cc4660d gateway helpers: base URL = gateway `/openai`
+  (`OPENAI_BASE_URL` ignored), token = `CLOUDFLARE_AIG_TOKEN` if set else `CLOUDFLARE_API_TOKEN`.
+  Every OpenAI call path from 1cc4660d (Agent, Files, copilot, wand, embeddings, vision, images,
+  TTS, STT, notification evaluator) is therefore routed with no further change.
+- `providers/cloudflare/index.ts` — the `cloudflare` provider (OpenAI SDK pointed at the unified
+  endpoint): system prompt, messages, tool calling (non-streaming loop + the shared streaming
+  tool loop `providers/openai-compat/streaming-tool-loop.ts`, ported from Sim), SSE streaming,
+  `response_format` JSON schema, temperature, `max_tokens`, image attachments (`image_url`,
+  inline only), Agent memory (`chat-completions` history protocol), usage → cost ledger at the
+  catalog prices.
+- `providers/cloudflare/model-ids.ts` + `providers/models.ts` (`cloudflare` provider, prices from
+  Cloudflare's model catalog, read 2026-10-01 — none unknown). Max output tokens: Sonnet 5 128k,
+  Haiku 4.5 64k (Anthropic docs), Gemini 2.5 65,536 (Google docs); Llama / GLM unset (4096 default).
+  Sonnet 5 has no temperature (Anthropic rejects it), Haiku 0–1, the others 0–2.
+- Routing: `providers/index.ts` `resolveExecutionProviderId` — curated Cloudflare id + Cloudflare
+  mode → `cloudflare`, everything else → `openai`. Outside Cloudflare mode a stored Cloudflare id
+  runs on `gpt-5-mini` (like any legacy vendor id) and the models are hidden from pickers.
+- Gating: `lib/core/config/env-flags.ts` `isCloudflareAIEnabled` (server: both vars; browser:
+  `NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED`, which `app/_shell/public-env-script.tsx` derives — never set
+  it by hand); `platformLlmProviders` then includes `cloudflare`, so no API key field shows.
+  Agent/Router/Evaluator model picker (`blocks/utils.ts`), copilot VFS model list and
+  `providers/utils.getProviderFromModel` honour it. Credentials: `getApiKeyWithBYOK('cloudflare')`
+  returns the placeholder `cloudflare-unified-billing`; the provider reads the token from env, so
+  it never sits in request objects. Usage is billed to the workspace (`isBYOK: false`).
+- Local copilot: in Cloudflare mode the default transport is `cloudflare` (unified endpoint,
+  bare OpenAI ids are sent as `openai/<id>`, e.g. `COPILOT_MODEL=openai/gpt-5.5` or
+  `anthropic/claude-sonnet-5`; `COPILOT_PROVIDER=cloudflare|openai` pins it). The copilot picker
+  shows the same six Cloudflare models under Anthropic / Google / Workers AI only in Cloudflare
+  mode. Their `local_copilot_user_access.default_model` enum slots reuse old values
+  (see `LOCAL_COPILOT_DEFAULT_MODEL_ENUM_SLOTS`) — replace with real values in the next migration.
+
+Feature support on the unified chat-completions endpoint (from Cloudflare docs; verify live):
+- Google Gemini 2.5: documented "Chat Completions" format with `tools`, `tool_choice`,
+  `response_format`, `stream`, `stream_options`, `reasoning_effort`.
+- Workers AI: GLM-4.7 Flash documents OpenAI `tools`/`tool_choice`/`response_format`/`stream`;
+  Llama 3.3 70B lists function calling, JSON mode and streaming (native schema); vision only on
+  Llama 4 Scout (not in the list).
+- Anthropic: Cloudflare's REST docs show `anthropic/...` on `/ai/v1/chat/completions`, but the
+  model pages list only the Anthropic Messages format and their published schemas omit `tools`.
+  Tool calling, `response_format` and images for Claude through chat completions are **not
+  confirmed** — test a Claude Agent with a tool before relying on it (fallback: an Anthropic
+  Messages path via `/ai/v1/messages`).
+- No unified embeddings endpoint for third-party models (Workers AI has `/v1/embeddings` for
+  `@cf/` models only) — embeddings stay on OpenAI `text-embedding-3-small` via the gateway.
+- Unconfirmed: whether Unified Billing covers the OpenAI Files API (`/openai/files`) used for
+  Agent attachments over ~12 MB.
+
+Rollback: unset `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` (and `CLOUDFLARE_AIG_TOKEN`),
+set `OPENAI_API_KEY` (remove `OPENAI_BASE_URL` or set `https://api.openai.com/v1`), restart the
+app and workers. Claude/Gemini/Workers AI models disappear from pickers; workflows that use them
+run on `gpt-5-mini` until edited. Legacy alias: `CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL` (the
+1cc4660d setup, OpenAI only) still works without the account id.
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

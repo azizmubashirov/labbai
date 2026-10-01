@@ -209,7 +209,10 @@ export const env = createEnv({
     OPENAI_API_KEY:                        z.string().min(1).optional(),           // Primary OpenAI API key (Labbai: the platform key for every LLM call)
     OPENAI_BASE_URL:                       z.string().url().optional(),            // Labbai: optional OpenAI-compatible base URL (default https://api.openai.com/v1), e.g. a gateway later
     OPENAI_EXTRA_HEADERS:                  z.string().optional(),                  // Labbai: optional JSON object of extra headers for OpenAI requests (e.g. {"cf-aig-authorization":"Bearer …"})
-    CLOUDFLARE_AIG_TOKEN:                  z.string().min(1).optional(),           // Labbai: Cloudflare AI Gateway token. Set = gateway mode (Unified Billing): OpenAI calls go to OPENAI_BASE_URL with cf-aig-authorization and NO Authorization header; OPENAI_API_KEY not needed
+    CLOUDFLARE_AIG_TOKEN:                  z.string().min(1).optional(),           // Labbai: legacy alias. Cloudflare AI Gateway token for the OpenAI provider path (cf-aig-authorization, no Authorization header); superseded by the CLOUDFLARE_* trio below
+    CLOUDFLARE_ACCOUNT_ID:                 z.string().min(1).optional(),           // Labbai: Cloudflare account id. With CLOUDFLARE_API_TOKEN = Cloudflare mode: every model (OpenAI, Anthropic, Google, Workers AI) goes through Cloudflare (Unified Billing)
+    CLOUDFLARE_API_TOKEN:                  z.string().min(1).optional(),           // Labbai: Cloudflare API token (Workers AI: Read + AI Gateway: Run). Unified /ai/v1/chat/completions (Authorization) and the gateway's /openai path (cf-aig-authorization)
+    CLOUDFLARE_AI_GATEWAY:                 z.string().min(1).optional(),           // Labbai: AI Gateway id (cf-aig-gateway-id) every Cloudflare-mode request goes through (default labbai)
     OPENAI_API_KEY_1:                      z.string().min(1).optional(),           // Additional OpenAI API key for load balancing
     OPENAI_API_KEY_2:                      z.string().min(1).optional(),           // Additional OpenAI API key for load balancing
     OPENAI_API_KEY_3:                      z.string().min(1).optional(),           // Additional OpenAI API key for load balancing

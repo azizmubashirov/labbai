@@ -100,3 +100,46 @@ describe('publicEnvHtmlAttributes', () => {
     expect(values).toEqual(PublicEnvScript().props.env)
   })
 })
+
+/**
+ * Cloudflare mode is configured by server-only vars; the browser learns it through a
+ * derived public flag so the model pickers can offer the Cloudflare models.
+ */
+describe('Cloudflare mode public flag', () => {
+  const KEYS = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'] as const
+
+  function withEnv(values: Partial<Record<(typeof KEYS)[number], string>>, run: () => void) {
+    const previous = KEYS.map((key) => [key, process.env[key]] as const)
+    for (const key of KEYS) {
+      const value = values[key]
+      if (value === undefined) Reflect.deleteProperty(process.env, key)
+      else process.env[key] = value
+    }
+    try {
+      run()
+    } finally {
+      for (const [key, value] of previous) {
+        if (value === undefined) Reflect.deleteProperty(process.env, key)
+        else process.env[key] = value
+      }
+    }
+  }
+
+  it('adds NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED without leaking the server values', () => {
+    withEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct-secretless', CLOUDFLARE_API_TOKEN: 'cf-token' }, () => {
+      const serialized = publicEnvHtmlAttributes()[PUBLIC_ENV_ATTRIBUTE]
+      const values = JSON.parse(serialized)
+
+      expect(values.NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED).toBe('true')
+      expect(serialized).not.toContain('cf-token')
+      expect(serialized).not.toContain('acct-secretless')
+    })
+  })
+
+  it('omits the flag unless both the account id and the token are set', () => {
+    withEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct' }, () => {
+      const values = JSON.parse(publicEnvHtmlAttributes()[PUBLIC_ENV_ATTRIBUTE])
+      expect(values).not.toHaveProperty('NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED')
+    })
+  })
+})

@@ -1,6 +1,7 @@
 /**
  * @vitest-environment node
  */
+import { resetEnvMock, setEnv } from '@labbai/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   assertLocalCopilotEnabled,
@@ -146,5 +147,83 @@ describe('getLocalCopilotConfig', () => {
     expect(config.provider).toBe('openai')
     expect(config.model).toBe('gpt-5-mini')
     expect(config.specialistModel).toBe('gpt-5.5')
+  })
+})
+
+describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () => {
+  const UNIFIED = 'https://api.cloudflare.com/client/v4/accounts/acct/ai/v1'
+
+  beforeEach(() => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+  })
+
+  afterEach(resetEnvMock)
+
+  it('defaults to the unified endpoint with the Cloudflare token and gateway id', () => {
+    process.env.OPENAI_API_KEY = 'sk-platform'
+
+    const config = getLocalCopilotConfig()
+    expect(config.provider).toBe('cloudflare')
+    expect(config.model).toBe('gpt-5.5')
+    expect(config.specialistModel).toBe('gpt-5-mini')
+    expect(config.baseUrl).toBe(UNIFIED)
+    expect(config.apiKey).toBe('cf-token')
+    expect(config.extraHeaders).toEqual({ 'cf-aig-gateway-id': 'labbai' })
+    expect(config.gatewayAuth).toBe(false)
+    expect(() => assertLocalCopilotEnabled(config)).not.toThrow()
+  })
+
+  it('accepts COPILOT_PROVIDER=cloudflare with a provider-namespaced COPILOT_MODEL', () => {
+    process.env.COPILOT_PROVIDER = 'cloudflare'
+    process.env.COPILOT_MODEL = 'anthropic/claude-sonnet-5'
+    setEnv({ CLOUDFLARE_AI_GATEWAY: 'gw' })
+
+    const config = getLocalCopilotConfig()
+    expect(config.provider).toBe('cloudflare')
+    expect(config.model).toBe('anthropic/claude-sonnet-5')
+    expect(config.specialistModel).toBe('anthropic/claude-sonnet-5')
+    expect(config.extraHeaders).toEqual({ 'cf-aig-gateway-id': 'gw' })
+  })
+
+  it('keeps COPILOT_PROVIDER=openai on the OpenAI transport', () => {
+    process.env.COPILOT_PROVIDER = 'openai'
+    mockIsOpenAIGatewayMode.mockReturnValue(true)
+    mockGetOpenAIAuthHeaders.mockReturnValue({ 'cf-aig-authorization': 'Bearer cf-token' })
+
+    const config = getLocalCopilotConfig()
+    expect(config.provider).toBe('openai')
+    expect(config.gatewayAuth).toBe(true)
+  })
+
+  it('runs a Cloudflare catalog pick on the unified endpoint', () => {
+    process.env.COPILOT_PROVIDER = 'openai'
+    process.env.OPENAI_API_KEY = 'sk-platform'
+
+    const config = buildLocalCopilotConfigForCatalog('google/gemini-2.5-pro')
+    expect(config).toMatchObject({
+      provider: 'cloudflare',
+      model: 'google/gemini-2.5-pro',
+      specialistModel: 'google/gemini-2.5-pro',
+      apiKey: 'cf-token',
+      baseUrl: UNIFIED,
+      extraHeaders: { 'cf-aig-gateway-id': 'labbai' },
+      gatewayAuth: false,
+    })
+  })
+
+  it('fails closed when COPILOT_PROVIDER=cloudflare is set without Cloudflare mode', () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
+    process.env.COPILOT_PROVIDER = 'cloudflare'
+
+    expect(() => assertLocalCopilotEnabled(getLocalCopilotConfig())).toThrow(/CLOUDFLARE_API_TOKEN/)
+  })
+
+  it('falls back to the env config for a Cloudflare pick outside Cloudflare mode', () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
+    process.env.OPENAI_API_KEY = 'sk-platform'
+
+    const config = buildLocalCopilotConfigForCatalog('anthropic/claude-sonnet-5')
+    expect(config.provider).toBe('openai')
+    expect(config.model).toBe('gpt-5.5')
   })
 })

@@ -82,6 +82,7 @@ export const providerHistoryAdapters: Record<ConversationProtocol, ProviderHisto
 
 export const providerHistoryProtocols: Record<ProviderId, ConversationProtocol | null> = {
   openai: 'responses',
+  cloudflare: 'chat-completions',
 }
 
 /**

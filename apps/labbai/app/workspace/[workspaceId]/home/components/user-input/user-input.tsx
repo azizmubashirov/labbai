@@ -27,6 +27,7 @@ import { ChevronDown, Paperclip, Plus, Slash } from '@labbai/emcn/icons'
 import { createLogger } from '@labbai/logger'
 import { useParams } from 'next/navigation'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
+import { isCloudflareAIEnabled } from '@/lib/core/config/env-flags'
 import { LABBAI_RESOURCE_DRAG_TYPE, LABBAI_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { MOTHERSHIP_ADD_CONTEXT_EVENT } from '@/lib/mothership/events'
 import { MOTHERSHIP_ACCEPT_ATTRIBUTE } from '@/lib/uploads/utils/validation'
@@ -54,10 +55,10 @@ import { useChatInputFocus } from '@/hooks/use-chat-input-focus'
 import { useVoiceInput } from '@/hooks/use-voice-input'
 import { SessionMemoryInspector } from '@/local-copilot/components/session-memory-inspector'
 import {
+  getAvailableLocalCopilotProviderGroups,
   getLocalCopilotCatalogEntriesForGroup,
   getLocalCopilotCatalogEntry,
   isLocalCopilotCatalogId,
-  LOCAL_COPILOT_PROVIDER_GROUPS,
   type LocalCopilotCatalogId,
 } from '@/local-copilot/lib/model-catalog'
 import { type DraftPayload, useMothershipDraftsStore } from '@/stores/mothership-drafts/store'
@@ -103,7 +104,7 @@ function LocalCopilotModelPicker({ catalogId, onCatalogIdChange }: LocalCopilotM
             }
           }}
         >
-          {LOCAL_COPILOT_PROVIDER_GROUPS.map((group, groupIndex) => {
+          {getAvailableLocalCopilotProviderGroups(isCloudflareAIEnabled).map((group, groupIndex) => {
             const entries = getLocalCopilotCatalogEntriesForGroup(group.id)
             return (
               <div key={group.id}>

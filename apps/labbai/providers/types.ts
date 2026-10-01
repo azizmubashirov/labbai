@@ -1,8 +1,11 @@
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import type { ProviderTimingSegment, StreamingExecution, UserFile } from '@/executor/types'
 
-/** Labbai: OpenAI is the only LLM provider (for now). */
-export type ProviderId = 'openai'
+/**
+ * Labbai LLM providers: `openai` (OpenAI Responses API) and `cloudflare` (non-OpenAI models
+ * through Cloudflare's unified chat-completions endpoint, Cloudflare mode only).
+ */
+export type ProviderId = 'openai' | 'cloudflare'
 
 export interface ModelTokenPricing {
   input: number // Per 1M tokens

@@ -2,12 +2,19 @@ import { connection } from 'next/server'
 import { PUBLIC_ENV_ATTRIBUTE } from '@/lib/core/config/env'
 
 /**
- * Every `NEXT_PUBLIC_*` value currently in `process.env`.
+ * Every `NEXT_PUBLIC_*` value currently in `process.env`, plus
+ * `NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED=true` in Cloudflare mode: that mode is configured by
+ * server-only vars (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, never sent to the
+ * browser), and the model pickers need to know it to offer the Cloudflare models.
  */
 function readPublicEnv(): Record<string, string | undefined> {
-  return Object.fromEntries(
+  const publicEnv: Record<string, string | undefined> = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => /^NEXT_PUBLIC_/i.test(key))
   )
+  if (process.env.CLOUDFLARE_ACCOUNT_ID?.trim() && process.env.CLOUDFLARE_API_TOKEN?.trim()) {
+    publicEnv.NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED = 'true'
+  }
+  return publicEnv
 }
 
 /**

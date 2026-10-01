@@ -5,7 +5,7 @@ import type OpenAI from 'openai'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import { formatCreditCost } from '@/lib/billing/credits/conversion'
 import { env } from '@/lib/core/config/env'
-import { getBlacklistedProvidersFromEnv } from '@/lib/core/config/env-flags'
+import { getBlacklistedProvidersFromEnv, isCloudflareAIEnabled } from '@/lib/core/config/env-flags'
 import {
   normalizeRecord,
   normalizeStringRecord,
@@ -21,6 +21,7 @@ import {
 } from '@/lib/workflows/subblocks/visibility'
 import type { SubBlockConfig } from '@/blocks/types'
 import { isCustomTool } from '@/executor/constants'
+import { CLOUDFLARE_PLATFORM_API_KEY, isCloudflareAIMode } from '@/providers/cloudflare/config'
 import {
   findProviderFromModel as findProviderFromDefinitions,
   getHostedModels as getHostedModelsFromDefinitions,
@@ -133,11 +134,22 @@ function buildProviderMetadata(providerId: ProviderId): ProviderMetadata {
 
 export const providers: Record<ProviderId, ProviderMetadata> = {
   openai: buildProviderMetadata('openai'),
+  cloudflare: buildProviderMetadata('cloudflare'),
+}
+
+/**
+ * Whether a provider's models can run on this deployment. `cloudflare` needs Cloudflare
+ * mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN on the server, mirrored to the
+ * browser); `openai` always can.
+ */
+export function isProviderAvailable(providerId: string): boolean {
+  return providerId !== 'cloudflare' || isCloudflareAIEnabled
 }
 
 export function getBaseModelProviders(): Record<string, ProviderId> {
   const allProviders = Object.entries(providers).reduce(
     (map, [providerId, config]) => {
+      if (!isProviderAvailable(providerId)) return map
       config.models.forEach((model) => {
         map[model.toLowerCase()] = providerId as ProviderId
       })
@@ -194,6 +206,14 @@ export function getProviderFromModel(model: string): ProviderId {
 
   if (!providerId) {
     logger.warn(`No provider found for model: ${model}, routing to OpenAI`)
+    providerId = 'openai'
+  }
+
+  /**
+   * Outside Cloudflare mode a stored Cloudflare model id (`anthropic/…`, `google/…`,
+   * `@cf/…`) runs on the closest OpenAI model, like any other legacy vendor id.
+   */
+  if (!isProviderAvailable(providerId)) {
     providerId = 'openai'
   }
 
@@ -924,11 +944,18 @@ export function shouldBillModelUsage(model: string): boolean {
 /**
  * Get the credential for a provider request (server-side only).
  *
- * Labbai: OpenAI is the only provider and always runs on the platform key
- * (OPENAI_API_KEY or its rotation pool), or on the Cloudflare AI Gateway token
- * (`CLOUDFLARE_AIG_TOKEN`, placeholder key). There are no per-block LLM keys.
+ * Labbai: `openai` runs on the platform key (OPENAI_API_KEY or its rotation pool), or on
+ * the Cloudflare AI Gateway token (`CLOUDFLARE_AIG_TOKEN` / Cloudflare mode, placeholder
+ * key). `cloudflare` runs on CLOUDFLARE_API_TOKEN, which the provider reads from the env
+ * itself, so a placeholder is returned. There are no per-block LLM keys.
  */
 export function getApiKey(provider: string, model: string, _userProvidedKey?: string): string {
+  if (provider === 'cloudflare') {
+    if (!isCloudflareAIMode()) {
+      throw new Error(`Provider "${provider}" is not available for ${model}`)
+    }
+    return CLOUDFLARE_PLATFORM_API_KEY
+  }
   if (provider !== 'openai') {
     throw new Error(`Provider "${provider}" is not available for ${model}`)
   }

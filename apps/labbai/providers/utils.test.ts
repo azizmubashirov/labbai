@@ -1,4 +1,4 @@
-import { resetEnvMock, setEnv } from '@labbai/testing'
+import { resetEnvFlagsMock, resetEnvMock, setEnv, setEnvFlags } from '@labbai/testing'
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const workflowMetadataMocks = vi.hoisted(() => ({
@@ -11,6 +11,15 @@ vi.mock('@/lib/internal/workflows/read-tool-enrichment', () => ({
   readWorkflowMetadataForTool: workflowMetadataMocks.readWorkflowMetadataForTool,
 }))
 
+import {
+  CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+  CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+  CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+  CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+  CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+  CLOUDFLARE_MODEL_IDS,
+  CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+} from '@/providers/cloudflare/model-ids'
 import {
   OPENAI_MODEL_GPT_4_1,
   OPENAI_MODEL_GPT_4_1_MINI,
@@ -44,6 +53,7 @@ import {
   getReasoningEffortValuesForModel,
   getThinkingLevelsForModel,
   getVerbosityValuesForModel,
+  isProviderAvailable,
   isProviderBlacklisted,
   MODELS_TEMP_RANGE_0_1,
   MODELS_TEMP_RANGE_0_2,
@@ -72,6 +82,22 @@ afterAll(resetEnvMock)
  * pool itself is covered by `lib/core/utils.test.ts` (getRotatingApiKey).
  */
 describe('getApiKey', () => {
+  afterEach(resetEnvMock)
+
+  it('returns the Cloudflare placeholder (never the token) for cloudflare in Cloudflare mode', () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+    const key = getApiKey('cloudflare', CLOUDFLARE_MODEL_CLAUDE_SONNET_5)
+    expect(key).toBe('cloudflare-unified-billing')
+    expect(key).not.toContain('cf-token')
+  })
+
+  it('refuses cloudflare outside Cloudflare mode', () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
+    expect(() => getApiKey('cloudflare', CLOUDFLARE_MODEL_CLAUDE_SONNET_5)).toThrow(
+      'Provider "cloudflare" is not available'
+    )
+  })
+
   it('throws for any provider other than openai without touching the key pool', () => {
     expect(() => getApiKey('anthropic', 'claude-sonnet-5', 'user-key')).toThrow(
       'Provider "anthropic" is not available for claude-sonnet-5'
@@ -173,16 +199,23 @@ describe('Model Capabilities', () => {
 
   describe('Model Constants', () => {
     it('should have correct models in MODELS_TEMP_RANGE_0_2', () => {
-      expect(MODELS_TEMP_RANGE_0_2).toEqual([OPENAI_MODEL_GPT_4_1, OPENAI_MODEL_GPT_4_1_MINI])
+      expect(MODELS_TEMP_RANGE_0_2).toEqual([
+        OPENAI_MODEL_GPT_4_1,
+        OPENAI_MODEL_GPT_4_1_MINI,
+        CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+        CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+        CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+        CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+      ])
     })
 
-    it('should have no models in the other temperature ranges', () => {
-      expect(MODELS_TEMP_RANGE_0_1).toEqual([])
+    it('should have Claude Haiku in the 0-1 range and nothing in 0-1.5', () => {
+      expect(MODELS_TEMP_RANGE_0_1).toEqual([CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5])
       expect(MODELS_TEMP_RANGE_0_15).toEqual([])
     })
 
     it('should have correct providers in PROVIDERS_WITH_TOOL_USAGE_CONTROL', () => {
-      expect(PROVIDERS_WITH_TOOL_USAGE_CONTROL).toEqual(['openai'])
+      expect(PROVIDERS_WITH_TOOL_USAGE_CONTROL).toEqual(['openai', 'cloudflare'])
     })
 
     it('should combine the temperature ranges in MODELS_WITH_TEMPERATURE_SUPPORT', () => {
@@ -356,8 +389,12 @@ describe('Cost Calculation', () => {
 })
 
 describe('getHostedModels', () => {
-  it('should return every curated OpenAI model as hosted', () => {
-    expect(getHostedModels()).toEqual([...OPENAI_MODEL_IDS])
+  it('should return every curated model (OpenAI and Cloudflare) as hosted', () => {
+    expect(getHostedModels()).toEqual([...OPENAI_MODEL_IDS, ...CLOUDFLARE_MODEL_IDS])
+  })
+
+  it('bills Cloudflare models like OpenAI ones', () => {
+    for (const id of CLOUDFLARE_MODEL_IDS) expect(shouldBillModelUsage(id)).toBe(true)
   })
 })
 
@@ -428,13 +465,13 @@ describe('Provider Management', () => {
 
   describe('getAllModels', () => {
     it('should return the curated models', () => {
-      expect(getAllModels()).toEqual([...OPENAI_MODEL_IDS])
+      expect(getAllModels()).toEqual([...OPENAI_MODEL_IDS, ...CLOUDFLARE_MODEL_IDS])
     })
   })
 
   describe('getAllProviderIds', () => {
-    it('should return only openai', () => {
-      expect(getAllProviderIds()).toEqual(['openai'])
+    it('should return openai and cloudflare', () => {
+      expect(getAllProviderIds()).toEqual(['openai', 'cloudflare'])
     })
   })
 
@@ -456,6 +493,29 @@ describe('Provider Management', () => {
 
       const baseProviders = getBaseModelProviders()
       expect(Object.keys(baseProviders).sort()).toEqual([...OPENAI_MODEL_IDS].sort())
+    })
+  })
+
+  describe('Cloudflare gating', () => {
+    afterEach(resetEnvFlagsMock)
+
+    it('hides the Cloudflare provider and routes its ids to openai outside Cloudflare mode', () => {
+      setEnvFlags({ isCloudflareAIEnabled: false })
+      expect(isProviderAvailable('cloudflare')).toBe(false)
+      expect(isProviderAvailable('openai')).toBe(true)
+      expect(getProviderFromModel(CLOUDFLARE_MODEL_CLAUDE_SONNET_5)).toBe('openai')
+      expect(Object.keys(getBaseModelProviders())).not.toContain(CLOUDFLARE_MODEL_GEMINI_2_5_FLASH)
+    })
+
+    it('offers and routes the Cloudflare models in Cloudflare mode', () => {
+      setEnvFlags({ isCloudflareAIEnabled: true })
+      expect(isProviderAvailable('cloudflare')).toBe(true)
+      for (const id of CLOUDFLARE_MODEL_IDS) {
+        expect(getProviderFromModel(id)).toBe('cloudflare')
+        expect(getBaseModelProviders()[id.toLowerCase()]).toBe('cloudflare')
+      }
+      expect(getProviderFromModel(OPENAI_MODEL_GPT_4_1)).toBe('openai')
+      expect(getProviderFromModel('claude-sonnet-4-5')).toBe('openai')
     })
   })
 })
@@ -1460,6 +1520,11 @@ describe('describeModelLevel', () => {
 })
 
 describe('findProviderFromModel', () => {
+  it('resolves curated Cloudflare ids to cloudflare', () => {
+    for (const id of CLOUDFLARE_MODEL_IDS) expect(findProviderFromModel(id)).toBe('cloudflare')
+    expect(findProviderFromModel('ANTHROPIC/Claude-Sonnet-5')).toBe('cloudflare')
+  })
+
   it('resolves curated and legacy chat models to openai', () => {
     expect(findProviderFromModel(OPENAI_MODEL_GPT_4_1)).toBe('openai')
     expect(findProviderFromModel('claude-sonnet-5')).toBe('openai')

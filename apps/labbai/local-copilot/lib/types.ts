@@ -10,10 +10,12 @@ import type {
 } from '@/local-copilot/lib/verification/types'
 
 /**
- * Local Copilot LLM transports. `openai` (default) is the OpenAI API; the others
- * are OpenAI-compatible overrides (Azure OpenAI, or any `COPILOT_BASE_URL`).
+ * Local Copilot LLM transports. `openai` is the OpenAI API (or the Cloudflare gateway's
+ * `/openai` path); `cloudflare` is Cloudflare's unified chat-completions endpoint (any
+ * provider's model, `openai/…`, `anthropic/…`, `google/…`, `@cf/…`; default in Cloudflare
+ * mode); the others are OpenAI-compatible overrides (Azure OpenAI, or any `COPILOT_BASE_URL`).
  */
-export type LocalCopilotProviderId = 'openai' | 'azure-openai' | 'openai-compatible'
+export type LocalCopilotProviderId = 'openai' | 'cloudflare' | 'azure-openai' | 'openai-compatible'
 
 export interface LocalCopilotConfig {
   enabled: boolean
@@ -30,10 +32,13 @@ export interface LocalCopilotConfig {
    * models (gpt-5*, o-series). Unset = provider default.
    */
   thinkingLevel?: string
-  /** Credential, sent as `Authorization: Bearer <key>`. */
+  /** Credential, sent as `Authorization: Bearer <key>` (the Cloudflare API token on `cloudflare`). */
   apiKey?: string
   baseUrl?: string
-  /** Extra request headers merged into every LLM call (`OPENAI_EXTRA_HEADERS`). */
+  /**
+   * Extra request headers merged into every LLM call (`OPENAI_EXTRA_HEADERS` on `openai`,
+   * `cf-aig-gateway-id` on `cloudflare`).
+   */
   extraHeaders?: Record<string, string>
   /**
    * True on the `openai` transport in Cloudflare AI Gateway mode

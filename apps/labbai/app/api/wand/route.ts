@@ -38,7 +38,9 @@ const logger = createLogger('WandGenerateAPI')
 
 /**
  * Labbai: wand runs on the platform OpenAI key (OPENAI_API_KEY) or the Cloudflare
- * AI Gateway (CLOUDFLARE_AIG_TOKEN) — no BYOK, no Azure.
+ * AI Gateway (Cloudflare mode: CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, or the
+ * legacy CLOUDFLARE_AIG_TOKEN) — no BYOK, no Azure. In Cloudflare mode the gateway
+ * base URL and token come from `providers/openai/client-config`.
  */
 const WAND_MODEL = OPENAI_DEFAULT_MODEL
 const WAND_MAX_OUTPUT_TOKENS = 10000
@@ -252,7 +254,7 @@ export const POST = withRouteHandler(async (req: NextRequest) => {
 
     if (!isWandConfigured()) {
       logger.error(
-        `[${requestId}] AI client not initialized. Missing OPENAI_API_KEY or CLOUDFLARE_AIG_TOKEN.`
+        `[${requestId}] AI client not initialized. Missing OPENAI_API_KEY or Cloudflare credentials.`
       )
       return NextResponse.json(
         { success: false, error: 'Wand generation service is not configured.' },

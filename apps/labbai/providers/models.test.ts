@@ -25,6 +25,15 @@ import {
   supportsForcedToolUse,
 } from '@/providers/models'
 import {
+  CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+  CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+  CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+  CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+  CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+  CLOUDFLARE_MODEL_IDS,
+  CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+} from '@/providers/cloudflare/model-ids'
+import {
   OPENAI_DEFAULT_MODEL,
   OPENAI_MODEL_GPT_4_1,
   OPENAI_MODEL_GPT_4_1_MINI,
@@ -35,8 +44,8 @@ import {
 import { supportsPromptCaching } from '@/providers/utils'
 
 describe('OpenAI catalog', () => {
-  it('is the only provider and exposes exactly the curated model ids', () => {
-    expect(Object.keys(PROVIDER_DEFINITIONS)).toEqual(['openai'])
+  it('has the openai and cloudflare providers and the curated OpenAI model ids', () => {
+    expect(Object.keys(PROVIDER_DEFINITIONS)).toEqual(['openai', 'cloudflare'])
     expect(getProviderModels('openai')).toEqual([...OPENAI_MODEL_IDS])
     expect(getProviderDefaultModel('openai')).toBe(OPENAI_DEFAULT_MODEL)
     expect(OPENAI_DEFAULT_MODEL).toBe(OPENAI_MODEL_GPT_5_MINI)
@@ -55,8 +64,8 @@ describe('OpenAI catalog', () => {
     })
   })
 
-  it('hosts every curated model on the platform key', () => {
-    expect(getHostedModels()).toEqual([...OPENAI_MODEL_IDS])
+  it('hosts every curated model on platform credentials', () => {
+    expect(getHostedModels()).toEqual([...OPENAI_MODEL_IDS, ...CLOUDFLARE_MODEL_IDS])
   })
 
   it('prices every curated model', () => {
@@ -88,6 +97,78 @@ describe('OpenAI catalog', () => {
       const featuredModels = provider.models.filter((model) => model.featured)
       expect(featuredModels.every((model) => model.sunset === undefined)).toBe(true)
     }
+  })
+})
+
+describe('Cloudflare catalog', () => {
+  it('lists exactly the curated Cloudflare model ids, Gemini 2.5 Flash by default', () => {
+    expect(getProviderModels('cloudflare')).toEqual([...CLOUDFLARE_MODEL_IDS])
+    expect(CLOUDFLARE_MODEL_IDS).toEqual([
+      'anthropic/claude-sonnet-5',
+      'anthropic/claude-haiku-4.5',
+      'google/gemini-2.5-pro',
+      'google/gemini-2.5-flash',
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      '@cf/zai-org/glm-4.7-flash',
+    ])
+    expect(getProviderDefaultModel('cloudflare')).toBe(CLOUDFLARE_MODEL_GEMINI_2_5_FLASH)
+  })
+
+  it('sends attachments inline (images only, no Files API)', () => {
+    expect(getProviderFileAttachment('cloudflare').strategy).toBe('inline')
+  })
+
+  it('prices every model from the Cloudflare catalog', () => {
+    expect(getModelPricing(CLOUDFLARE_MODEL_CLAUDE_SONNET_5)).toMatchObject({
+      input: 2,
+      cachedInput: 0.2,
+      output: 10,
+    })
+    expect(getModelPricing(CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5)).toMatchObject({ input: 1, output: 5 })
+    expect(getModelPricing(CLOUDFLARE_MODEL_GEMINI_2_5_PRO)).toMatchObject({
+      input: 1.25,
+      output: 10,
+    })
+    expect(getModelPricing(CLOUDFLARE_MODEL_GEMINI_2_5_FLASH)).toMatchObject({
+      input: 0.3,
+      output: 2.5,
+    })
+    expect(getModelPricing(CLOUDFLARE_MODEL_LLAMA_3_3_70B)).toMatchObject({
+      input: 0.293,
+      output: 2.253,
+    })
+    expect(getModelPricing(CLOUDFLARE_MODEL_GLM_4_7_FLASH)).toMatchObject({
+      input: 0.0605,
+      output: 0.4,
+    })
+  })
+
+  it('declares temperature only where the vendor accepts it, and forced tool use', () => {
+    expect(getModelCapabilities(CLOUDFLARE_MODEL_CLAUDE_SONNET_5)?.temperature).toBeUndefined()
+    expect(getModelCapabilities(CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5)?.temperature).toEqual({
+      min: 0,
+      max: 1,
+    })
+    expect(getModelCapabilities(CLOUDFLARE_MODEL_GEMINI_2_5_PRO)?.temperature).toEqual({
+      min: 0,
+      max: 2,
+    })
+    for (const id of CLOUDFLARE_MODEL_IDS) expect(supportsForcedToolUse(id)).toBe(true)
+  })
+
+  it('routes curated Cloudflare ids to the cloudflare provider and keeps them out of legacy mapping', () => {
+    for (const id of CLOUDFLARE_MODEL_IDS) {
+      expect(isKnownModelId(id)).toBe(true)
+      expect(isLegacyChatModelId(id)).toBe(false)
+      expect(findProviderFromModel(id)).toBe('cloudflare')
+      expect(getProviderFromModel(id)).toBe('cloudflare')
+      expect(getBaseModelProviders()[id.toLowerCase()]).toBe('cloudflare')
+    }
+  })
+
+  it('still maps un-curated vendor ids onto OpenAI', () => {
+    expect(findProviderFromModel('anthropic/claude-opus-5')).toBe('openai')
+    expect(findProviderFromModel('claude-sonnet-5')).toBe('openai')
   })
 })
 

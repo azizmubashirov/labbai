@@ -1,9 +1,12 @@
 /**
  * Comprehensive provider definitions - Single source of truth
  *
- * Labbai: OpenAI is the only LLM provider for now (direct OpenAI API, platform key
- * OPENAI_API_KEY), so the catalog holds a single provider, `openai`, with a short
- * curated model list. List prices are kept so the internal cost ledger stays accurate.
+ * Labbai: two providers. `openai` holds the curated OpenAI models (plain `gpt-*` ids, run
+ * on the OpenAI Responses API — directly or, in Cloudflare mode, through the Cloudflare AI
+ * Gateway). `cloudflare` holds the curated non-OpenAI models (Anthropic, Google, Workers AI)
+ * that only run in Cloudflare mode, through Cloudflare's unified chat-completions endpoint;
+ * outside Cloudflare mode they are hidden from pickers and a stored id runs on the closest
+ * OpenAI model. List prices are kept so the internal cost ledger stays accurate.
  * This file contains all provider and model information including:
  * - Model lists
  * - Pricing information
@@ -12,8 +15,16 @@
  */
 
 import type React from 'react'
-import { OpenAIIcon } from '@/components/icons'
+import { CloudflareIcon, OpenAIIcon } from '@/components/icons'
 import { LARGE_VALUE_THRESHOLD_BYTES } from '@/lib/execution/payloads/large-value-ref'
+import {
+  CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+  CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+  CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+  CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+  CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+  CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+} from '@/providers/cloudflare/model-ids'
 import {
   OPENAI_DEFAULT_MODEL,
   OPENAI_EMBEDDING_MODEL,
@@ -252,6 +263,111 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
     ],
   },
+  /**
+   * Cloudflare Unified Billing: non-OpenAI models through
+   * `POST /client/v4/accounts/<account>/ai/v1/chat/completions` (Cloudflare mode only).
+   * Ids, context windows and prices are Cloudflare's model catalog
+   * (developers.cloudflare.com/ai/models, read 2026-10-01); Cloudflare passes provider
+   * prices through without markup. Max output tokens come from the vendors' docs where
+   * Cloudflare does not publish one; unset means the 4096 default.
+   */
+  cloudflare: {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    description: 'Anthropic, Google and Workers AI models through Cloudflare AI Gateway',
+    defaultModel: CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+    icon: CloudflareIcon,
+    color: '#F38020',
+    isReseller: true,
+    capabilities: {
+      toolUsageControl: true,
+    },
+    models: [
+      {
+        id: CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+        pricing: {
+          input: 2.0,
+          cachedInput: 0.2,
+          output: 10.0,
+          updatedAt: '2026-10-01',
+        },
+        // Sonnet 5 rejects temperature / top_p (Anthropic), so no temperature capability.
+        capabilities: {
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+      },
+      {
+        id: CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+        pricing: {
+          input: 1.0,
+          cachedInput: 0.1,
+          output: 5.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 1 },
+          maxOutputTokens: 64000,
+        },
+        contextWindow: 200000,
+        speedOptimized: true,
+      },
+      {
+        id: CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+        pricing: {
+          input: 1.25,
+          cachedInput: 0.125,
+          output: 10.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1000000,
+      },
+      {
+        id: CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+        pricing: {
+          input: 0.3,
+          cachedInput: 0.03,
+          output: 2.5,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1000000,
+        speedOptimized: true,
+      },
+      {
+        id: CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+        pricing: {
+          input: 0.293,
+          output: 2.253,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+        },
+        contextWindow: 24000,
+      },
+      {
+        id: CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+        pricing: {
+          input: 0.0605,
+          output: 0.4,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+        },
+        contextWindow: 131072,
+        speedOptimized: true,
+      },
+    ],
+  },
 }
 
 export function getProviderModels(providerId: string): string[] {
@@ -341,7 +457,7 @@ function getAllStaticModelIds(): string[] {
 
 const STATIC_MODEL_ID_SET = new Set(getAllStaticModelIds().map((id) => id.toLowerCase()))
 
-/** True for a curated OpenAI model id. */
+/** True for a curated catalog model id (OpenAI or Cloudflare). */
 export function isKnownModelId(modelId: string): boolean {
   if (!modelId || typeof modelId !== 'string') return false
   const trimmed = modelId.trim()
@@ -417,15 +533,20 @@ export function getBaseModelProviders(): Record<string, ProviderId> {
 }
 
 /**
- * Resolves the provider for a model id without guessing: curated gateway ids and
- * legacy chat-model ids route to `openai`; anything else is `null`.
+ * Resolves the catalog provider for a model id without guessing: curated ids route to
+ * the provider that declares them (`openai` or `cloudflare`), legacy chat-model ids to
+ * `openai`; anything else is `null`. Whether Cloudflare mode is on is decided by the
+ * callers that execute or offer a model (`providers/utils`, `providers/index`).
  */
 export function findProviderFromModel(model: string): ProviderId | null {
-  if (isKnownModelId(model) || isLegacyChatModelId(model)) return 'openai'
+  if (typeof model !== 'string') return null
+  const catalogued = MODEL_CATALOG_INDEX.get(model.trim().toLowerCase())
+  if (catalogued) return catalogued.providerId as ProviderId
+  if (isLegacyChatModelId(model)) return 'openai'
   return null
 }
 
-/** Every chat model runs on OpenAI; unknown ids resolve there too. */
+/** Catalog provider for a model; unknown ids resolve to OpenAI. */
 export function getProviderFromModel(model: string): ProviderId {
   return findProviderFromModel(model) ?? 'openai'
 }
@@ -510,9 +631,12 @@ export function getProvidersWithToolUsageControl(): string[] {
   return providers
 }
 
-/** Models backed by the platform OpenAI key: all of them. */
+/**
+ * Models whose credentials the platform supplies (and bills): every catalog model —
+ * the OpenAI key / gateway token for `openai`, the Cloudflare token for `cloudflare`.
+ */
 export function getHostedModels(): string[] {
-  return getProviderModels('openai')
+  return getAllStaticModelIds()
 }
 
 export function getComputerUseModels(): string[] {

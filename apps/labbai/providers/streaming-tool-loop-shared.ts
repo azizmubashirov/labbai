@@ -16,7 +16,7 @@ import type { AgentStreamEvent, ToolCallEndStatus } from '@/providers/stream-eve
  * capability reporting consume this set; providers select their own internal
  * loop from request shape. Event exposure is controlled separately.
  */
-export const STREAMING_TOOL_CALL_PROVIDERS: ReadonlySet<string> = new Set(['openai'])
+export const STREAMING_TOOL_CALL_PROVIDERS: ReadonlySet<string> = new Set(['openai', 'cloudflare'])
 
 /** Aggregate result reported by a streaming tool loop when its stream closes. */
 export interface StreamingToolLoopComplete {

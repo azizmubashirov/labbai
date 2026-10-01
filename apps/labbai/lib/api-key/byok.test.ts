@@ -1,8 +1,15 @@
 /**
  * @vitest-environment node
  */
-import { dbChainMockFns, hasMockCondition, resetDbChainMock, schemaMock } from '@labbai/testing'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  dbChainMockFns,
+  hasMockCondition,
+  resetDbChainMock,
+  resetEnvMock,
+  schemaMock,
+  setEnv,
+} from '@labbai/testing'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockDecryptSecret, mockIsOrganizationBYOKEntitled, mockGetRotatingApiKey } = vi.hoisted(
   () => ({
@@ -449,5 +456,37 @@ describe('getApiKeyWithBYOK (OpenAI only)', () => {
       )
     }
     expect(mockGetRotatingApiKey).not.toHaveBeenCalled()
+  })
+
+  describe('Cloudflare mode', () => {
+    afterEach(resetEnvMock)
+
+    it('returns the cloudflare placeholder key, never the token, billed to the workspace', async () => {
+      setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+
+      const result = await getApiKeyWithBYOK('cloudflare', 'anthropic/claude-sonnet-5', null)
+
+      expect(result).toEqual({ apiKey: 'cloudflare-unified-billing', isBYOK: false })
+      expect(JSON.stringify(result)).not.toContain('cf-token')
+      expect(mockGetRotatingApiKey).not.toHaveBeenCalled()
+    })
+
+    it('needs no OpenAI key for openai either (gateway placeholder)', async () => {
+      setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+
+      await expect(getApiKeyWithBYOK('openai', 'gpt-5-mini', null)).resolves.toEqual({
+        apiKey: 'cloudflare-ai-gateway',
+        isBYOK: false,
+      })
+      expect(mockGetRotatingApiKey).not.toHaveBeenCalled()
+    })
+
+    it('rejects cloudflare outside Cloudflare mode', async () => {
+      setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
+
+      await expect(getApiKeyWithBYOK('cloudflare', 'anthropic/claude-sonnet-5', null)).rejects.toThrow(
+        'Provider "cloudflare" is not available'
+      )
+    })
   })
 })

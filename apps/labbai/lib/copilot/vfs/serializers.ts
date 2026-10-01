@@ -1,6 +1,6 @@
 import type { ShareAuthType } from '@/lib/api/contracts/public-shares'
 import { getCopilotToolDescription } from '@/lib/copilot/tools/descriptions'
-import { isHosted } from '@/lib/core/config/env-flags'
+import { isCloudflareAIEnabled, isHosted } from '@/lib/core/config/env-flags'
 import {
   getServiceAccountConnectNoun,
   getServiceAccountGatingBlockType,
@@ -529,11 +529,16 @@ interface StaticModelOption {
   deprecated?: boolean
 }
 
-/** Labbai: every catalog model runs on the platform OpenAI key, so all are hosted. */
+/**
+ * Labbai: every catalog model runs on platform credentials (OpenAI key / Cloudflare
+ * token), so all are hosted. The Cloudflare models are listed only in Cloudflare mode,
+ * mirroring the user picker.
+ */
 function getStaticModelOptionsForVFS(): StaticModelOption[] {
   const models: StaticModelOption[] = []
 
   for (const [providerId, def] of Object.entries(PROVIDER_DEFINITIONS)) {
+    if (providerId === 'cloudflare' && !isCloudflareAIEnabled) continue
     for (const model of def.models) {
       // Retired models are hidden from the agent's menu (mirrors the user picker)
       // so it never suggests a model whose API calls fail; legacy stays available.

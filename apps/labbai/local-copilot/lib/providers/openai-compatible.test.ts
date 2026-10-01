@@ -121,3 +121,104 @@ describe('Cloudflare AI Gateway transport', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${GATEWAY}/chat/completions`)
   })
 })
+
+describe('Cloudflare unified endpoint transport', () => {
+  const UNIFIED = 'https://api.cloudflare.com/client/v4/accounts/acct/ai/v1'
+  const cloudflareConfig: LocalCopilotConfig = {
+    enabled: true,
+    provider: 'cloudflare',
+    model: 'gpt-5.5',
+    specialistModel: 'gpt-5-mini',
+    apiKey: 'cf-token',
+    baseUrl: UNIFIED,
+    extraHeaders: { 'cf-aig-gateway-id': 'labbai' },
+    gatewayAuth: false,
+  }
+
+  function sse(chunks: unknown[]): Response {
+    const body = `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join('')}data: [DONE]\n\n`
+    return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('sends namespaced OpenAI ids with the Cloudflare token and gateway id, and parses the stream', async () => {
+    const fetchMock = vi.fn(async (..._args: FetchArgs) =>
+      sse([
+        { choices: [{ delta: { content: 'Hi' } }] },
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  { index: 0, id: 'call_1', function: { name: 'read', arguments: '{"a":1}' } },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        },
+        { choices: [], usage: { prompt_tokens: 7, completion_tokens: 2 } },
+      ])
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const chunks = []
+    for await (const chunk of createOpenAiCompatibleProvider(
+      cloudflareConfig
+    ).chatCompletionStream({
+      model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }],
+    })) {
+      chunks.push(chunk)
+    }
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${UNIFIED}/chat/completions`)
+    const headers = init?.headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer cf-token')
+    expect(headers['cf-aig-gateway-id']).toBe('labbai')
+    expect(headers).not.toHaveProperty('cf-aig-authorization')
+    const body = JSON.parse(String(init?.body))
+    expect(body.model).toBe('openai/gpt-5.5')
+    expect(body.max_completion_tokens).toBeGreaterThanOrEqual(32768)
+    expect(body).not.toHaveProperty('temperature')
+    expect(body).not.toHaveProperty('prompt_cache_key')
+    expect(body.stream_options).toEqual({ include_usage: true })
+
+    expect(chunks).toEqual(
+      expect.arrayContaining([
+        { type: 'text', content: 'Hi' },
+        { type: 'tool_call', toolCall: { id: 'call_1', name: 'read', arguments: '{"a":1}' } },
+        { type: 'done', finishReason: 'stop', usage: { inputTokens: 7, outputTokens: 2 } },
+      ])
+    )
+  })
+
+  it('passes Cloudflare catalog ids through and omits temperature where the model rejects it', async () => {
+    const fetchMock = vi.fn(async (..._args: FetchArgs) => sse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = createOpenAiCompatibleProvider(cloudflareConfig)
+
+    for (const model of ['anthropic/claude-sonnet-5', 'anthropic/claude-haiku-4.5']) {
+      for await (const _chunk of provider.chatCompletionStream({
+        model,
+        messages: [{ role: 'user', content: 'hi' }],
+      })) {
+        // drain
+      }
+    }
+
+    const sonnet = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+    expect(sonnet.model).toBe('anthropic/claude-sonnet-5')
+    expect(sonnet).not.toHaveProperty('temperature')
+    expect(sonnet.max_tokens).toBe(4096)
+
+    const haiku = JSON.parse(String(fetchMock.mock.calls[1][1]?.body))
+    expect(haiku.model).toBe('anthropic/claude-haiku-4.5')
+    expect(haiku.temperature).toBe(0.2)
+  })
+})
