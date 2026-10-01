@@ -86,7 +86,9 @@ export async function createCloudflareChatCompletionStream(
   params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
   options?: { signal?: AbortSignal }
 ): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
-  const response = await client.chat.completions.create(params, options).asResponse()
+  /** Callers pass an already-prepared payload (prepareConversationGeneration or the shared loop). */
+  const createStream = () => client.chat.completions.create(params, options).asResponse()
+  const response = await createStream()
   if (!response.body) {
     throw new Error(`${PROVIDER_NAME} returned an empty streaming response`)
   }
