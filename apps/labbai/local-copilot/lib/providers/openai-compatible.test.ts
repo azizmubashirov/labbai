@@ -325,10 +325,7 @@ describe('Cloudflare unified endpoint transport', () => {
         stream: true,
         max_tokens: 4096,
         tool_choice: { type: 'auto' },
-        system: [
-          { type: 'text', text: 'You are Labbai.' },
-          { type: 'text', text: 'Current context: {}', cache_control: { type: 'ephemeral' } },
-        ],
+        system: 'You are Labbai.\n\nCurrent context: {}',
         tools: [
           {
             name: 'get_weather',

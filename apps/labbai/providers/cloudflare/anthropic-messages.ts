@@ -295,27 +295,24 @@ function withCacheControl(block: AnthropicBlock): AnthropicBlock {
 
 /**
  * Marks the stable prefix for Anthropic prompt caching (render order: tools → system →
- * messages): the last tool, the last system block, and the last block of the latest two
- * user-role turns — the newest one is the write point for the next request (the next
- * tool round or user turn), the previous one is a guaranteed read point.
+ * messages): the last tool and the last block of the latest three user-role turns — the
+ * newest one is the write point for the next request (the next tool round or user turn),
+ * the earlier ones are guaranteed read points.
  */
-function applyCacheBreakpoints(
-  tools: AnthropicBlock[],
-  system: AnthropicBlock[],
-  messages: AnthropicMessage[]
-): void {
+function applyCacheBreakpoints(tools: AnthropicBlock[], messages: AnthropicMessage[]): void {
   let remaining = ANTHROPIC_MAX_CACHE_BREAKPOINTS
   if (tools.length > 0) {
     tools[tools.length - 1] = withCacheControl(tools[tools.length - 1])
     remaining--
   }
-  if (system.length > 0) {
-    system[system.length - 1] = withCacheControl(system[system.length - 1])
-    remaining--
-  }
+  /**
+   * Cloudflare's `/ai/v1/messages` only accepts `system` as a plain string, so the system
+   * prompt carries no breakpoint of its own; the user-turn breakpoints below cache it
+   * (it renders before `messages`).
+   */
   let markedTurns = 0
   for (let index = messages.length - 1; index >= 0; index--) {
-    if (remaining <= 0 || markedTurns >= 2) break
+    if (remaining <= 0 || markedTurns >= 3) break
     const message = messages[index]
     if (message.role !== 'user' || message.content.length === 0) continue
     const last = message.content.length - 1
@@ -337,7 +334,7 @@ export function toAnthropicMessagesBody(chat: Record<string, unknown>): Record<s
     Array.isArray(chat.messages) ? chat.messages : []
   )
   const tools = toAnthropicTools(chat.tools)
-  applyCacheBreakpoints(tools, system, messages)
+  applyCacheBreakpoints(tools, messages)
 
   const requestedMaxTokens =
     typeof chat.max_tokens === 'number'
@@ -364,10 +361,15 @@ export function toAnthropicMessagesBody(chat: Record<string, unknown>): Record<s
         ? chat.stop.filter((value): value is string => typeof value === 'string')
         : undefined
 
+  const systemText = system
+    .map((block) => (typeof block.text === 'string' ? block.text : ''))
+    .filter(Boolean)
+    .join('\n\n')
+
   return {
     model,
     max_tokens: maxTokens,
-    ...(system.length > 0 ? { system } : {}),
+    ...(systemText ? { system: systemText } : {}),
     messages,
     ...(tools.length > 0 ? { tools } : {}),
     ...(toolChoice ? { tool_choice: toolChoice } : {}),

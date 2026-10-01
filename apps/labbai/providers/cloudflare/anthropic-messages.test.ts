@@ -20,7 +20,6 @@ type Body = Record<string, any>
 function countBreakpoints(body: Body): number {
   const blocks: Body[] = [
     ...(body.tools ?? []),
-    ...(body.system ?? []),
     ...body.messages.flatMap((message: Body) => message.content),
   ]
   return blocks.filter((block) => block.cache_control).length
@@ -50,7 +49,7 @@ describe('isAnthropicModelId', () => {
 })
 
 describe('toAnthropicMessagesBody', () => {
-  it('marks the last tool, the last system block and the latest two user turns', () => {
+  it('sends system as a string and marks the last tool and the latest user turns', () => {
     const body = toAnthropicMessagesBody({
       model: 'anthropic/claude-sonnet-5',
       max_tokens: 4096,
@@ -83,10 +82,7 @@ describe('toAnthropicMessagesBody', () => {
       max_tokens: 4096,
       stream: true,
       tool_choice: { type: 'auto' },
-      system: [
-        { type: 'text', text: 'You are Labbai.' },
-        { type: 'text', text: 'Current context: {}', cache_control: EPHEMERAL },
-      ],
+      system: 'You are Labbai.\n\nCurrent context: {}',
       tools: [
         { name: 'search', input_schema: { type: 'object', properties: {} } },
         {
@@ -116,7 +112,8 @@ describe('toAnthropicMessagesBody', () => {
         },
       ],
     })
-    expect(countBreakpoints(body)).toBe(ANTHROPIC_MAX_CACHE_BREAKPOINTS)
+    expect(countBreakpoints(body)).toBe(3)
+    expect(countBreakpoints(body)).toBeLessThanOrEqual(ANTHROPIC_MAX_CACHE_BREAKPOINTS)
   })
 
   it('never exceeds four breakpoints in a long tool loop', () => {

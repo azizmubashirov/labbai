@@ -500,7 +500,7 @@ describe('cloudflareProvider', () => {
       expect(body).toMatchObject({
         model: 'anthropic/claude-haiku-4.5',
         max_tokens: 256,
-        system: [{ type: 'text', text: 'Be brief.', cache_control: { type: 'ephemeral' } }],
+        system: 'Be brief.',
         output_config: { format: { type: 'json_schema' } },
       })
       expect(body).not.toHaveProperty('response_format')
