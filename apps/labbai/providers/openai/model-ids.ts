@@ -1,8 +1,10 @@
 /**
  * Labbai: the curated OpenAI model ids, client-safe (no env access).
  *
- * Labbai runs on OpenAI only for now (direct OpenAI API, server key OPENAI_API_KEY).
- * Every other vendor id that a stored workflow may still carry is mapped here.
+ * The four curated ids run everywhere (OpenAI API, or the Cloudflare AI Gateway in
+ * Cloudflare mode); {@link OPENAI_CLOUDFLARE_MODEL_IDS} add every other OpenAI chat model
+ * in Cloudflare mode. Every other vendor id that a stored workflow may still carry is
+ * mapped here.
  */
 
 /** Strong: flagship reasoning + tool use. */
@@ -26,6 +28,54 @@ export const OPENAI_MODEL_IDS = [
 ] as const
 
 const CURATED = new Map<string, string>(OPENAI_MODEL_IDS.map((id) => [id.toLowerCase(), id]))
+
+/**
+ * Every other OpenAI chat model Cloudflare serves through Unified Billing (the `openai/*`
+ * text-generation entries of developers.cloudflare.com/ai/models, read 2026-10-01).
+ * Offered and run only in Cloudflare mode, on the same Responses API path as the curated
+ * models (through the gateway's `/openai` endpoint), so stored workflows and Agent memory
+ * keep one protocol. Outside Cloudflare mode a stored id runs on the closest curated model
+ * ({@link resolveOpenAIModelId}). Image, speech and transcription models are not chat
+ * models and are not listed.
+ */
+export const OPENAI_CLOUDFLARE_MODEL_IDS = [
+  'gpt-6-astra',
+  'gpt-6-sol',
+  'gpt-6-luna',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.5-pro',
+  'gpt-5.4',
+  'gpt-5.4-pro',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
+  'gpt-5.1',
+  'gpt-5',
+  'gpt-5-nano',
+  'o4-mini',
+  'o3',
+  'o3-mini',
+  'gpt-4.1-nano',
+  'gpt-4o',
+  'gpt-4o-mini',
+] as const
+
+const CLOUDFLARE_ONLY = new Map<string, string>(
+  OPENAI_CLOUDFLARE_MODEL_IDS.map((id) => [id.toLowerCase(), id])
+)
+
+/**
+ * The canonical Cloudflare-mode OpenAI id for `model` (case-insensitive, an `openai/`
+ * prefix allowed), or `undefined` when it is not one of {@link OPENAI_CLOUDFLARE_MODEL_IDS}.
+ */
+export function resolveCloudflareOpenAIModelId(
+  model: string | undefined | null
+): string | undefined {
+  if (typeof model !== 'string') return undefined
+  const lowered = model.trim().toLowerCase()
+  return CLOUDFLARE_ONLY.get(lowered) ?? CLOUDFLARE_ONLY.get(lowered.replace(/^openai\//, ''))
+}
 
 /** True for a GPT-5 / o-series reasoning id (no temperature; max_completion_tokens). */
 export function isOpenAIReasoningModelId(model: string): boolean {

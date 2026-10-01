@@ -73,6 +73,9 @@ describe('Cloudflare model ids', () => {
   it('recognizes only the curated ids, case-insensitively, and canonicalizes them', () => {
     expect(isCloudflareModelId('anthropic/claude-sonnet-5')).toBe(true)
     expect(isCloudflareModelId('@cf/meta/llama-3.3-70b-instruct-fp8-fast')).toBe(true)
+    expect(isCloudflareModelId('anthropic/claude-opus-5.5')).toBe(true)
+    expect(isCloudflareModelId('google/gemini-3.8-flash')).toBe(true)
+    expect(isCloudflareModelId('google/nano-banana-pro')).toBe(false)
     expect(resolveCloudflareModelId(' Google/Gemini-2.5-Flash ')).toBe('google/gemini-2.5-flash')
     expect(isCloudflareModelId('gpt-4.1')).toBe(false)
     expect(isCloudflareModelId('openai/gpt-4.1')).toBe(false)

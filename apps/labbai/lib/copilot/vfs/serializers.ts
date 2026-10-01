@@ -13,7 +13,7 @@ import { isSubBlockHidden } from '@/lib/workflows/subblocks/visibility'
 import { getBlock } from '@/blocks'
 import type { BlockConfig, SubBlockConfig } from '@/blocks/types'
 import { isHiddenUnder } from '@/blocks/visibility/context'
-import { PROVIDER_DEFINITIONS } from '@/providers/models'
+import { isCloudflareOnlyModel, PROVIDER_DEFINITIONS } from '@/providers/models'
 import { deriveHostedApiKeySupport } from '@/tools/hosted-api-key'
 import type { ExecutableToolConfig, ToolHostingCondition } from '@/tools/types'
 
@@ -522,6 +522,8 @@ export function serializeTableMeta(table: {
  */
 interface StaticModelOption {
   id: string
+  /** Readable name shown in the picker. */
+  name?: string
   provider: string
   hosted: boolean
   recommended?: boolean
@@ -531,15 +533,16 @@ interface StaticModelOption {
 
 /**
  * Labbai: every catalog model runs on platform credentials (OpenAI key / Cloudflare
- * token), so all are hosted. The Cloudflare models are listed only in Cloudflare mode,
- * mirroring the user picker.
+ * token), so all are hosted. Cloudflare-only models (Anthropic, Google, Workers AI and the
+ * OpenAI models beyond the curated four) are listed only in Cloudflare mode, mirroring the
+ * user picker.
  */
 function getStaticModelOptionsForVFS(): StaticModelOption[] {
   const models: StaticModelOption[] = []
 
   for (const [providerId, def] of Object.entries(PROVIDER_DEFINITIONS)) {
-    if (providerId === 'cloudflare' && !isCloudflareAIEnabled) continue
     for (const model of def.models) {
+      if (!isCloudflareAIEnabled && isCloudflareOnlyModel(model.id)) continue
       // Retired models are hidden from the agent's menu (mirrors the user picker)
       // so it never suggests a model whose API calls fail; legacy stays available.
       if (model.sunset?.status === 'deprecated') continue
@@ -548,6 +551,7 @@ function getStaticModelOptionsForVFS(): StaticModelOption[] {
         provider: providerId,
         hosted: true,
       }
+      if (model.name) option.name = model.name
       if (model.recommended) option.recommended = true
       if (model.speedOptimized) option.speedOptimized = true
       if (model.sunset) option.deprecated = true

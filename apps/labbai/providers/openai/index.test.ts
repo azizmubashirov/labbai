@@ -13,7 +13,11 @@ vi.mock('@/providers/openai/core', () => ({
 }))
 
 import { openaiProvider } from '@/providers/openai'
-import { OPENAI_DEFAULT_MODEL, OPENAI_MODEL_IDS } from '@/providers/openai/model-ids'
+import {
+  OPENAI_CLOUDFLARE_MODEL_IDS,
+  OPENAI_DEFAULT_MODEL,
+  OPENAI_MODEL_IDS,
+} from '@/providers/openai/model-ids'
 
 describe('openaiProvider', () => {
   beforeEach(() => {
@@ -22,9 +26,11 @@ describe('openaiProvider', () => {
 
   afterEach(resetEnvMock)
 
-  it('exposes the curated catalog and default model', () => {
+  it('exposes the OpenAI catalog (curated + Cloudflare-only) and default model', () => {
     expect(openaiProvider.id).toBe('openai')
-    expect(openaiProvider.models).toEqual([...OPENAI_MODEL_IDS])
+    expect([...openaiProvider.models].sort()).toEqual(
+      [...OPENAI_MODEL_IDS, ...OPENAI_CLOUDFLARE_MODEL_IDS].sort()
+    )
     expect(openaiProvider.defaultModel).toBe(OPENAI_DEFAULT_MODEL)
   })
 

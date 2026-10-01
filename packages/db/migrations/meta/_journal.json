@@ -2682,6 +2682,13 @@
       "when": 1790353136617,
       "tag": "0383_labbai_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 384,
+      "version": "7",
+      "when": 1790439536617,
+      "tag": "0384_labbai_copilot_default_model_text",
+      "breakpoints": true
     }
   ]
 }

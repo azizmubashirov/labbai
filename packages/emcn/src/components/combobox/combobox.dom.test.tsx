@@ -401,3 +401,36 @@ describe('Combobox virtualized options', () => {
     expect(document.querySelectorAll('[role="option"]').length).toBeLessThan(options.length)
   })
 })
+
+describe('Combobox groups', () => {
+  const groups = [
+    { section: 'OpenAI', items: [{ label: 'GPT-5 mini', value: 'gpt-5-mini' }] },
+    {
+      section: 'Anthropic',
+      items: [{ label: 'Claude Sonnet 5', value: 'anthropic/claude-sonnet-5' }],
+    },
+  ]
+  const options = groups.flatMap((group) => group.items)
+
+  function renderedOptions(): Array<string | null> {
+    return [...document.querySelectorAll('[role="option"]')].map((node) => node.textContent)
+  }
+
+  it('shows every section while nothing is typed', () => {
+    render(<Combobox options={options} groups={groups} />)
+    click(trigger())
+
+    expect(renderedOptions()).toEqual(['GPT-5 mini', 'Claude Sonnet 5'])
+    expect(document.body.textContent).toContain('OpenAI')
+    expect(document.body.textContent).toContain('Anthropic')
+  })
+
+  it('narrows the sections to the options an editable value matches', () => {
+    render(<Combobox options={options} groups={groups} editable filterOptions value='claude' />)
+    act(() => trigger('input[role="combobox"]').focus())
+
+    expect(renderedOptions()).toEqual(['Claude Sonnet 5'])
+    expect(document.body.textContent).toContain('Anthropic')
+    expect(document.body.textContent).not.toContain('OpenAI')
+  })
+})

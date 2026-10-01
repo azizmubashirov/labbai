@@ -404,32 +404,21 @@ const Combobox = memo(
       }, [allOptions, value, open, filterOptions, searchable, searchQuery])
 
       /**
-       * Filter groups based on search query (preserves group structure)
+       * Groups narrowed to the visible options (preserves group structure). Derived from
+       * `filteredOptions`, so hidden options, the search query and an editable input's typed
+       * value filter the sections exactly as they filter the keyboard-navigation list.
        */
       const filteredGroups = useMemo(() => {
         if (!groups) return null
 
-        const baseGroups = groups
+        const visible = new Set(filteredOptions.map((option) => option.value))
+        return groups
           .map((group) => ({
             ...group,
-            items: group.items.filter((opt) => !opt.hidden),
+            items: group.items.filter((option) => visible.has(option.value)),
           }))
           .filter((group) => group.items.length > 0)
-
-        if (!searchable || !searchQuery) return baseGroups
-
-        const query = searchQuery.toLowerCase()
-        return baseGroups
-          .map((group) => ({
-            ...group,
-            items: group.items.filter((option) => {
-              const label = option.label.toLowerCase()
-              const optionValue = option.value.toLowerCase()
-              return label.includes(query) || optionValue.includes(query)
-            }),
-          }))
-          .filter((group) => group.items.length > 0)
-      }, [groups, searchable, searchQuery])
+      }, [groups, filteredOptions])
 
       const virtualizeOptions =
         !filteredGroups && !showAllOption && filteredOptions.length >= VIRTUALIZE_OPTION_THRESHOLD

@@ -218,6 +218,20 @@ describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () =>
     expect(() => assertLocalCopilotEnabled(getLocalCopilotConfig())).toThrow(/CLOUDFLARE_API_TOKEN/)
   })
 
+  it('runs a Cloudflare-only OpenAI pick on the unified endpoint', () => {
+    const config = buildLocalCopilotConfigForCatalog('o3')
+    expect(config).toMatchObject({ provider: 'cloudflare', model: 'o3', baseUrl: UNIFIED })
+  })
+
+  it('falls back to the env config for a Cloudflare-only OpenAI pick outside Cloudflare mode', () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
+    process.env.OPENAI_API_KEY = 'sk-platform'
+
+    const config = buildLocalCopilotConfigForCatalog('gpt-4.1')
+    expect(config.provider).toBe('openai')
+    expect(config.model).toBe('gpt-5.5')
+  })
+
   it('falls back to the env config for a Cloudflare pick outside Cloudflare mode', () => {
     setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
     process.env.OPENAI_API_KEY = 'sk-platform'

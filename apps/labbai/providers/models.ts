@@ -1,11 +1,13 @@
 /**
  * Comprehensive provider definitions - Single source of truth
  *
- * Labbai: two providers. `openai` holds the curated OpenAI models (plain `gpt-*` ids, run
- * on the OpenAI Responses API — directly or, in Cloudflare mode, through the Cloudflare AI
- * Gateway). `cloudflare` holds the curated non-OpenAI models (Anthropic, Google, Workers AI)
- * that only run in Cloudflare mode, through Cloudflare's unified chat-completions endpoint;
- * outside Cloudflare mode they are hidden from pickers and a stored id runs on the closest
+ * Labbai: two providers. `openai` holds the OpenAI chat models (plain ids such as `gpt-5.5`,
+ * run on the OpenAI Responses API — directly or, in Cloudflare mode, through the Cloudflare AI
+ * Gateway): four curated ones everywhere, every other OpenAI chat model Cloudflare serves
+ * only in Cloudflare mode (`cloudflareOnly`). `cloudflare` holds every Claude and Gemini chat
+ * model in Cloudflare's catalog plus two Workers AI models; they only run in Cloudflare mode,
+ * through Cloudflare's unified chat-completions endpoint. Outside Cloudflare mode the
+ * Cloudflare-only models are hidden from pickers and a stored id runs on the closest curated
  * OpenAI model. List prices are kept so the internal cost ledger stays accurate.
  * This file contains all provider and model information including:
  * - Model lists
@@ -18,10 +20,7 @@ import type React from 'react'
 import { CloudflareIcon, OpenAIIcon } from '@/components/icons'
 import { LARGE_VALUE_THRESHOLD_BYTES } from '@/lib/execution/payloads/large-value-ref'
 import {
-  CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
-  CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
   CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
-  CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
   CLOUDFLARE_MODEL_GLM_4_7_FLASH,
   CLOUDFLARE_MODEL_LLAMA_3_3_70B,
 } from '@/providers/cloudflare/model-ids'
@@ -88,6 +87,8 @@ export interface ModelCapabilities {
 
 interface ModelDefinition {
   id: string
+  /** Readable name shown in pickers (the id is what workflows store). */
+  name?: string
   pricing: ModelPricing
   capabilities: ModelCapabilities
   contextWindow?: number
@@ -106,6 +107,12 @@ interface ModelDefinition {
   sunset?: {
     status: 'legacy' | 'deprecated'
   }
+  /**
+   * Offered and run only in Cloudflare mode (Unified Billing). Every `cloudflare` model is
+   * Cloudflare-only whether or not it sets this; on `openai` it marks the models beyond the
+   * four curated ones.
+   */
+  cloudflareOnly?: boolean
 }
 
 export interface ProviderDefinition {
@@ -177,9 +184,172 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     capabilities: {
       toolUsageControl: true,
     },
+    /**
+     * Ids, context windows, max output tokens, reasoning-effort values and list prices from
+     * OpenAI's model pages (developers.openai.com/api/docs/models, read 2026-10-01); the
+     * `cloudflareOnly` set is every other `openai/*` chat model in Cloudflare's catalog.
+     * Where Cloudflare's price differs, the higher one is kept. Reasoning models take no
+     * temperature (the convention of the curated entries). Long-context tiers: OpenAI bills
+     * the whole request at 2x input / 1.5x output above 272k input tokens.
+     */
     models: [
       {
+        id: 'gpt-6-astra',
+        name: 'GPT-6 Astra',
+        pricing: {
+          input: 10.0,
+          cachedInput: 1.0,
+          output: 50.0,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 20.0,
+              cachedInput: 2.0,
+              output: 75.0,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['low', 'medium', 'high', 'xhigh', 'max'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-6-sol',
+        name: 'GPT-6 Sol',
+        pricing: {
+          input: 2.0,
+          cachedInput: 0.2,
+          output: 10.0,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 4.0,
+              cachedInput: 0.4,
+              output: 15.0,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-6-luna',
+        name: 'GPT-6 Luna',
+        pricing: {
+          input: 0.1,
+          cachedInput: 0.01,
+          output: 0.5,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 0.2,
+              cachedInput: 0.02,
+              output: 0.75,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        cloudflareOnly: true,
+        speedOptimized: true,
+      },
+      {
+        // OpenAI list price; Cloudflare lists $2 / $10 — the higher one is kept so usage is never
+        // billed below cost.
+        id: 'gpt-5.6-sol',
+        name: 'GPT-5.6 Sol',
+        pricing: {
+          input: 4.0,
+          cachedInput: 0.4,
+          output: 20.0,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 8.0,
+              cachedInput: 0.8,
+              output: 30.0,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-5.6-terra',
+        name: 'GPT-5.6 Terra',
+        pricing: {
+          input: 2.0,
+          cachedInput: 0.2,
+          output: 12.0,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 4.0,
+              cachedInput: 0.4,
+              output: 18.0,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-5.6-luna',
+        name: 'GPT-5.6 Luna',
+        pricing: {
+          input: 0.2,
+          cachedInput: 0.02,
+          output: 1.2,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 0.4,
+              cachedInput: 0.04,
+              output: 1.8,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh', 'max'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        cloudflareOnly: true,
+        speedOptimized: true,
+      },
+      {
         id: 'gpt-5.5',
+        name: 'GPT-5.5',
         pricing: {
           input: 5.0,
           cachedInput: 0.5,
@@ -209,7 +379,147 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         recommended: true,
       },
       {
+        id: 'gpt-5.5-pro',
+        name: 'GPT-5.5 Pro',
+        pricing: {
+          input: 30.0,
+          output: 180.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['medium', 'high', 'xhigh'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        releaseDate: '2026-04-23',
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-5.4',
+        name: 'GPT-5.4',
+        pricing: {
+          input: 2.5,
+          cachedInput: 0.25,
+          output: 15.0,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 5.0,
+              cachedInput: 0.5,
+              output: 22.5,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        releaseDate: '2026-03-05',
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-5.4-pro',
+        name: 'GPT-5.4 Pro',
+        pricing: {
+          input: 30.0,
+          output: 180.0,
+          tiers: [
+            {
+              aboveInputTokens: 272000,
+              input: 60.0,
+              output: 270.0,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['medium', 'high', 'xhigh'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1050000,
+        releaseDate: '2026-03-05',
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-5.4-mini',
+        name: 'GPT-5.4 mini',
+        pricing: {
+          input: 0.75,
+          cachedInput: 0.075,
+          output: 4.5,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 400000,
+        releaseDate: '2026-03-17',
+        cloudflareOnly: true,
+        speedOptimized: true,
+      },
+      {
+        id: 'gpt-5.4-nano',
+        name: 'GPT-5.4 nano',
+        pricing: {
+          input: 0.2,
+          cachedInput: 0.02,
+          output: 1.25,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high', 'xhigh'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 400000,
+        releaseDate: '2026-03-17',
+        cloudflareOnly: true,
+        speedOptimized: true,
+      },
+      {
+        id: 'gpt-5.1',
+        name: 'GPT-5.1',
+        pricing: {
+          input: 1.25,
+          cachedInput: 0.125,
+          output: 10.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['none', 'low', 'medium', 'high'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 400000,
+        releaseDate: '2025-11-13',
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-5',
+        name: 'GPT-5',
+        pricing: {
+          input: 1.25,
+          cachedInput: 0.125,
+          output: 10.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['minimal', 'low', 'medium', 'high'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 400000,
+        releaseDate: '2025-08-07',
+        cloudflareOnly: true,
+      },
+      {
         id: 'gpt-5-mini',
+        name: 'GPT-5 mini',
         pricing: {
           input: 0.25,
           cachedInput: 0.025,
@@ -232,7 +542,78 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         speedOptimized: true,
       },
       {
+        id: 'gpt-5-nano',
+        name: 'GPT-5 nano',
+        pricing: {
+          input: 0.05,
+          cachedInput: 0.005,
+          output: 0.4,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['minimal', 'low', 'medium', 'high'] },
+          verbosity: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 400000,
+        releaseDate: '2025-08-07',
+        cloudflareOnly: true,
+        speedOptimized: true,
+      },
+      {
+        id: 'o4-mini',
+        name: 'o4-mini',
+        pricing: {
+          input: 1.1,
+          cachedInput: 0.275,
+          output: 4.4,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 100000,
+        },
+        contextWindow: 200000,
+        releaseDate: '2025-04-16',
+        cloudflareOnly: true,
+      },
+      {
+        id: 'o3',
+        name: 'o3',
+        pricing: {
+          input: 2.0,
+          cachedInput: 0.5,
+          output: 8.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 100000,
+        },
+        contextWindow: 200000,
+        releaseDate: '2025-04-16',
+        cloudflareOnly: true,
+      },
+      {
+        id: 'o3-mini',
+        name: 'o3-mini',
+        pricing: {
+          input: 1.1,
+          cachedInput: 0.55,
+          output: 4.4,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 100000,
+        },
+        contextWindow: 200000,
+        releaseDate: '2025-01-31',
+        cloudflareOnly: true,
+      },
+      {
         id: 'gpt-4.1',
+        name: 'GPT-4.1',
         pricing: {
           input: 2.0,
           cachedInput: 0.5,
@@ -248,6 +629,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
       {
         id: 'gpt-4.1-mini',
+        name: 'GPT-4.1 mini',
         pricing: {
           input: 0.4,
           cachedInput: 0.1,
@@ -261,15 +643,74 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         contextWindow: 1047576,
         releaseDate: '2025-04-14',
       },
+      {
+        id: 'gpt-4.1-nano',
+        name: 'GPT-4.1 nano',
+        pricing: {
+          input: 0.1,
+          cachedInput: 0.025,
+          output: 0.4,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          maxOutputTokens: 32768,
+        },
+        contextWindow: 1047576,
+        releaseDate: '2025-04-14',
+        cloudflareOnly: true,
+        speedOptimized: true,
+      },
+      {
+        // OpenAI list price; Cloudflare lists half — the higher one is kept so usage is never
+        // billed below cost. Same for GPT-4o mini.
+        id: 'gpt-4o',
+        name: 'GPT-4o',
+        pricing: {
+          input: 2.5,
+          cachedInput: 1.25,
+          output: 10.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          maxOutputTokens: 16384,
+        },
+        contextWindow: 128000,
+        releaseDate: '2024-08-06',
+        cloudflareOnly: true,
+      },
+      {
+        id: 'gpt-4o-mini',
+        name: 'GPT-4o mini',
+        pricing: {
+          input: 0.15,
+          cachedInput: 0.075,
+          output: 0.6,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          maxOutputTokens: 16384,
+        },
+        contextWindow: 128000,
+        releaseDate: '2024-07-18',
+        cloudflareOnly: true,
+        speedOptimized: true,
+      },
     ],
   },
   /**
    * Cloudflare Unified Billing: non-OpenAI models through
-   * `POST /client/v4/accounts/<account>/ai/v1/chat/completions` (Cloudflare mode only).
-   * Ids, context windows and prices are Cloudflare's model catalog
-   * (developers.cloudflare.com/ai/models, read 2026-10-01); Cloudflare passes provider
-   * prices through without markup. Max output tokens come from the vendors' docs where
-   * Cloudflare does not publish one; unset means the 4096 default.
+   * `POST /client/v4/accounts/<account>/ai/v1/chat/completions` (Cloudflare mode only) —
+   * every Claude (`anthropic/…`) and Gemini (`google/…`) chat model in Cloudflare's catalog,
+   * plus two Workers AI models (`@cf/…`). Ids, context windows and prices are Cloudflare's
+   * model catalog (developers.cloudflare.com/ai/models, read 2026-10-01); Cloudflare passes
+   * provider prices through without markup. Temperature ranges come from Cloudflare's model
+   * schemas (Claude models without one reject temperature); max output tokens from the
+   * vendors' docs (unset means the 4096 default); Gemini `reasoningEffort` values from
+   * Google's OpenAI-compatibility docs (`minimal` only where Google maps it, `none` only on
+   * 2.5 Flash / Flash-Lite).
    */
   cloudflare: {
     id: 'cloudflare',
@@ -284,21 +725,184 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
     },
     models: [
       {
-        id: CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+        // Anthropic rejects forced tool use on this model.
+        id: 'anthropic/claude-fable-5.1',
+        name: 'Claude Fable 5.1',
+        pricing: {
+          input: 10.0,
+          cachedInput: 0.25,
+          output: 50.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          forcedToolUse: false,
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+        releaseDate: '2026-09-01',
+      },
+      {
+        id: 'anthropic/claude-fable-5',
+        name: 'Claude Fable 5',
+        pricing: {
+          input: 10.0,
+          cachedInput: 1.0,
+          output: 50.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+        releaseDate: '2026-06-09',
+      },
+      {
+        // Anthropic rejects forced tool use on this model.
+        id: 'anthropic/claude-opus-5.5',
+        name: 'Claude Opus 5.5',
+        pricing: {
+          input: 4.0,
+          cachedInput: 0.2,
+          output: 20.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          forcedToolUse: false,
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+        releaseDate: '2026-09-22',
+      },
+      {
+        id: 'anthropic/claude-opus-5',
+        name: 'Claude Opus 5',
+        pricing: {
+          input: 5.0,
+          cachedInput: 0.5,
+          output: 25.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+        releaseDate: '2026-07-24',
+      },
+      {
+        id: 'anthropic/claude-opus-4.8',
+        name: 'Claude Opus 4.8',
+        pricing: {
+          input: 5.0,
+          cachedInput: 0.5,
+          output: 25.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+        releaseDate: '2026-05-28',
+      },
+      {
+        id: 'anthropic/claude-opus-4.7',
+        name: 'Claude Opus 4.7',
+        pricing: {
+          input: 5.0,
+          cachedInput: 0.5,
+          output: 25.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+        releaseDate: '2026-04-16',
+      },
+      {
+        id: 'anthropic/claude-opus-4.6',
+        name: 'Claude Opus 4.6',
+        pricing: {
+          input: 5.0,
+          cachedInput: 0.5,
+          output: 25.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 1 },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 1000000,
+        releaseDate: '2026-02-05',
+      },
+      {
+        id: 'anthropic/claude-opus-4.5',
+        name: 'Claude Opus 4.5',
+        pricing: {
+          input: 5.0,
+          cachedInput: 0.5,
+          output: 25.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 1 },
+          maxOutputTokens: 64000,
+        },
+        contextWindow: 200000,
+        releaseDate: '2025-11-24',
+      },
+      {
+        // No temperature: Anthropic rejects temperature / top_p from the 4.7 generation on.
+        id: 'anthropic/claude-sonnet-5',
+        name: 'Claude Sonnet 5',
         pricing: {
           input: 2.0,
           cachedInput: 0.2,
           output: 10.0,
           updatedAt: '2026-10-01',
         },
-        // Sonnet 5 rejects temperature / top_p (Anthropic), so no temperature capability.
         capabilities: {
           maxOutputTokens: 128000,
         },
         contextWindow: 1000000,
+        releaseDate: '2026-06-30',
       },
       {
-        id: CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+        id: 'anthropic/claude-sonnet-4.6',
+        name: 'Claude Sonnet 4.6',
+        pricing: {
+          input: 3.0,
+          cachedInput: 0.3,
+          output: 15.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 1 },
+          maxOutputTokens: 128000,
+        },
+        contextWindow: 200000,
+        releaseDate: '2026-02-17',
+      },
+      {
+        // Deprecated by Anthropic (retirement scheduled), still callable.
+        id: 'anthropic/claude-sonnet-4.5',
+        name: 'Claude Sonnet 4.5',
+        pricing: {
+          input: 3.0,
+          cachedInput: 0.3,
+          output: 15.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 1 },
+          maxOutputTokens: 64000,
+        },
+        contextWindow: 200000,
+        releaseDate: '2025-09-29',
+        sunset: { status: 'legacy' },
+      },
+      {
+        id: 'anthropic/claude-haiku-4.5',
+        name: 'Claude Haiku 4.5',
         pricing: {
           input: 1.0,
           cachedInput: 0.1,
@@ -310,24 +914,80 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
           maxOutputTokens: 64000,
         },
         contextWindow: 200000,
+        releaseDate: '2025-10-15',
         speedOptimized: true,
       },
       {
-        id: CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
+        id: 'google/gemini-3.8-flash',
+        name: 'Gemini 3.8 Flash',
         pricing: {
-          input: 1.25,
-          cachedInput: 0.125,
-          output: 10.0,
+          input: 0.75,
+          cachedInput: 0.075,
+          output: 3.75,
           updatedAt: '2026-10-01',
         },
         capabilities: {
           temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
           maxOutputTokens: 65536,
         },
-        contextWindow: 1000000,
+        contextWindow: 1048576,
+        speedOptimized: true,
       },
       {
-        id: CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+        id: 'google/gemini-3.7-flash',
+        name: 'Gemini 3.7 Flash',
+        pricing: {
+          input: 0.75,
+          cachedInput: 0.075,
+          output: 3.75,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1048576,
+        speedOptimized: true,
+      },
+      {
+        id: 'google/gemini-3.6-flash',
+        name: 'Gemini 3.6 Flash',
+        pricing: {
+          input: 1.5,
+          cachedInput: 0.15,
+          output: 7.5,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1048576,
+        speedOptimized: true,
+      },
+      {
+        id: 'google/gemini-3.5-flash',
+        name: 'Gemini 3.5 Flash',
+        pricing: {
+          input: 1.5,
+          cachedInput: 0.15,
+          output: 9.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1048576,
+        speedOptimized: true,
+      },
+      {
+        id: 'google/gemini-3.5-flash-lite',
+        name: 'Gemini 3.5 Flash-Lite',
         pricing: {
           input: 0.3,
           cachedInput: 0.03,
@@ -336,6 +996,115 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
         },
         capabilities: {
           temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1048576,
+        speedOptimized: true,
+      },
+      {
+        id: 'google/gemini-3.1-pro',
+        name: 'Gemini 3.1 Pro',
+        pricing: {
+          input: 2.0,
+          cachedInput: 0.2,
+          output: 12.0,
+          tiers: [
+            {
+              aboveInputTokens: 200000,
+              input: 4.0,
+              cachedInput: 0.4,
+              output: 18.0,
+            },
+          ],
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['minimal', 'low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1000000,
+      },
+      {
+        id: 'google/gemini-3.1-flash-lite',
+        name: 'Gemini 3.1 Flash-Lite',
+        pricing: {
+          input: 0.25,
+          cachedInput: 0.03,
+          output: 1.5,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['minimal', 'low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1000000,
+        speedOptimized: true,
+      },
+      {
+        id: 'google/gemini-3-flash',
+        name: 'Gemini 3 Flash',
+        pricing: {
+          input: 0.5,
+          cachedInput: 0.05,
+          output: 3.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['minimal', 'low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1000000,
+        speedOptimized: true,
+      },
+      {
+        id: 'google/gemini-2.5-pro',
+        name: 'Gemini 2.5 Pro',
+        pricing: {
+          input: 1.25,
+          cachedInput: 0.125,
+          output: 10.0,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['minimal', 'low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1000000,
+      },
+      {
+        id: 'google/gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash',
+        pricing: {
+          input: 0.3,
+          cachedInput: 0.03,
+          output: 2.5,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['none', 'minimal', 'low', 'medium', 'high'] },
+          maxOutputTokens: 65536,
+        },
+        contextWindow: 1000000,
+        speedOptimized: true,
+      },
+      {
+        id: 'google/gemini-2.5-flash-lite',
+        name: 'Gemini 2.5 Flash-Lite',
+        pricing: {
+          input: 0.1,
+          cachedInput: 0.01,
+          output: 0.4,
+          updatedAt: '2026-10-01',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+          reasoningEffort: { values: ['none', 'minimal', 'low', 'medium', 'high'] },
           maxOutputTokens: 65536,
         },
         contextWindow: 1000000,
@@ -343,6 +1112,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
       {
         id: CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+        name: 'Llama 3.3 70B',
         pricing: {
           input: 0.293,
           output: 2.253,
@@ -355,6 +1125,7 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
       },
       {
         id: CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+        name: 'GLM-4.7 Flash',
         pricing: {
           input: 0.0605,
           output: 0.4,
@@ -481,6 +1252,62 @@ export function isLegacyChatModelId(modelId: string): boolean {
   return /(^|\/)(gpt|o\d|chatgpt|chat-latest|computer-use|claude|gemini|gemma|llama|qwen|mistral|deepseek|grok|kimi|glm|sonar)/.test(
     lowered
   )
+}
+
+/** Picker sections, one per model vendor. */
+export type ModelPickerGroupId = 'openai' | 'anthropic' | 'google' | 'workers-ai'
+
+/** Picker sections in display order. */
+export const MODEL_PICKER_GROUPS: ReadonlyArray<{ id: ModelPickerGroupId; label: string }> = [
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'google', label: 'Google' },
+  { id: 'workers-ai', label: 'Workers AI' },
+]
+
+/**
+ * The picker section of a catalog model: `openai` for the OpenAI provider, else by the
+ * Cloudflare id's vendor (`anthropic/…`, `google/…`, `@cf/…` = Workers AI). `null` for an
+ * id the catalog does not know.
+ */
+export function getModelPickerGroup(modelId: string): ModelPickerGroupId | null {
+  if (typeof modelId !== 'string') return null
+  const lowered = modelId.trim().toLowerCase()
+  const entry = MODEL_CATALOG_INDEX.get(lowered)
+  if (!entry) return null
+  if (entry.providerId === 'openai') return 'openai'
+  if (lowered.startsWith('anthropic/')) return 'anthropic'
+  if (lowered.startsWith('google/')) return 'google'
+  return 'workers-ai'
+}
+
+/** Section label for a picker group. */
+export function getModelPickerGroupLabel(groupId: ModelPickerGroupId): string {
+  return MODEL_PICKER_GROUPS.find((group) => group.id === groupId)?.label ?? groupId
+}
+
+/** Readable picker name of a catalog model; the id itself when it has none or is unknown. */
+export function getModelDisplayName(modelId: string): string {
+  if (typeof modelId !== 'string') return modelId
+  return findCatalogModel(modelId.trim())?.name ?? modelId
+}
+
+const CLOUDFLARE_ONLY_MODEL_IDS = new Set(
+  Object.entries(PROVIDER_DEFINITIONS).flatMap(([providerId, provider]) =>
+    provider.models
+      .filter((model) => providerId === 'cloudflare' || model.cloudflareOnly === true)
+      .map((model) => model.id.toLowerCase())
+  )
+)
+
+/**
+ * Whether a catalog model is offered and run only in Cloudflare mode: every `cloudflare`
+ * model and the OpenAI models beyond the four curated ones. Callers that build pickers
+ * gate on this together with `isCloudflareAIEnabled`.
+ */
+export function isCloudflareOnlyModel(modelId: string): boolean {
+  if (typeof modelId !== 'string') return false
+  return CLOUDFLARE_ONLY_MODEL_IDS.has(modelId.trim().toLowerCase())
 }
 
 const MODEL_SUNSET_STATUS = new Map<string, 'legacy' | 'deprecated'>()

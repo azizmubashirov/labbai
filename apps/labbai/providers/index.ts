@@ -38,7 +38,7 @@ import {
   uploadLargeFilesToProvider,
 } from '@/providers/file-attachments.server'
 import { isEvaluationModel, isKnownModelId } from '@/providers/models'
-import { resolveOpenAIModelId } from '@/providers/openai/model-ids'
+import { resolveCloudflareOpenAIModelId, resolveOpenAIModelId } from '@/providers/openai/model-ids'
 import { getProviderExecutor } from '@/providers/registry'
 import {
   type ProviderRuntimeContext,
@@ -178,15 +178,20 @@ function sanitizeRequest(request: ProviderRequest, providerId: ProviderId): Prov
   const sanitizedRequest = { ...request }
   /**
    * Labbai: stored workflows and callers may still carry retired or non-OpenAI model
-   * ids (`gpt-4o`, `claude-sonnet-4-6`, `gemini-2.5-pro`, `azure/…`). On `openai` they run
-   * on the closest curated OpenAI model instead of failing. Curated Cloudflare ids on
-   * `cloudflare` pass through in their canonical spelling.
+   * ids (`claude-sonnet-4-6`, `gemini-2.5-pro`, `azure/…`). On `openai` they run on the
+   * closest curated OpenAI model instead of failing. In Cloudflare mode the other OpenAI
+   * chat models Cloudflare serves (`gpt-6-sol`, `o3`, `gpt-4o`, …) pass through; outside it
+   * they map like any legacy id. Cloudflare ids on `cloudflare` pass through in their
+   * canonical spelling.
    */
   if (sanitizedRequest.model && providerId === 'cloudflare') {
     sanitizedRequest.model =
       resolveCloudflareModelId(sanitizedRequest.model) ?? sanitizedRequest.model
   } else if (sanitizedRequest.model) {
-    const resolved = resolveOpenAIModelId(sanitizedRequest.model)
+    const cloudflareOpenAIModel = isCloudflareAIMode()
+      ? resolveCloudflareOpenAIModelId(sanitizedRequest.model)
+      : undefined
+    const resolved = cloudflareOpenAIModel ?? resolveOpenAIModelId(sanitizedRequest.model)
     if (resolved !== sanitizedRequest.model) {
       logger.info('Mapped model id onto a curated OpenAI model', {
         requested: sanitizedRequest.model,

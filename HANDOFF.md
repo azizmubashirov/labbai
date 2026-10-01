@@ -22,7 +22,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | 1 Docs, landing, desktop, CLI/SDK, helm, PII, sandboxes (JS-only Function), Pi/A2A/Mothership/video blocks, enrichments, Sim Mailer | done |
 | 2 Integrations trimmed to ~10% (list in LABBAI_PLAN.md) | done |
 | 3 Stripe and all payments removed; entitlements permissive; cost ledger kept | done |
-| 4 LLM: OpenAI (gpt-5.5, gpt-5-mini default, gpt-4.1, gpt-4.1-mini, text-embedding-3-small) + in Cloudflare mode Claude / Gemini / Workers AI, all from one Cloudflare account (see "Cloudflare AI (one account for every model)") | done (Cloudflare multi-provider coded 2026-10-01, not deployed) |
+| 4 LLM: OpenAI (gpt-5.5, gpt-5-mini default, gpt-4.1, gpt-4.1-mini, text-embedding-3-small) + in Cloudflare mode every OpenAI / Claude / Gemini chat model Cloudflare serves and two Workers AI models, all from one Cloudflare account (see "Cloudflare AI (one account for every model)") | done (Cloudflare multi-provider coded 2026-10-01, not deployed; needs migration 0384) |
 | 6 Remove `apps/labbai/ee`; access control, audit logs, credential groups, access requests, SCIM re-implemented clean-room (`lib/labbai/**`), always on | done |
 | 7 Organization UI layer (`/o/**`), Sim Search, org Search MCP, org Assistant removed; kept org-backed features live in workspace settings; DB tables kept | done |
 | + Sim cloud copilot path (Go mothership client, BYOK/API-key routes) and Local/Cloud switch removed — local copilot only | done |
@@ -443,8 +443,8 @@ Cloudflare adds a 5% fee on credit purchases; provider prices pass through witho
 
 | Models | Labbai provider | Endpoint | Auth |
 |---|---|---|---|
-| Plain OpenAI ids (`gpt-5.5`, `gpt-5-mini`, `gpt-4.1`, `gpt-4.1-mini`) + embeddings, images, TTS, STT, Files, wand, notification evaluator, vision | `openai` (Responses API, unchanged) | `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openai` | `cf-aig-authorization: Bearer <token>`, no `Authorization` |
-| `anthropic/claude-sonnet-5`, `anthropic/claude-haiku-4.5`, `google/gemini-2.5-pro`, `google/gemini-2.5-flash`, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, `@cf/zai-org/glm-4.7-flash` | `cloudflare` (new) | `POST https://api.cloudflare.com/client/v4/accounts/<account>/ai/v1/chat/completions` | `Authorization: Bearer <token>` + `cf-aig-gateway-id: <gateway>` |
+| Every OpenAI chat model, plain ids (`gpt-5.5`, `o3`, `gpt-6-sol`, …) + embeddings, images, TTS, STT, Files, wand, notification evaluator, vision | `openai` (Responses API, unchanged) | `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openai` | `cf-aig-authorization: Bearer <token>`, no `Authorization` |
+| Every Claude (`anthropic/…`) and Gemini (`google/…`) chat model, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, `@cf/zai-org/glm-4.7-flash` | `cloudflare` (new) | `POST https://api.cloudflare.com/client/v4/accounts/<account>/ai/v1/chat/completions` | `Authorization: Bearer <token>` + `cf-aig-gateway-id: <gateway>` |
 
 Why OpenAI stays on its own path: existing workflows store plain ids (`gpt-4.1`) and their Agent
 memory is stored in the Responses protocol; keeping OpenAI on the Responses API through the
@@ -465,26 +465,143 @@ Code:
   `response_format` JSON schema, temperature, `max_tokens`, image attachments (`image_url`,
   inline only), Agent memory (`chat-completions` history protocol), usage → cost ledger at the
   catalog prices.
-- `providers/cloudflare/model-ids.ts` + `providers/models.ts` (`cloudflare` provider, prices from
-  Cloudflare's model catalog, read 2026-10-01 — none unknown). Max output tokens: Sonnet 5 128k,
-  Haiku 4.5 64k (Anthropic docs), Gemini 2.5 65,536 (Google docs); Llama / GLM unset (4096 default).
-  Sonnet 5 has no temperature (Anthropic rejects it), Haiku 0–1, the others 0–2.
-- Routing: `providers/index.ts` `resolveExecutionProviderId` — curated Cloudflare id + Cloudflare
-  mode → `cloudflare`, everything else → `openai`. Outside Cloudflare mode a stored Cloudflare id
-  runs on `gpt-5-mini` (like any legacy vendor id) and the models are hidden from pickers.
+- Model catalog: see "Full model list" below (`providers/models.ts`,
+  `providers/cloudflare/model-ids.ts`, `providers/openai/model-ids.ts`).
+- Routing: `providers/index.ts` `resolveExecutionProviderId` — Cloudflare id + Cloudflare
+  mode → `cloudflare`, everything else → `openai`. `sanitizeRequest` passes the Cloudflare-only
+  OpenAI ids (`OPENAI_CLOUDFLARE_MODEL_IDS`) through in Cloudflare mode. Outside Cloudflare mode
+  a stored Cloudflare-only id (Claude / Gemini / Workers AI or an OpenAI model beyond the four
+  curated ones) runs on the closest curated model (`gpt-5.5` for flagship ids, else
+  `gpt-5-mini`, like any legacy vendor id) and the models are hidden from pickers.
 - Gating: `lib/core/config/env-flags.ts` `isCloudflareAIEnabled` (server: both vars; browser:
   `NEXT_PUBLIC_CLOUDFLARE_AI_ENABLED`, which `app/_shell/public-env-script.tsx` derives — never set
   it by hand); `platformLlmProviders` then includes `cloudflare`, so no API key field shows.
-  Agent/Router/Evaluator model picker (`blocks/utils.ts`), copilot VFS model list and
-  `providers/utils.getProviderFromModel` honour it. Credentials: `getApiKeyWithBYOK('cloudflare')`
+  Agent/Router/Evaluator model picker (`blocks/utils.ts`, via `isCloudflareOnlyModel`), copilot
+  VFS model list and `providers/utils.getProviderFromModel` honour it. Credentials: `getApiKeyWithBYOK('cloudflare')`
   returns the placeholder `cloudflare-unified-billing`; the provider reads the token from env, so
   it never sits in request objects. Usage is billed to the workspace (`isBYOK: false`).
 - Local copilot: in Cloudflare mode the default transport is `cloudflare` (unified endpoint,
   bare OpenAI ids are sent as `openai/<id>`, e.g. `COPILOT_MODEL=openai/gpt-5.5` or
-  `anthropic/claude-sonnet-5`; `COPILOT_PROVIDER=cloudflare|openai` pins it). The copilot picker
-  shows the same six Cloudflare models under Anthropic / Google / Workers AI only in Cloudflare
-  mode. Their `local_copilot_user_access.default_model` enum slots reuse old values
-  (see `LOCAL_COPILOT_DEFAULT_MODEL_ENUM_SLOTS`) — replace with real values in the next migration.
+  `anthropic/claude-sonnet-5`; `COPILOT_PROVIDER=cloudflare|openai` pins it). The copilot catalog
+  (`local-copilot/lib/model-catalog.ts`) is derived from `providers/models.ts`: GPT-5.5 (default)
+  and GPT-5 mini always, every other model only in Cloudflare mode, grouped OpenAI / Anthropic /
+  Google / Workers AI. Left out because the copilot speaks Chat Completions with tools: GPT-5.4 /
+  5.5 Pro and GPT-5.6 (Responses-only on Cloudflare), GPT-6 Sol / Luna (OpenAI: function calling
+  on Chat Completions only with reasoning off). `local_copilot_user_access.default_model` is text
+  since migration **0384** (stores the picker id; old enum labels are decoded on read), because
+  the 16-value enum could not hold ~45 choices.
+
+#### Full model list (second step, 2026-10-01)
+
+Owner decision: don't limit to a few models — in Cloudflare mode offer **every** Claude, Gemini
+and OpenAI chat model Cloudflare serves through Unified Billing. Static catalog: Cloudflare has
+no documented API that lists the third-party models with prices (`GET
+/accounts/{id}/ai/models/search` is documented as "Searches Workers AI models" and its result
+schema is untyped), so the list was read from https://developers.cloudflare.com/ai/models/
+(per-model pages + `schema-input.json`) and must be refreshed by hand. Excluded as non-chat:
+Nano Banana (images), Veo / Gemini Omni (video), Gemini 3.1 Flash TTS, GPT Image, TTS-1,
+GPT-4o Transcribe. Prices are $ per 1M tokens (input / cached input / output).
+
+OpenAI — provider `openai`, Responses API through the gateway `/openai` path. Context, max
+output and reasoning efforts from OpenAI's model pages; prices from OpenAI where Cloudflare's
+differ (kept the higher so usage is never billed below cost: GPT-4o and GPT-4o mini — Cloudflare
+lists half; GPT-5.6 Sol — Cloudflare $2 / $10, OpenAI $4 / $20 "promotional"). Long-context
+tier (2x input / 1.5x output above 272k input) on GPT-6, GPT-5.6, GPT-5.5, GPT-5.4, GPT-5.4 Pro.
+Reasoning models take no temperature; GPT-4.x take 0–2.
+
+| Id | Price | Context | Max out | Reasoning effort | Where |
+|---|---|---|---|---|---|
+| `gpt-6-astra` | 10 / 1 / 50 | 1.05M | 128k | low…max | Cloudflare mode |
+| `gpt-6-sol` | 2 / 0.2 / 10 | 1.05M | 128k | none…max | Cloudflare mode |
+| `gpt-6-luna` | 0.1 / 0.01 / 0.5 | 1.05M | 128k | none…max | Cloudflare mode |
+| `gpt-5.6-sol` | 4 / 0.4 / 20 | 1.05M | 128k | none…max | Cloudflare mode |
+| `gpt-5.6-terra` | 2 / 0.2 / 12 | 1.05M | 128k | none…max | Cloudflare mode |
+| `gpt-5.6-luna` | 0.2 / 0.02 / 1.2 | 1.05M | 128k | none…max | Cloudflare mode |
+| `gpt-5.5` | 5 / 0.5 / 30 | 1.05M | 128k | none…xhigh | always |
+| `gpt-5.5-pro` | 30 / – / 180 | 1.05M | 128k | medium, high, xhigh | Cloudflare mode |
+| `gpt-5.4` | 2.5 / 0.25 / 15 | 1.05M | 128k | none…xhigh | Cloudflare mode |
+| `gpt-5.4-pro` | 30 / – / 180 | 1.05M | 128k | medium, high, xhigh | Cloudflare mode |
+| `gpt-5.4-mini` | 0.75 / 0.075 / 4.5 | 400k | 128k | none…xhigh | Cloudflare mode |
+| `gpt-5.4-nano` | 0.2 / 0.02 / 1.25 | 400k | 128k | none…xhigh | Cloudflare mode |
+| `gpt-5.1` | 1.25 / 0.125 / 10 | 400k | 128k | none…high | Cloudflare mode |
+| `gpt-5` | 1.25 / 0.125 / 10 | 400k | 128k | minimal…high | Cloudflare mode |
+| `gpt-5-mini` (default) | 0.25 / 0.025 / 2 | 400k | 128k | minimal…high | always |
+| `gpt-5-nano` | 0.05 / 0.005 / 0.4 | 400k | 128k | minimal…high | Cloudflare mode |
+| `o4-mini` | 1.1 / 0.275 / 4.4 | 200k | 100k | low…high | Cloudflare mode |
+| `o3` | 2 / 0.5 / 8 | 200k | 100k | low…high | Cloudflare mode |
+| `o3-mini` | 1.1 / 0.55 / 4.4 | 200k | 100k | low…high | Cloudflare mode |
+| `gpt-4.1` | 2 / 0.5 / 8 | 1.05M | 32,768 | – (temp 0–2) | always |
+| `gpt-4.1-mini` | 0.4 / 0.1 / 1.6 | 1.05M | 32,768 | – (temp 0–2) | always |
+| `gpt-4.1-nano` | 0.1 / 0.025 / 0.4 | 1.05M | 32,768 | – (temp 0–2) | Cloudflare mode |
+| `gpt-4o` | 2.5 / 1.25 / 10 | 128k | 16,384 | – (temp 0–2) | Cloudflare mode |
+| `gpt-4o-mini` | 0.15 / 0.075 / 0.6 | 128k | 16,384 | – (temp 0–2) | Cloudflare mode |
+
+Why OpenAI models stay on the Responses path: the gateway `/openai` path is OpenAI's own API, so
+every OpenAI chat model (including the Responses-only Pro and GPT-5.6 models) works there with
+no new code, and workflows / Agent memory keep one protocol. They are gated to Cloudflare mode
+(`cloudflareOnly`) only so a deployment without Cloudflare keeps its four curated models.
+
+Anthropic — provider `cloudflare`, unified chat completions. Prices and context from Cloudflare,
+max output from Anthropic's model pages. Temperature 0–1 only where Cloudflare's schema has it
+(Opus 4.6 / 4.5, Sonnet 4.6 / 4.5, Haiku 4.5); the others reject temperature. Forced tool use off
+for Opus 5.5 and Fable 5.1 (Anthropic returns an error). No reasoning control is sent.
+
+| Id | Price | Context | Max out |
+|---|---|---|---|
+| `anthropic/claude-fable-5.1` | 10 / 0.25 / 50 | 1M | 128k |
+| `anthropic/claude-fable-5` | 10 / 1 / 50 | 1M | 128k |
+| `anthropic/claude-opus-5.5` | 4 / 0.2 / 20 | 1M | 128k |
+| `anthropic/claude-opus-5` | 5 / 0.5 / 25 | 1M | 128k |
+| `anthropic/claude-opus-4.8` | 5 / 0.5 / 25 | 1M | 128k |
+| `anthropic/claude-opus-4.7` | 5 / 0.5 / 25 | 1M | 128k |
+| `anthropic/claude-opus-4.6` | 5 / 0.5 / 25 | 1M | 128k |
+| `anthropic/claude-opus-4.5` | 5 / 0.5 / 25 | 200k | 64k |
+| `anthropic/claude-sonnet-5` | 2 / 0.2 / 10 | 1M | 128k |
+| `anthropic/claude-sonnet-4.6` | 3 / 0.3 / 15 | 200k (Anthropic: 1M) | 128k |
+| `anthropic/claude-sonnet-4.5` (legacy: deprecated by Anthropic) | 3 / 0.3 / 15 | 200k | 64k |
+| `anthropic/claude-haiku-4.5` | 1 / 0.1 / 5 | 200k | 64k |
+
+Google — provider `cloudflare`, unified chat completions. Prices and context from Cloudflare,
+max output 65,536 for all (Google model pages), temperature 0–2. `reasoningEffort` is forwarded
+as `reasoning_effort` (Google's OpenAI compatibility): `none` only on 2.5 Flash / Flash-Lite,
+`minimal` only where Google maps it (2.5, 3 Flash, 3.1 Pro, 3.1 Flash-Lite); 3.5+ get
+low / medium / high (3.7 / 3.8 reject `minimal`).
+
+| Id | Price | Context |
+|---|---|---|
+| `google/gemini-3.8-flash` | 0.75 / 0.075 / 3.75 | 1,048,576 |
+| `google/gemini-3.7-flash` | 0.75 / 0.075 / 3.75 | 1,048,576 |
+| `google/gemini-3.6-flash` | 1.5 / 0.15 / 7.5 | 1,048,576 |
+| `google/gemini-3.5-flash` | 1.5 / 0.15 / 9 | 1,048,576 |
+| `google/gemini-3.5-flash-lite` | 0.3 / 0.03 / 2.5 | 1,048,576 |
+| `google/gemini-3.1-pro` | 2 / 0.2 / 12 (above 200k: 4 / 0.4 / 18) | 1M |
+| `google/gemini-3.1-flash-lite` | 0.25 / 0.03 / 1.5 | 1M |
+| `google/gemini-3-flash` | 0.5 / 0.05 / 3 | 1M |
+| `google/gemini-2.5-pro` | 1.25 / 0.125 / 10 | 1M |
+| `google/gemini-2.5-flash` | 0.3 / 0.03 / 2.5 | 1M |
+| `google/gemini-2.5-flash-lite` | 0.1 / 0.01 / 0.4 | 1M |
+
+Workers AI (unchanged): `@cf/meta/llama-3.3-70b-instruct-fp8-fast` 0.293 / – / 2.253, 24k;
+`@cf/zai-org/glm-4.7-flash` 0.0605 / – / 0.4, 131,072.
+
+Pickers: options carry a readable `label` and a vendor `group` (OpenAI, Anthropic, Google,
+Workers AI); the sub-block combobox renders them as sections (emcn `Combobox` `groups` now
+filter by the typed value too) and typing a model's name stores its id. Not recorded by the
+cost ledger: prompt-cache **write** prices (Anthropic, GPT-6 / GPT-5.6) — `ModelPricing` has no
+field for them. Deploy: `deploy.sh` runs the migrations, which now include 0384 (copilot default
+model enum → text).
+
+Uncertain / verify live:
+- Claude through `/ai/v1/chat/completions`: Cloudflare's Claude pages list only the Anthropic
+  Messages format (unchanged risk from the first step) — test tools, JSON output and images.
+- Gemini 3.x tool calling through chat completions: Gemini 3 needs its thought signatures sent
+  back between tool turns; whether Cloudflare's unified endpoint carries them is not documented.
+- GPT-5.6 is listed by Cloudflare with the Responses format only; it runs on the `/openai`
+  Responses path here, which should be fine, but Unified Billing for it is unverified.
+- Pro models can run for minutes (OpenAI recommends background mode) — expect slow Agent runs.
+- The o-series effort values (low / medium / high) are OpenAI's long-standing values; their
+  current model pages do not restate them.
+- Gemini 3.8 Flash also lists "Default (per second) $0.75" on Cloudflare (unclear what it bills).
 
 Feature support on the unified chat-completions endpoint (from Cloudflare docs; verify live):
 - Google Gemini 2.5: documented "Chat Completions" format with `tools`, `tool_choice`,

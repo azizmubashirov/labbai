@@ -207,8 +207,9 @@ export function getLocalCopilotConfig(): LocalCopilotConfig {
  *
  * Catalog ids apply when the env transport is `openai` or `cloudflare`. OpenAI entries
  * run on the env transport (the OpenAI API / gateway, or Cloudflare's unified endpoint as
- * `openai/<id>`); Cloudflare entries (Anthropic, Google, Workers AI) run on `cloudflare`
- * and need Cloudflare mode — without it the env config is used unchanged. When
+ * `openai/<id>`); Cloudflare entries (Anthropic, Google, Workers AI) run on `cloudflare`.
+ * Every entry but GPT-5.5 / GPT-5 mini is Cloudflare-only and needs Cloudflare mode —
+ * without it the env config is used unchanged. When
  * `COPILOT_PROVIDER` pins Azure or another OpenAI-compatible endpoint (deployment names /
  * custom ids), the env config (`COPILOT_MODEL`) wins.
  */
@@ -219,10 +220,10 @@ export function buildLocalCopilotConfigForCatalog(
   if (base.provider !== 'openai' && base.provider !== 'cloudflare') return base
 
   const entry = resolveLocalCopilotCatalogEntry(catalogId)
+  if (entry.cloudflareOnly && !getCloudflareAIConfig()) return base
   const model = entry.model?.trim() || process.env.COPILOT_MODEL?.trim() || DEFAULT_MODEL
 
   if (entry.provider === 'cloudflare' && base.provider !== 'cloudflare') {
-    if (!getCloudflareAIConfig()) return base
     const provider: LocalCopilotProviderId = 'cloudflare'
     return {
       ...base,

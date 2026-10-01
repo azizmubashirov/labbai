@@ -155,6 +155,27 @@ describe('cloudflareProvider', () => {
       },
     })
     expect(body.stream).toBeUndefined()
+    expect(body.reasoning_effort).toBeUndefined()
+  })
+
+  it('forwards an explicit reasoning effort as reasoning_effort, never "auto"', async () => {
+    mockFetch
+      .mockResolvedValueOnce(Response.json(completion({ content: 'ok' }, 'stop')))
+      .mockResolvedValueOnce(Response.json(completion({ content: 'ok' }, 'stop')))
+
+    await cloudflareProvider.executeRequest({
+      model: 'google/gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoningEffort: 'low',
+    })
+    await cloudflareProvider.executeRequest({
+      model: 'google/gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+      reasoningEffort: 'auto',
+    })
+
+    expect(call(0).body.reasoning_effort).toBe('low')
+    expect(call(1).body.reasoning_effort).toBeUndefined()
   })
 
   it('names a custom gateway with CLOUDFLARE_AI_GATEWAY', async () => {

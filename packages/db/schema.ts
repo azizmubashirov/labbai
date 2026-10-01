@@ -7675,6 +7675,10 @@ export const localCopilotAuditStatusEnum = pgEnum('local_copilot_audit_status', 
  * Allowlisted Local Copilot picker ids. Keep in sync with
  * `LOCAL_COPILOT_CATALOG` in `apps/labbai/local-copilot/lib/model-catalog.ts`.
  */
+/**
+ * Legacy: `local_copilot_user_access.default_model` was this enum until migration 0384 made
+ * it text. The type still exists in the database; kept so schema diffs do not drop it.
+ */
 export const localCopilotDefaultModelEnum = pgEnum('local_copilot_default_model', [
   'openai',
   'claude',
@@ -7839,7 +7843,12 @@ export const localCopilotUserAccess = pgTable(
     email: text('email').notNull(),
     hasAccess: boolean('has_access').notNull().default(true),
     localOnly: boolean('local_only').notNull().default(true),
-    defaultModel: localCopilotDefaultModelEnum('default_model').notNull().default('openai'),
+    /**
+     * Copilot picker id (`gpt-5.5`, `anthropic/claude-opus-5.5`, …). Text since 0384: the
+     * picker outgrew {@link localCopilotDefaultModelEnum}; rows written before it hold legacy
+     * enum labels (`openai`, …), which the app decodes on read.
+     */
+    defaultModel: text('default_model').notNull().default('openai'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },

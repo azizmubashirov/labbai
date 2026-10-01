@@ -17,8 +17,8 @@ ported in. We do not sync with upstream Sim; we develop it ourselves from here.
   OAuth providers and knowledge connectors
 - LLM providers: the old per-vendor providers stay removed. All models are managed from one
   place — Cloudflare (one account, one token, one balance via Unified Billing, gateway `labbai`):
-  OpenAI plus Anthropic / Google / Workers AI through Cloudflare (coded 2026-10-01, see
-  "Models" and HANDOFF.md "Cloudflare AI (one account for every model)").
+  every OpenAI, Anthropic and Google chat model plus two Workers AI models through Cloudflare
+  (coded 2026-10-01, see "Models" and HANDOFF.md "Cloudflare AI (one account for every model)").
 - Sim cloud copilot path (Go mothership client) and the Local/Cloud switch — local copilot only
 - Copilot providers other than the OpenAI-compatible one (Bedrock, Vertex, Gemini)
 - PII service (`apps/pii`), Pi / A2A / Mothership blocks, video generation,
@@ -70,16 +70,30 @@ Owner decision 2026-10-01: manage every model from Cloudflare (one account, one 
 balance via Unified Billing, AI Gateway `labbai`). Env: `CLOUDFLARE_ACCOUNT_ID`,
 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_AI_GATEWAY` (default `labbai`) — "Cloudflare mode".
 
+Owner decision 2026-10-01 (second): don't limit the list — in Cloudflare mode the pickers offer
+**every** Claude, Gemini and OpenAI chat model Cloudflare serves through Unified Billing (static
+catalog, from Cloudflare's model catalog read 2026-10-01; full table in HANDOFF.md).
+
 - OpenAI (provider `openai`, Responses API through the gateway's `/openai` path, plain ids so
-  existing workflows are unchanged): strong `gpt-5.5` · fast, default for Agent blocks
-  `gpt-5-mini` · `gpt-4.1` · `gpt-4.1-mini` · embeddings `text-embedding-3-small`.
+  existing workflows are unchanged): curated everywhere — strong `gpt-5.5` · fast, default for
+  Agent blocks `gpt-5-mini` · `gpt-4.1` · `gpt-4.1-mini`; Cloudflare mode adds GPT-6 Astra / Sol /
+  Luna, GPT-5.6 Sol / Terra / Luna, GPT-5.5 Pro, GPT-5.4 (+ Pro, mini, nano), GPT-5.1, GPT-5,
+  GPT-5 nano, o4-mini, o3, o3-mini, GPT-4.1 nano, GPT-4o, GPT-4o mini. Embeddings
+  `text-embedding-3-small`.
 - Anthropic / Google / Workers AI (provider `cloudflare`, Cloudflare's unified
-  `/ai/v1/chat/completions`, Cloudflare mode only): `anthropic/claude-sonnet-5`,
-  `anthropic/claude-haiku-4.5`, `google/gemini-2.5-pro`, `google/gemini-2.5-flash`,
-  `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (strong open model),
-  `@cf/zai-org/glm-4.7-flash` (cheap and fast). Selectable in the Agent block and the copilot
-  picker without any user key; hidden (and a stored id runs on `gpt-5-mini`) outside
-  Cloudflare mode.
+  `/ai/v1/chat/completions`, Cloudflare mode only): Claude Fable 5.1 / 5, Opus 5.5 / 5 / 4.8 /
+  4.7 / 4.6 / 4.5, Sonnet 5 / 4.6 / 4.5 (legacy), Haiku 4.5; Gemini 3.8 / 3.7 / 3.6 / 3.5 Flash,
+  3.5 Flash-Lite, 3.1 Pro, 3.1 Flash-Lite, 3 Flash, 2.5 Pro / Flash / Flash-Lite; Workers AI
+  `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (strong open model), `@cf/zai-org/glm-4.7-flash`
+  (cheap and fast).
+- Pickers (Agent / Router / Evaluator / Guardrails / Translate blocks, fallback list, copilot)
+  group models by vendor — OpenAI, Anthropic, Google, Workers AI — with readable names; the
+  stored value is still the model id. No user key anywhere. Outside Cloudflare mode only the
+  four curated OpenAI models show, and a stored Cloudflare-only id runs on the closest curated
+  model (`gpt-5.5` for flagship ids, else `gpt-5-mini`).
+- The copilot offers the same list minus the models it cannot run on Chat Completions with
+  tools (GPT-5.4 / 5.5 Pro, GPT-5.6, GPT-6 Sol / Luna); its per-user default is stored as text
+  (migration 0384).
 - Without the Cloudflare vars: OpenAI directly with `OPENAI_API_KEY`, OpenAI models only.
 
 ## Build (new, after cleanup)
@@ -114,8 +128,9 @@ balance via Unified Billing, AI Gateway `labbai`). Env: `CLOUDFLARE_ACCOUNT_ID`,
 - **Cloudflare AI** — coded 2026-10-01 (not deployed): one Cloudflare account for every model.
   `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (+ optional `CLOUDFLARE_AI_GATEWAY`) route
   OpenAI (gateway `/openai`: Agent, copilot, wand, notifications, embeddings, vision, images,
-  speech) and the new Claude / Gemini / Workers AI models (unified chat completions) through
-  Cloudflare Unified Billing. The earlier `CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL` setup still
+  speech) and every Claude / Gemini chat model plus two Workers AI models (unified chat
+  completions) through Cloudflare Unified Billing; the full model list (2026-10-01, second step)
+  needs `migrate` for 0384 on deploy. The earlier `CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL` setup still
   works as a legacy alias. Rollback and details: HANDOFF.md "Cloudflare AI (one account for
   every model)".
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,

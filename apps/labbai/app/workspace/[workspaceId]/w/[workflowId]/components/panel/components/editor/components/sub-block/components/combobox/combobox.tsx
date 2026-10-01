@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Combobox, type ComboboxOption, cn } from '@labbai/emcn'
+import { Combobox, type ComboboxOption, type ComboboxOptionGroup, cn } from '@labbai/emcn'
 import { useReactFlow } from '@xyflow/react'
 import { useDeploymentShape } from '@/lib/core/config/deployment-shape'
 import type { SelectorKey } from '@/lib/selectors/manifest'
@@ -36,7 +36,13 @@ const EMPTY_OPTIONS: ComboBoxOption[] = []
  */
 type ComboBoxOption =
   | string
-  | { label: string; id: string; icon?: React.ComponentType<{ className?: string }> }
+  | {
+      label: string
+      id: string
+      icon?: React.ComponentType<{ className?: string }>
+      /** Section header the option is listed under (the model picker's vendor sections). */
+      group?: string
+    }
 
 /**
  * Props for the ComboBox component
@@ -232,6 +238,31 @@ export const ComboBox = memo(function ComboBox({
       return { label: option.label, value: option.id, icon: option.icon }
     })
   }, [evaluatedOptions])
+
+  /**
+   * Section headers for lists whose options declare a `group` (the model picker: OpenAI,
+   * Anthropic, Google, Workers AI). Options without one share an unlabeled section;
+   * `undefined` keeps the flat list when no option has a group.
+   */
+  const comboboxGroups = useMemo((): ComboboxOptionGroup[] | undefined => {
+    const hasGroups = evaluatedOptions.some(
+      (option) => typeof option !== 'string' && Boolean(option.group)
+    )
+    if (!hasGroups) return undefined
+    const groups: ComboboxOptionGroup[] = []
+    const bySection = new Map<string, ComboboxOptionGroup>()
+    evaluatedOptions.forEach((option, index) => {
+      const section = typeof option === 'string' ? '' : (option.group ?? '')
+      let group = bySection.get(section)
+      if (!group) {
+        group = section ? { section, items: [] } : { items: [] }
+        bySection.set(section, group)
+        groups.push(group)
+      }
+      group.items.push(comboboxOptions[index])
+    })
+    return groups
+  }, [evaluatedOptions, comboboxOptions])
 
   /**
    * Extracts the value identifier from an option
@@ -460,7 +491,8 @@ export const ComboBox = memo(function ComboBox({
         if (typeof option === 'string') {
           return option === newValue
         }
-        return option.id === newValue
+        // A model typed by its readable name (`GPT-5 mini`) stores the model id.
+        return option.id === newValue || (subBlockId === 'model' && option.label === newValue)
       })
 
       // If a matching option is found, store its ID; otherwise store the raw value
@@ -472,7 +504,7 @@ export const ComboBox = memo(function ComboBox({
         : newValue
       setStoreValue(nextValue)
     },
-    [isPreview, evaluatedOptions, setStoreValue]
+    [isPreview, evaluatedOptions, setStoreValue, subBlockId]
   )
 
   return (
@@ -500,6 +532,7 @@ export const ComboBox = memo(function ComboBox({
           return (
             <Combobox
               options={comboboxOptions}
+              groups={comboboxGroups}
               value={inputValue}
               selectedValue={value ?? ''}
               onChange={comboboxOnChange}

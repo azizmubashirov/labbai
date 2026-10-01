@@ -4,8 +4,12 @@ import { isCloudflareAIEnabled, platformLlmProviders } from '@/lib/core/config/e
 import { containsReference } from '@/lib/workflows/sanitization/references'
 import type { SubBlockConfig } from '@/blocks/types'
 import {
+  getModelDisplayName,
+  getModelPickerGroup,
+  getModelPickerGroupLabel,
   getModelSunsetStatus,
   getProviderIcon,
+  isCloudflareOnlyModel,
   isEvaluationModel,
   PROVIDER_DEFINITIONS,
 } from '@/providers/models'
@@ -33,9 +37,10 @@ export const SERVICE_ACCOUNT_SUBBLOCKS: SubBlockConfig[] = [
 ]
 
 /**
- * Returns model options for combobox subblocks: the curated catalog — OpenAI always,
- * plus the Cloudflare models (Anthropic, Google, Workers AI) in Cloudflare mode. No
- * dynamic providers, no local model servers.
+ * Returns model options for combobox subblocks: the four curated OpenAI models always, plus
+ * in Cloudflare mode every other OpenAI chat model and the Anthropic, Google and Workers AI
+ * models. Each option carries a readable label and its vendor section (`group`); the id is
+ * what the block stores. No dynamic providers, no local model servers.
  */
 export function getModelOptions() {
   return buildModelOptions(false)
@@ -47,18 +52,24 @@ export function getAgentModelOptions() {
 }
 
 function buildModelOptions(includeEvaluation: boolean) {
-  return Object.entries(PROVIDER_DEFINITIONS)
-    // Cloudflare models (Anthropic, Google, Workers AI) only run in Cloudflare mode.
-    .filter(([providerId]) => providerId !== 'cloudflare' || isCloudflareAIEnabled)
-    .flatMap(([, provider]) => provider.models.map((model) => model.id))
+  return Object.values(PROVIDER_DEFINITIONS)
+    .flatMap((provider) => provider.models.map((model) => model.id))
     .filter(
       (model) =>
+        // Cloudflare-only models (Unified Billing) run only in Cloudflare mode.
+        (isCloudflareAIEnabled || !isCloudflareOnlyModel(model)) &&
         getModelSunsetStatus(model) !== 'deprecated' &&
         (includeEvaluation || !isEvaluationModel(model))
     )
     .map((model) => {
       const icon = getProviderIcon(model)
-      return { label: model, id: model, ...(icon && { icon }) }
+      const group = getModelPickerGroup(model)
+      return {
+        label: getModelDisplayName(model),
+        id: model,
+        ...(group && { group: getModelPickerGroupLabel(group) }),
+        ...(icon && { icon }),
+      }
     })
 }
 

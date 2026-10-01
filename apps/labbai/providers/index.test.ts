@@ -2099,6 +2099,50 @@ describe('executeProviderRequest — Cloudflare routing', () => {
     expect(sentRequest()).toMatchObject({ model: 'gpt-4.1' })
   })
 
+  it('keeps a Gemini reasoning effort on the cloudflare provider', async () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+
+    await executeProviderRequest('cloudflare', {
+      model: 'google/gemini-3.1-pro',
+      workspaceId: 'ws-1',
+      reasoningEffort: 'low',
+      temperature: 1,
+    })
+
+    expect(getProviderExecutor).toHaveBeenCalledWith('cloudflare')
+    expect(sentRequest()).toMatchObject({
+      model: 'google/gemini-3.1-pro',
+      reasoningEffort: 'low',
+      temperature: 1,
+    })
+  })
+
+  it('runs every other OpenAI chat model on the Responses path in Cloudflare mode', async () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'cf-token' })
+
+    await executeProviderRequest('openai', {
+      model: 'GPT-6-Sol',
+      workspaceId: 'ws-1',
+      reasoningEffort: 'max',
+      temperature: 0.4,
+    })
+
+    expect(getProviderExecutor).toHaveBeenCalledWith('openai')
+    expect(sentRequest()).toMatchObject({ model: 'gpt-6-sol', reasoningEffort: 'max' })
+    expect(sentRequest().temperature).toBeUndefined()
+  })
+
+  it('maps the Cloudflare-only OpenAI models to curated ones outside Cloudflare mode', async () => {
+    setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
+
+    await executeProviderRequest('openai', { model: 'gpt-6-sol', workspaceId: 'ws-1' })
+    await executeProviderRequest('openai', { model: 'gpt-4o', workspaceId: 'ws-1' })
+
+    expect(getProviderExecutor).toHaveBeenCalledWith('openai')
+    expect(mockExecuteRequest.mock.calls[0][0]).toMatchObject({ model: 'gpt-5.5' })
+    expect(mockExecuteRequest.mock.calls[1][0]).toMatchObject({ model: 'gpt-5-mini' })
+  })
+
   it('runs a Cloudflare id on the default OpenAI model outside Cloudflare mode', async () => {
     setEnv({ CLOUDFLARE_ACCOUNT_ID: undefined, CLOUDFLARE_API_TOKEN: undefined })
 

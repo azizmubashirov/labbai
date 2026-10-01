@@ -31,6 +31,7 @@ import {
   shouldRequireApiKeyForModel,
 } from '@/blocks/utils'
 import { getProviderModels } from '@/providers/models'
+import { OPENAI_CLOUDFLARE_MODEL_IDS, OPENAI_MODEL_IDS } from '@/providers/openai/model-ids'
 import { getProviderFromModel } from '@/providers/utils'
 
 describe('BUILT_IN_TOOL_TYPES', () => {
@@ -46,21 +47,50 @@ describe('BUILT_IN_TOOL_TYPES', () => {
 })
 
 describe('model options', () => {
-  it('lists exactly the curated OpenAI models', () => {
-    const curated = getProviderModels('openai')
-    expect(curated.length).toBeGreaterThan(0)
-    expect(getModelOptions().map((option) => option.id)).toEqual(curated)
-    expect(getAgentModelOptions().map((option) => option.id)).toEqual(curated)
+  it('lists exactly the four curated OpenAI models outside Cloudflare mode', () => {
+    expect(getModelOptions().map((option) => option.id)).toEqual([...OPENAI_MODEL_IDS])
+    expect(getAgentModelOptions().map((option) => option.id)).toEqual([...OPENAI_MODEL_IDS])
+  })
+
+  it('labels options with readable names under their vendor section', () => {
+    expect(getModelOptions().find((option) => option.id === 'gpt-5-mini')).toMatchObject({
+      label: 'GPT-5 mini',
+      group: 'OpenAI',
+    })
+
+    setEnvFlags({ isCloudflareAIEnabled: true })
+    try {
+      const options = getAgentModelOptions()
+      expect(options.find((option) => option.id === 'anthropic/claude-opus-5.5')).toMatchObject({
+        label: 'Claude Opus 5.5',
+        group: 'Anthropic',
+      })
+      expect(options.find((option) => option.id === 'google/gemini-3.8-flash')).toMatchObject({
+        label: 'Gemini 3.8 Flash',
+        group: 'Google',
+      })
+      expect(options.find((option) => option.id === '@cf/zai-org/glm-4.7-flash')).toMatchObject({
+        label: 'GLM-4.7 Flash',
+        group: 'Workers AI',
+      })
+      expect(options.find((option) => option.id === 'o3')).toMatchObject({
+        label: 'o3',
+        group: 'OpenAI',
+      })
+    } finally {
+      resetEnvFlagsMock()
+    }
   })
 
   it('offers no auto-routing pseudo-model', () => {
     expect(getModelOptions().map((option) => option.id)).not.toContain('sim-auto')
   })
 
-  it('adds the Cloudflare models (no API key field) only in Cloudflare mode', () => {
+  it('adds every Cloudflare model (no API key field) only in Cloudflare mode', () => {
     const openai = getProviderModels('openai')
     const cloudflare = getProviderModels('cloudflare')
     expect(cloudflare).toContain('anthropic/claude-sonnet-5')
+    expect(openai).toEqual(expect.arrayContaining([...OPENAI_CLOUDFLARE_MODEL_IDS]))
 
     setEnvFlags({ isCloudflareAIEnabled: true, platformLlmProviders: new Set(['openai', 'cloudflare']) })
     try {
@@ -70,7 +100,7 @@ describe('model options', () => {
       resetEnvFlagsMock()
     }
 
-    expect(getAgentModelOptions().map((option) => option.id)).toEqual(openai)
+    expect(getAgentModelOptions().map((option) => option.id)).toEqual([...OPENAI_MODEL_IDS])
     for (const id of cloudflare) expect(shouldRequireApiKeyForModel(id)).toBe(false)
   })
 })

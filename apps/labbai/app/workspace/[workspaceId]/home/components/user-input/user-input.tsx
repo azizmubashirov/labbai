@@ -105,7 +105,7 @@ function LocalCopilotModelPicker({ catalogId, onCatalogIdChange }: LocalCopilotM
           }}
         >
           {getAvailableLocalCopilotProviderGroups(isCloudflareAIEnabled).map((group, groupIndex) => {
-            const entries = getLocalCopilotCatalogEntriesForGroup(group.id)
+            const entries = getLocalCopilotCatalogEntriesForGroup(group.id, isCloudflareAIEnabled)
             return (
               <div key={group.id}>
                 {groupIndex > 0 ? <DropdownMenuSeparator /> : null}

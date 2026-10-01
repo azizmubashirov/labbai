@@ -4,12 +4,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   isOpenAIReasoningModelId,
+  OPENAI_CLOUDFLARE_MODEL_IDS,
   OPENAI_DEFAULT_MODEL,
   OPENAI_MODEL_GPT_4_1,
   OPENAI_MODEL_GPT_4_1_MINI,
   OPENAI_MODEL_GPT_5_5,
   OPENAI_MODEL_GPT_5_MINI,
   OPENAI_MODEL_IDS,
+  resolveCloudflareOpenAIModelId,
   resolveOpenAIModelId,
 } from '@/providers/openai/model-ids'
 
@@ -76,4 +78,27 @@ describe('isOpenAIReasoningModelId', () => {
       expect(isOpenAIReasoningModelId(model)).toBe(false)
     }
   )
+})
+
+describe('resolveCloudflareOpenAIModelId', () => {
+  it.each([...OPENAI_CLOUDFLARE_MODEL_IDS])('resolves Cloudflare-mode id %s', (model) => {
+    expect(resolveCloudflareOpenAIModelId(model)).toBe(model)
+  })
+
+  it('normalizes case, whitespace and the openai/ prefix', () => {
+    expect(resolveCloudflareOpenAIModelId(' GPT-6-Sol ')).toBe('gpt-6-sol')
+    expect(resolveCloudflareOpenAIModelId('openai/o3')).toBe('o3')
+  })
+
+  it.each([...OPENAI_MODEL_IDS, 'gpt-4-turbo', 'anthropic/claude-sonnet-5', 'azure/gpt-4o', ''])(
+    'returns undefined for %s (curated or not a Cloudflare OpenAI chat model)',
+    (model) => {
+      expect(resolveCloudflareOpenAIModelId(model)).toBeUndefined()
+    }
+  )
+
+  it('keeps the curated and Cloudflare-only sets disjoint', () => {
+    const curated = new Set<string>(OPENAI_MODEL_IDS)
+    for (const id of OPENAI_CLOUDFLARE_MODEL_IDS) expect(curated.has(id)).toBe(false)
+  })
 })

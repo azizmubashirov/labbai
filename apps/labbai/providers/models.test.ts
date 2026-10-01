@@ -7,24 +7,32 @@ import {
   getBaseModelProviders,
   getHostedModels,
   getModelCapabilities,
+  getModelDisplayName,
+  getModelPickerGroup,
   getModelPricing,
+  getModelSunsetStatus,
   getModelsWithPromptCaching,
   getPromptCachingMinimumTokens,
   getProviderDefaultModel,
   getProviderFileAttachment,
   getProviderFromModel,
   getProviderModels,
+  getReasoningEffortValuesForModel,
   getStaticProviderModels,
   getThinkingStreamVisibility,
+  isCloudflareOnlyModel,
   isCustomModelId,
   isKnownModelId,
   isLegacyChatModelId,
   isModelDeprecated,
+  MODEL_PICKER_GROUPS,
   orderModelIdsByReleaseDate,
   PROVIDER_DEFINITIONS,
   supportsForcedToolUse,
 } from '@/providers/models'
 import {
+  CLOUDFLARE_ANTHROPIC_MODEL_IDS,
+  CLOUDFLARE_GOOGLE_MODEL_IDS,
   CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
   CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
   CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
@@ -32,8 +40,10 @@ import {
   CLOUDFLARE_MODEL_GLM_4_7_FLASH,
   CLOUDFLARE_MODEL_IDS,
   CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+  CLOUDFLARE_WORKERS_AI_MODEL_IDS,
 } from '@/providers/cloudflare/model-ids'
 import {
+  OPENAI_CLOUDFLARE_MODEL_IDS,
   OPENAI_DEFAULT_MODEL,
   OPENAI_MODEL_GPT_4_1,
   OPENAI_MODEL_GPT_4_1_MINI,
@@ -44,11 +54,87 @@ import {
 import { supportsPromptCaching } from '@/providers/utils'
 
 describe('OpenAI catalog', () => {
-  it('has the openai and cloudflare providers and the curated OpenAI model ids', () => {
+  it('has the openai and cloudflare providers and every OpenAI chat model id', () => {
     expect(Object.keys(PROVIDER_DEFINITIONS)).toEqual(['openai', 'cloudflare'])
-    expect(getProviderModels('openai')).toEqual([...OPENAI_MODEL_IDS])
+    const openai = getProviderModels('openai')
+    expect([...openai].sort()).toEqual([...OPENAI_MODEL_IDS, ...OPENAI_CLOUDFLARE_MODEL_IDS].sort())
+    expect(new Set(openai).size).toBe(openai.length)
     expect(getProviderDefaultModel('openai')).toBe(OPENAI_DEFAULT_MODEL)
     expect(OPENAI_DEFAULT_MODEL).toBe(OPENAI_MODEL_GPT_5_MINI)
+  })
+
+  it('lists every OpenAI chat model Cloudflare serves, and no image / speech models', () => {
+    expect([...OPENAI_CLOUDFLARE_MODEL_IDS].sort()).toEqual(
+      [
+        'gpt-6-astra',
+        'gpt-6-sol',
+        'gpt-6-luna',
+        'gpt-5.6-sol',
+        'gpt-5.6-terra',
+        'gpt-5.6-luna',
+        'gpt-5.5-pro',
+        'gpt-5.4',
+        'gpt-5.4-pro',
+        'gpt-5.4-mini',
+        'gpt-5.4-nano',
+        'gpt-5.1',
+        'gpt-5',
+        'gpt-5-nano',
+        'o4-mini',
+        'o3',
+        'o3-mini',
+        'gpt-4.1-nano',
+        'gpt-4o',
+        'gpt-4o-mini',
+      ].sort()
+    )
+    for (const id of getProviderModels('openai')) {
+      expect(id).not.toMatch(/image|tts|transcribe|embedding/)
+    }
+  })
+
+  it('marks only the models beyond the curated four as Cloudflare-only', () => {
+    for (const id of OPENAI_MODEL_IDS) expect(isCloudflareOnlyModel(id)).toBe(false)
+    for (const id of OPENAI_CLOUDFLARE_MODEL_IDS) expect(isCloudflareOnlyModel(id)).toBe(true)
+    for (const id of CLOUDFLARE_MODEL_IDS) expect(isCloudflareOnlyModel(id)).toBe(true)
+    expect(isCloudflareOnlyModel('GPT-4O')).toBe(true)
+    expect(isCloudflareOnlyModel('mystery-model')).toBe(false)
+  })
+
+  it('prices the Cloudflare-only OpenAI models, with long-context tiers', () => {
+    expect(getModelPricing('gpt-6-astra')).toMatchObject({
+      input: 10,
+      cachedInput: 1,
+      output: 50,
+      tiers: [{ aboveInputTokens: 272000, input: 20, cachedInput: 2, output: 75 }],
+    })
+    expect(getModelPricing('gpt-5.6-sol')).toMatchObject({ input: 4, output: 20 })
+    expect(getModelPricing('gpt-4o')).toMatchObject({ input: 2.5, cachedInput: 1.25, output: 10 })
+    expect(getModelPricing('gpt-5.5-pro')).toMatchObject({ input: 30, output: 180 })
+    expect(getModelPricing('gpt-5.5-pro')?.cachedInput).toBeUndefined()
+  })
+
+  it('declares OpenAI reasoning efforts and temperature per model', () => {
+    expect(getReasoningEffortValuesForModel('gpt-6-sol')).toEqual([
+      'none',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ])
+    expect(getReasoningEffortValuesForModel('gpt-6-astra')).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ])
+    expect(getReasoningEffortValuesForModel('gpt-5.5-pro')).toEqual(['medium', 'high', 'xhigh'])
+    expect(getReasoningEffortValuesForModel('o3')).toEqual(['low', 'medium', 'high'])
+    expect(getModelCapabilities('o3')?.temperature).toBeUndefined()
+    expect(getModelCapabilities('gpt-4o')?.temperature).toEqual({ min: 0, max: 2 })
+    expect(getModelCapabilities('gpt-4o')?.maxOutputTokens).toBe(16384)
   })
 
   it('returns no models or default for a removed provider', () => {
@@ -64,15 +150,26 @@ describe('OpenAI catalog', () => {
     })
   })
 
-  it('hosts every curated model on platform credentials', () => {
-    expect(getHostedModels()).toEqual([...OPENAI_MODEL_IDS, ...CLOUDFLARE_MODEL_IDS])
+  it('hosts every catalog model on platform credentials', () => {
+    expect(getHostedModels()).toEqual([
+      ...getProviderModels('openai'),
+      ...getProviderModels('cloudflare'),
+    ])
   })
 
-  it('prices every curated model', () => {
-    for (const id of OPENAI_MODEL_IDS) {
+  it('prices, names and sizes every catalog model', () => {
+    for (const id of getHostedModels()) {
       const pricing = getModelPricing(id)
       expect(pricing?.input).toBeGreaterThan(0)
       expect(pricing?.output).toBeGreaterThan(0)
+      expect(getModelPickerGroup(id)).not.toBeNull()
+    }
+    for (const provider of Object.values(PROVIDER_DEFINITIONS)) {
+      for (const model of provider.models) {
+        expect(model.name).toBeTruthy()
+        expect(getModelDisplayName(model.id)).toBe(model.name)
+        expect(model.contextWindow).toBeGreaterThan(0)
+      }
     }
   })
 
@@ -85,9 +182,9 @@ describe('OpenAI catalog', () => {
     })
   })
 
-  it('maps every curated id to openai in the base model providers', () => {
+  it('maps every OpenAI id to openai in the base model providers', () => {
     const baseModels = getBaseModelProviders()
-    for (const id of OPENAI_MODEL_IDS) {
+    for (const id of [...OPENAI_MODEL_IDS, ...OPENAI_CLOUDFLARE_MODEL_IDS]) {
       expect(baseModels[id]).toBe('openai')
     }
   })
@@ -101,17 +198,64 @@ describe('OpenAI catalog', () => {
 })
 
 describe('Cloudflare catalog', () => {
-  it('lists exactly the curated Cloudflare model ids, Gemini 2.5 Flash by default', () => {
+  it('lists every Claude and Gemini chat model plus Workers AI, Gemini 2.5 Flash default', () => {
     expect(getProviderModels('cloudflare')).toEqual([...CLOUDFLARE_MODEL_IDS])
     expect(CLOUDFLARE_MODEL_IDS).toEqual([
+      ...CLOUDFLARE_ANTHROPIC_MODEL_IDS,
+      ...CLOUDFLARE_GOOGLE_MODEL_IDS,
+      ...CLOUDFLARE_WORKERS_AI_MODEL_IDS,
+    ])
+    expect(CLOUDFLARE_ANTHROPIC_MODEL_IDS).toEqual([
+      'anthropic/claude-fable-5.1',
+      'anthropic/claude-fable-5',
+      'anthropic/claude-opus-5.5',
+      'anthropic/claude-opus-5',
+      'anthropic/claude-opus-4.8',
+      'anthropic/claude-opus-4.7',
+      'anthropic/claude-opus-4.6',
+      'anthropic/claude-opus-4.5',
       'anthropic/claude-sonnet-5',
+      'anthropic/claude-sonnet-4.6',
+      'anthropic/claude-sonnet-4.5',
       'anthropic/claude-haiku-4.5',
+    ])
+    expect(CLOUDFLARE_GOOGLE_MODEL_IDS).toEqual([
+      'google/gemini-3.8-flash',
+      'google/gemini-3.7-flash',
+      'google/gemini-3.6-flash',
+      'google/gemini-3.5-flash',
+      'google/gemini-3.5-flash-lite',
+      'google/gemini-3.1-pro',
+      'google/gemini-3.1-flash-lite',
+      'google/gemini-3-flash',
       'google/gemini-2.5-pro',
       'google/gemini-2.5-flash',
+      'google/gemini-2.5-flash-lite',
+    ])
+    expect(CLOUDFLARE_WORKERS_AI_MODEL_IDS).toEqual([
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       '@cf/zai-org/glm-4.7-flash',
     ])
     expect(getProviderDefaultModel('cloudflare')).toBe(CLOUDFLARE_MODEL_GEMINI_2_5_FLASH)
+  })
+
+  it('groups and names models for the pickers', () => {
+    expect(MODEL_PICKER_GROUPS.map((group) => group.id)).toEqual([
+      'openai',
+      'anthropic',
+      'google',
+      'workers-ai',
+    ])
+    expect(getModelPickerGroup('gpt-5-mini')).toBe('openai')
+    expect(getModelPickerGroup('o3')).toBe('openai')
+    expect(getModelPickerGroup('anthropic/claude-opus-5.5')).toBe('anthropic')
+    expect(getModelPickerGroup('Google/Gemini-3.1-Pro')).toBe('google')
+    expect(getModelPickerGroup(CLOUDFLARE_MODEL_GLM_4_7_FLASH)).toBe('workers-ai')
+    expect(getModelPickerGroup('mystery-model')).toBeNull()
+    expect(getModelDisplayName('gpt-5-mini')).toBe('GPT-5 mini')
+    expect(getModelDisplayName('anthropic/claude-opus-5.5')).toBe('Claude Opus 5.5')
+    expect(getModelDisplayName('google/gemini-3.5-flash-lite')).toBe('Gemini 3.5 Flash-Lite')
+    expect(getModelDisplayName('mystery-model')).toBe('mystery-model')
   })
 
   it('sends attachments inline (images only, no Files API)', () => {
@@ -141,6 +285,58 @@ describe('Cloudflare catalog', () => {
       input: 0.0605,
       output: 0.4,
     })
+    expect(getModelPricing('anthropic/claude-opus-5.5')).toMatchObject({
+      input: 4,
+      cachedInput: 0.2,
+      output: 20,
+    })
+    expect(getModelPricing('anthropic/claude-fable-5.1')).toMatchObject({
+      input: 10,
+      cachedInput: 0.25,
+      output: 50,
+    })
+    expect(getModelPricing('google/gemini-3.1-pro')).toMatchObject({
+      input: 2,
+      cachedInput: 0.2,
+      output: 12,
+      tiers: [{ aboveInputTokens: 200000, input: 4, cachedInput: 0.4, output: 18 }],
+    })
+    expect(getModelPricing('google/gemini-2.5-flash-lite')).toMatchObject({
+      input: 0.1,
+      output: 0.4,
+    })
+  })
+
+  it('declares Gemini reasoning efforts from Google\'s OpenAI-compatibility mapping', () => {
+    expect(getReasoningEffortValuesForModel('google/gemini-2.5-flash')).toEqual([
+      'none',
+      'minimal',
+      'low',
+      'medium',
+      'high',
+    ])
+    expect(getReasoningEffortValuesForModel('google/gemini-2.5-pro')).toEqual([
+      'minimal',
+      'low',
+      'medium',
+      'high',
+    ])
+    expect(getReasoningEffortValuesForModel('google/gemini-3.8-flash')).toEqual([
+      'low',
+      'medium',
+      'high',
+    ])
+    for (const id of [...CLOUDFLARE_ANTHROPIC_MODEL_IDS, ...CLOUDFLARE_WORKERS_AI_MODEL_IDS]) {
+      expect(getReasoningEffortValuesForModel(id)).toBeNull()
+    }
+    for (const id of CLOUDFLARE_GOOGLE_MODEL_IDS) {
+      expect(getModelCapabilities(id)?.maxOutputTokens).toBe(65536)
+    }
+  })
+
+  it('marks Claude Sonnet 4.5 legacy (Anthropic deprecated it; still callable)', () => {
+    expect(getModelSunsetStatus('anthropic/claude-sonnet-4.5')).toBe('legacy')
+    expect(isModelDeprecated('anthropic/claude-sonnet-4.5')).toBe(true)
   })
 
   it('declares temperature only where the vendor accepts it, and forced tool use', () => {
@@ -153,7 +349,25 @@ describe('Cloudflare catalog', () => {
       min: 0,
       max: 2,
     })
-    for (const id of CLOUDFLARE_MODEL_IDS) expect(supportsForcedToolUse(id)).toBe(true)
+    for (const id of [
+      'anthropic/claude-fable-5.1',
+      'anthropic/claude-fable-5',
+      'anthropic/claude-opus-5.5',
+      'anthropic/claude-opus-5',
+      'anthropic/claude-opus-4.8',
+      'anthropic/claude-opus-4.7',
+    ]) {
+      expect(getModelCapabilities(id)?.temperature).toBeUndefined()
+    }
+    expect(getModelCapabilities('anthropic/claude-opus-4.6')?.temperature).toEqual({
+      min: 0,
+      max: 1,
+    })
+    // Anthropic rejects forced tool use on Claude Opus 5.5 and Claude Fable 5.1.
+    const noForcedTools = ['anthropic/claude-opus-5.5', 'anthropic/claude-fable-5.1']
+    for (const id of CLOUDFLARE_MODEL_IDS) {
+      expect(supportsForcedToolUse(id)).toBe(!noForcedTools.includes(id))
+    }
   })
 
   it('routes curated Cloudflare ids to the cloudflare provider and keeps them out of legacy mapping', () => {
@@ -166,8 +380,8 @@ describe('Cloudflare catalog', () => {
     }
   })
 
-  it('still maps un-curated vendor ids onto OpenAI', () => {
-    expect(findProviderFromModel('anthropic/claude-opus-5')).toBe('openai')
+  it('still maps vendor ids Cloudflare does not list onto OpenAI', () => {
+    expect(findProviderFromModel('anthropic/claude-opus-3')).toBe('openai')
     expect(findProviderFromModel('claude-sonnet-5')).toBe('openai')
   })
 })
@@ -180,10 +394,16 @@ describe('model routing', () => {
     expect(isLegacyChatModelId(model)).toBe(false)
   })
 
+  it.each([...OPENAI_CLOUDFLARE_MODEL_IDS])('routes Cloudflare-only OpenAI id %s', (model) => {
+    expect(findProviderFromModel(model)).toBe('openai')
+    expect(isKnownModelId(model)).toBe(true)
+    expect(isLegacyChatModelId(model)).toBe(false)
+  })
+
   it.each([
-    'gpt-4o',
+    'gpt-4-turbo',
     'gpt-5.2',
-    'o3',
+    'o1',
     'claude-sonnet-4-6',
     'gemini-2.5-pro',
     'azure/gpt-5',
@@ -217,16 +437,16 @@ describe('model routing', () => {
 
 describe('legacy id fallbacks', () => {
   it('prices legacy chat ids at their resolved curated model', () => {
-    expect(getModelPricing('gpt-4o')).toEqual(getModelPricing(OPENAI_MODEL_GPT_5_MINI))
+    expect(getModelPricing('gpt-4-turbo')).toEqual(getModelPricing(OPENAI_MODEL_GPT_5_MINI))
     expect(getModelPricing('claude-sonnet-4-6')).toEqual(getModelPricing(OPENAI_MODEL_GPT_5_MINI))
-    expect(getModelPricing('gpt-6-astra')).toEqual(getModelPricing(OPENAI_MODEL_GPT_5_5))
+    expect(getModelPricing('gpt-6.1-sol')).toEqual(getModelPricing(OPENAI_MODEL_GPT_5_5))
   })
 
   it('reports capabilities of the resolved curated model for legacy chat ids', () => {
     expect(getModelCapabilities('gemini-2.5-pro')).toEqual(
       getModelCapabilities(OPENAI_MODEL_GPT_5_MINI)
     )
-    expect(getModelCapabilities('gpt-4o')?.reasoningEffort).toBeDefined()
+    expect(getModelCapabilities('gpt-4-turbo')?.reasoningEffort).toBeDefined()
   })
 
   it('returns null pricing and capabilities for non-chat unknown ids', () => {
@@ -336,10 +556,10 @@ describe('orderModelIdsByReleaseDate', () => {
 })
 
 describe('getStaticProviderModels', () => {
-  it('returns the curated openai models', () => {
-    expect(getStaticProviderModels('openai').map((model) => model.id)).toEqual([
-      ...OPENAI_MODEL_IDS,
-    ])
+  it('returns the openai catalog models', () => {
+    expect(getStaticProviderModels('openai').map((model) => model.id)).toEqual(
+      getProviderModels('openai')
+    )
   })
 })
 

@@ -12,15 +12,16 @@ vi.mock('@/lib/internal/workflows/read-tool-enrichment', () => ({
 }))
 
 import {
+  CLOUDFLARE_GOOGLE_MODEL_IDS,
   CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
   CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
   CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
-  CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
   CLOUDFLARE_MODEL_GLM_4_7_FLASH,
   CLOUDFLARE_MODEL_IDS,
   CLOUDFLARE_MODEL_LLAMA_3_3_70B,
 } from '@/providers/cloudflare/model-ids'
 import {
+  OPENAI_CLOUDFLARE_MODEL_IDS,
   OPENAI_MODEL_GPT_4_1,
   OPENAI_MODEL_GPT_4_1_MINI,
   OPENAI_MODEL_GPT_5_5,
@@ -125,7 +126,7 @@ describe('Model Capabilities', () => {
     })
 
     it('resolves legacy chat ids through their curated model', () => {
-      expect(supportsTemperature('gpt-4o')).toBe(false)
+      expect(supportsTemperature('gpt-4-turbo')).toBe(false)
       expect(supportsTemperature('claude-sonnet-4-6')).toBe(false)
     })
   })
@@ -202,15 +203,23 @@ describe('Model Capabilities', () => {
       expect(MODELS_TEMP_RANGE_0_2).toEqual([
         OPENAI_MODEL_GPT_4_1,
         OPENAI_MODEL_GPT_4_1_MINI,
-        CLOUDFLARE_MODEL_GEMINI_2_5_PRO,
-        CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
+        'gpt-4.1-nano',
+        'gpt-4o',
+        'gpt-4o-mini',
+        ...CLOUDFLARE_GOOGLE_MODEL_IDS,
         CLOUDFLARE_MODEL_LLAMA_3_3_70B,
         CLOUDFLARE_MODEL_GLM_4_7_FLASH,
       ])
     })
 
-    it('should have Claude Haiku in the 0-1 range and nothing in 0-1.5', () => {
-      expect(MODELS_TEMP_RANGE_0_1).toEqual([CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5])
+    it('should have the Claude models that accept temperature in 0-1 and nothing in 0-1.5', () => {
+      expect(MODELS_TEMP_RANGE_0_1).toEqual([
+        'anthropic/claude-opus-4.6',
+        'anthropic/claude-opus-4.5',
+        'anthropic/claude-sonnet-4.6',
+        'anthropic/claude-sonnet-4.5',
+        CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+      ])
       expect(MODELS_TEMP_RANGE_0_15).toEqual([])
     })
 
@@ -224,9 +233,22 @@ describe('Model Capabilities', () => {
       )
     })
 
-    it('should have the GPT-5 family in reasoning effort and verbosity arrays', () => {
-      expect(MODELS_WITH_REASONING_EFFORT).toEqual([OPENAI_MODEL_GPT_5_5, OPENAI_MODEL_GPT_5_MINI])
-      expect(MODELS_WITH_VERBOSITY).toEqual([OPENAI_MODEL_GPT_5_5, OPENAI_MODEL_GPT_5_MINI])
+    it('should have the OpenAI reasoning models and Gemini in the reasoning effort array', () => {
+      const openaiReasoning = getProviderModels('openai').filter((id) =>
+        /^(gpt-5|gpt-6|o\d)/.test(id)
+      )
+      expect(MODELS_WITH_REASONING_EFFORT).toEqual([
+        ...openaiReasoning,
+        ...CLOUDFLARE_GOOGLE_MODEL_IDS,
+      ])
+      expect(MODELS_WITH_REASONING_EFFORT).toContain(OPENAI_MODEL_GPT_5_5)
+      expect(MODELS_WITH_REASONING_EFFORT).toContain(OPENAI_MODEL_GPT_5_MINI)
+    })
+
+    it('should have the GPT-5 / GPT-6 family (not the Pro models) in the verbosity array', () => {
+      expect(MODELS_WITH_VERBOSITY).toEqual(
+        getProviderModels('openai').filter((id) => /^gpt-(5|6)/.test(id) && !id.endsWith('-pro'))
+      )
     })
 
     it('should have no models in MODELS_WITH_THINKING', () => {
@@ -389,8 +411,8 @@ describe('Cost Calculation', () => {
 })
 
 describe('getHostedModels', () => {
-  it('should return every curated model (OpenAI and Cloudflare) as hosted', () => {
-    expect(getHostedModels()).toEqual([...OPENAI_MODEL_IDS, ...CLOUDFLARE_MODEL_IDS])
+  it('should return every catalog model (OpenAI and Cloudflare) as hosted', () => {
+    expect(getHostedModels()).toEqual([...getProviderModels('openai'), ...CLOUDFLARE_MODEL_IDS])
   })
 
   it('bills Cloudflare models like OpenAI ones', () => {
@@ -400,14 +422,14 @@ describe('getHostedModels', () => {
 
 describe('shouldBillModelUsage', () => {
   it('should return true for exact matches of hosted models', () => {
-    for (const id of OPENAI_MODEL_IDS) {
+    for (const id of [...OPENAI_MODEL_IDS, ...OPENAI_CLOUDFLARE_MODEL_IDS]) {
       expect(shouldBillModelUsage(id)).toBe(true)
     }
   })
 
   it('should return false for non-catalog ids', () => {
     expect(shouldBillModelUsage('unknown-model')).toBe(false)
-    expect(shouldBillModelUsage('gpt-4o')).toBe(false)
+    expect(shouldBillModelUsage('gpt-4-turbo')).toBe(false)
     expect(shouldBillModelUsage('gpt-4.1-2025-04-14')).toBe(false)
   })
 
@@ -416,7 +438,7 @@ describe('shouldBillModelUsage', () => {
   })
 
   it('should not match partial model names', () => {
-    expect(shouldBillModelUsage('gpt-5')).toBe(false)
+    expect(shouldBillModelUsage('gpt-6')).toBe(false)
     expect(shouldBillModelUsage('gpt-4')).toBe(false)
   })
 })
@@ -444,7 +466,8 @@ describe('Provider Management', () => {
       const provider = getProvider('openai')
       expect(provider?.id).toBe('openai')
       expect(provider?.name).toBe('OpenAI')
-      expect(provider?.models).toEqual([...OPENAI_MODEL_IDS])
+      expect(provider?.models).toEqual(getProviderModels('openai'))
+      expect(provider?.models).toEqual(expect.arrayContaining([...OPENAI_MODEL_IDS]))
     })
 
     it('should resolve a model id to its provider', () => {
@@ -465,7 +488,7 @@ describe('Provider Management', () => {
 
   describe('getAllModels', () => {
     it('should return the curated models', () => {
-      expect(getAllModels()).toEqual([...OPENAI_MODEL_IDS, ...CLOUDFLARE_MODEL_IDS])
+      expect(getAllModels()).toEqual([...getProviderModels('openai'), ...CLOUDFLARE_MODEL_IDS])
     })
   })
 
@@ -477,7 +500,9 @@ describe('Provider Management', () => {
 
   describe('getProviderModels', () => {
     it('should return models for openai', () => {
-      expect(getProviderModels('openai')).toEqual([...OPENAI_MODEL_IDS])
+      expect([...getProviderModels('openai')].sort()).toEqual(
+        [...OPENAI_MODEL_IDS, ...OPENAI_CLOUDFLARE_MODEL_IDS].sort()
+      )
     })
 
     it('should return empty array for unknown providers', () => {
@@ -492,7 +517,9 @@ describe('Provider Management', () => {
       expect(allProviders[OPENAI_MODEL_GPT_4_1]).toBe('openai')
 
       const baseProviders = getBaseModelProviders()
-      expect(Object.keys(baseProviders).sort()).toEqual([...OPENAI_MODEL_IDS].sort())
+      expect(Object.keys(baseProviders).sort()).toEqual(
+        [...OPENAI_MODEL_IDS, ...OPENAI_CLOUDFLARE_MODEL_IDS].sort()
+      )
     })
   })
 

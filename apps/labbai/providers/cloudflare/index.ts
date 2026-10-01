@@ -78,8 +78,9 @@ export function createCloudflareClient(): OpenAI {
  * Cloudflare provider: Anthropic, Google and Workers AI models through Cloudflare's
  * OpenAI-compatible unified endpoint (Chat Completions format), paid from Cloudflare
  * Unified Billing. Supports system prompts, multi-turn tool calling (streaming and
- * non-streaming loops), SSE streaming, JSON-schema response formats, temperature and
- * max tokens. Only reachable in Cloudflare mode (`providers/index.ts` routes here).
+ * non-streaming loops), SSE streaming, JSON-schema response formats, temperature, max
+ * tokens and (Gemini) reasoning effort. Only reachable in Cloudflare mode
+ * (`providers/index.ts` routes here).
  */
 export const cloudflareProvider: ProviderConfig = {
   id: 'cloudflare',
@@ -126,6 +127,14 @@ export const cloudflareProvider: ProviderConfig = {
 
     if (request.temperature !== undefined) payload.temperature = request.temperature
     if (request.maxTokens != null) payload.max_tokens = request.maxTokens
+    /**
+     * Gemini reads OpenAI's `reasoning_effort` on chat completions (Google's OpenAI
+     * compatibility). `sanitizeRequest` keeps an effort only for models that declare one, so
+     * Claude and Workers AI never receive it.
+     */
+    if (request.reasoningEffort !== undefined && request.reasoningEffort !== 'auto') {
+      payload.reasoning_effort = request.reasoningEffort
+    }
 
     if (request.responseFormat) {
       payload.response_format = {
