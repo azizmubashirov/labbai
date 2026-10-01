@@ -31,8 +31,8 @@ describe('resolveAddEmail', () => {
 
   it('matches case-insensitively while echoing the original email in errors', () => {
     expect(resolveAddEmail('ADA@Labbai.dev', ctx)).toEqual({ userId: 'user-ada' })
-    expect(resolveAddEmail('Grace@SIM.dev', ctx)).toEqual({
-      error: 'Grace@SIM.dev already has access',
+    expect(resolveAddEmail('Grace@LABBAI.dev', ctx)).toEqual({
+      error: 'Grace@LABBAI.dev already has access',
     })
   })
 })

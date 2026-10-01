@@ -2,6 +2,7 @@
  * @vitest-environment node
  */
 
+import { resetEnvMock, setEnv } from '@labbai/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TOOL_RESULT_MAX_INLINE_CHARS } from '@/lib/copilot/constants'
 
@@ -822,10 +823,12 @@ describe('vfs handlers docs corpus routing', () => {
     vi.clearAllMocks()
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    setEnv({ COPILOT_DOCS_BASE_URL: 'https://docs.example.com' })
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    resetEnvMock()
   })
 
   it('globs the docs corpus without materializing the workspace VFS', async () => {
