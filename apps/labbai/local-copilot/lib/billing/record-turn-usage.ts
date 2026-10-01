@@ -114,6 +114,9 @@ export async function recordLocalCopilotTurnUsage(
             ...(component.cacheCreationTokens
               ? { cacheCreationTokens: component.cacheCreationTokens }
               : {}),
+            ...(component.cacheCreation1hTokens
+              ? { cacheCreation1hTokens: component.cacheCreation1hTokens }
+              : {}),
             ...(component.calls != null ? { calls: component.calls } : {}),
             ...(component.provider ? { provider: component.provider } : {}),
             ...(component.vendor ? { vendor: component.vendor } : {}),

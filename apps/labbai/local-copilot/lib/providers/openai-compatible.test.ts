@@ -8,7 +8,12 @@ import {
   createOpenAiCompatibleProvider,
   isOpenAiReasoningModel,
 } from '@/local-copilot/lib/providers/openai-compatible'
-import type { ChatCompletionChunk } from '@/local-copilot/lib/providers/types'
+import { buildPromptCacheLayout } from '@/local-copilot/lib/providers/prompt-cache'
+import type {
+  ChatCompletionChunk,
+  ChatCompletionRequest,
+  ChatMessage,
+} from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
 import { resetCloudflareAnthropicMessagesFallback } from '@/providers/cloudflare/anthropic-messages'
 import {
@@ -68,6 +73,39 @@ describe('buildOpenAiCompatibleHeaders', () => {
 })
 
 type FetchArgs = [input: string, init?: RequestInit]
+
+const STATIC_RULES = 'Static copilot rules: never invent ids.'
+const CACHE_TOOLS = [
+  { name: 'a_stable', description: 'Stable tool', parameters: { type: 'object' } },
+  { name: 'z_gated', description: 'Gated tool', parameters: { type: 'object' } },
+]
+const CACHE_LAYOUT = buildPromptCacheLayout({
+  staticSystemPrompt: STATIC_RULES,
+  tools: CACHE_TOOLS,
+  stableToolCount: 1,
+})
+
+/** A copilot-shaped request: static rules, then per-workspace / per-day context and history. */
+function copilotRequest(params: {
+  model: string
+  workspace: string
+  date: string
+  history: ChatMessage[]
+}): ChatCompletionRequest {
+  return {
+    model: params.model,
+    tools: CACHE_TOOLS,
+    promptCache: CACHE_LAYOUT,
+    messages: [
+      { role: 'system', content: STATIC_RULES },
+      {
+        role: 'system',
+        content: `Current context:\n{"workspaceId":"${params.workspace}","date":"${params.date}"}`,
+      },
+      ...params.history,
+    ],
+  }
+}
 
 describe('Cloudflare AI Gateway transport', () => {
   const GATEWAY = 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai'
@@ -378,6 +416,91 @@ describe('Cloudflare unified endpoint transport', () => {
       expect(onUsage).toHaveBeenCalledWith({ inputTokens: 5, outputTokens: 1 })
     })
 
+    it('sends the same 1-hour cached prefix for two workspaces, chats and dates', async () => {
+      const fetchMock = vi.fn(async (..._args: FetchArgs) =>
+        sseResponse(cloudflareAnthropicTextSse)
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const provider = createOpenAiCompatibleProvider(cloudflareConfig)
+      const requests = [
+        copilotRequest({
+          model: 'anthropic/claude-sonnet-5',
+          workspace: 'ws-alpha',
+          date: '2026-10-01',
+          history: [{ role: 'user', content: 'Build a workflow' }],
+        }),
+        copilotRequest({
+          model: 'anthropic/claude-sonnet-5',
+          workspace: 'ws-beta',
+          date: '2027-01-31',
+          history: [
+            { role: 'user', content: 'Hi' },
+            { role: 'assistant', content: 'Hello' },
+            { role: 'user', content: 'List my tables' },
+          ],
+        }),
+      ]
+      for (const request of requests) {
+        for await (const _chunk of provider.chatCompletionStream(request)) {
+          // drain
+        }
+      }
+
+      const prefixes = fetchMock.mock.calls.map(([url, init]) => {
+        expect(url).toBe(`${UNIFIED}/messages`)
+        const body = JSON.parse(String(init?.body))
+        expect(body.system).toBe(STATIC_RULES)
+        expect(body.tools.map((tool: { name: string }) => tool.name)).toEqual([
+          'a_stable',
+          'z_gated',
+        ])
+        expect(body.tools[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' })
+        expect(body.messages[0].content[0].cache_control).toEqual({
+          type: 'ephemeral',
+          ttl: '1h',
+        })
+        return JSON.stringify([body.tools, body.system, body.messages[0].content[0]])
+      })
+      expect(prefixes[0]).toBe(prefixes[1])
+      for (const dynamic of ['ws-alpha', 'ws-beta', '2026-10-01', '2027-01-31']) {
+        expect(prefixes[0]).not.toContain(dynamic)
+      }
+    })
+
+    it('bills 1-hour cache writes separately when the usage splits them by TTL', async () => {
+      const oneHourSse = [
+        'data: {"type":"message_start","message":{"id":"msg_1h","model":"claude-sonnet-5","usage":{"input_tokens":10,"cache_creation_input_tokens":14000,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":500,"ephemeral_1h_input_tokens":13500},"output_tokens":1}}}',
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"OK"}}',
+        'data: {"type":"content_block_stop","index":0}',
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}',
+        'data: {"type":"message_stop"}',
+        '',
+      ].join('\n')
+      vi.stubGlobal('fetch', vi.fn(async (..._args: FetchArgs) => sseResponse(oneHourSse)))
+      const onUsage = vi.fn()
+      for await (const _chunk of createOpenAiCompatibleProvider(
+        cloudflareConfig
+      ).chatCompletionStream({
+        ...copilotRequest({
+          model: 'anthropic/claude-sonnet-5',
+          workspace: 'ws',
+          date: 'today',
+          history: [{ role: 'user', content: 'hi' }],
+        }),
+        onUsage,
+      })) {
+        // drain
+      }
+
+      expect(onUsage).toHaveBeenCalledWith({
+        inputTokens: 14_010,
+        outputTokens: 3,
+        cacheCreationTokens: 14_000,
+        cacheCreation1hTokens: 13_500,
+      })
+    })
+
     it('keeps OpenAI models on chat completions (no Anthropic rewrite)', async () => {
       const fetchMock = vi.fn(async (..._args: FetchArgs) => sse([]))
       vi.stubGlobal('fetch', fetchMock)
@@ -424,5 +547,51 @@ describe('OpenAI transport prompt caching', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
     expect(body.prompt_cache_key).toBe('local-copilot:gpt-5.5')
     expect(body).not.toHaveProperty('cache_control')
+  })
+
+  it('keys the cache by the static prefix, shared by every workspace and date', async () => {
+    const fetchMock = vi.fn(
+      async (..._args: FetchArgs) =>
+        new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = createOpenAiCompatibleProvider({
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-5.5',
+      specialistModel: 'gpt-5-mini',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+    })
+    const requests = [
+      copilotRequest({
+        model: 'gpt-5.5',
+        workspace: 'ws-alpha',
+        date: '2026-10-01',
+        history: [{ role: 'user', content: 'hi' }],
+      }),
+      copilotRequest({
+        model: 'gpt-5.5',
+        workspace: 'ws-beta',
+        date: '2027-01-31',
+        history: [{ role: 'user', content: 'show tables' }],
+      }),
+    ]
+    for (const request of requests) {
+      for await (const _chunk of provider.chatCompletionStream(request)) {
+        // drain
+      }
+    }
+
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)))
+    expect(bodies[0].prompt_cache_key).toBe(`local-copilot:gpt-5.5:${CACHE_LAYOUT.prefixKey}`)
+    expect(bodies[1].prompt_cache_key).toBe(bodies[0].prompt_cache_key)
+    /** Static first, same order: tools, then the rules as the first message. */
+    expect(bodies[1].tools).toEqual(bodies[0].tools)
+    expect(bodies[0].messages[0]).toEqual({ role: 'system', content: STATIC_RULES })
+    expect(bodies[1].messages[0]).toEqual(bodies[0].messages[0])
   })
 })

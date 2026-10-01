@@ -23,8 +23,28 @@ export interface TokenUsage {
   inputTokens: number
   outputTokens: number
   cacheReadTokens?: number
-  /** Anthropic prompt-cache writes. */
+  /** Anthropic prompt-cache writes (all TTLs). */
   cacheCreationTokens?: number
+  /**
+   * The part of `cacheCreationTokens` written with the 1-hour TTL (priced at 2 × input
+   * instead of 1.25 ×), when the usage reports the split.
+   */
+  cacheCreation1hTokens?: number
+}
+
+/**
+ * How a request's prompt is laid out for prompt caching (`providers/prompt-cache.ts`).
+ * When set, `messages[0]` is the static system prompt (byte-identical for every account and
+ * chat) and every further leading system message is dynamic context.
+ */
+export interface PromptCacheLayout {
+  /**
+   * The first `stableToolCount` tools are the same, in the same order, on every request that
+   * shares this static system prompt; the tools after them depend on the turn's intent.
+   */
+  stableToolCount: number
+  /** Short hash of the static prefix (all tools + static system prompt). */
+  prefixKey: string
 }
 
 /**
@@ -49,6 +69,8 @@ export interface ChatCompletionRequest {
   maxTokens?: number
   signal?: AbortSignal
   onUsage?: TokenUsageListener
+  /** Static-prefix layout for prompt caching; omit when the prompt has no such layout. */
+  promptCache?: PromptCacheLayout
 }
 
 export interface ChatCompletionChunk {

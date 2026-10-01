@@ -29,7 +29,9 @@ function resolveActiveDomains(intent: LocalCopilotIntent): Set<LocalCopilotCloud
 }
 
 /**
- * Builds the Arena Copilot system prompt for one turn.
+ * Builds an intent-pruned Arena Copilot system prompt (analysis / size comparisons). The
+ * runtime sends {@link buildFullLocalCopilotSystemPrompt} instead, so the rules stay one
+ * byte-stable, cacheable prefix whatever the intent.
  *
  * Sections that describe a specific domain's tools are dropped when that domain
  * is not in play. This is safe because the tool catalog is pruned by the same
@@ -65,7 +67,12 @@ export function buildLocalCopilotSystemPrompt(
   return { content: included.join('\n'), sectionIds, omittedSectionIds }
 }
 
-/** The unpruned prompt — the baseline the golden test pins. */
+/**
+ * The unpruned prompt — what the copilot sends as its static rules on every turn (the
+ * baseline `system-prompt.golden.txt` pins). It must stay free of dynamic text (dates, ids,
+ * names, counts): it is the cached prefix shared by every account and chat
+ * (`providers/prompt-cache.ts`); per-turn context goes in separate system messages.
+ */
 export function buildFullLocalCopilotSystemPrompt(): string {
   return LOCAL_COPILOT_PROMPT_SECTIONS.map((section) => section.content).join('\n')
 }

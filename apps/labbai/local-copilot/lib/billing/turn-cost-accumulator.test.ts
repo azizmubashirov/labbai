@@ -33,6 +33,32 @@ describe('priceModelUsageWithCache', () => {
     })
   })
 
+  it('prices 1-hour cache writes at 2x input and the rest of the writes at 1.25x', () => {
+    const priced = priceModelUsageWithCache({
+      model: SONNET,
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheCreationTokens: 400_000,
+      cacheCreation1hTokens: 300_000,
+    })
+
+    // 600k uncached × $2 + 100k 5m write × $2.50 + 300k 1h write × $4 = 1.2 + 0.25 + 1.2
+    expect(priced.input).toBeCloseTo(2.65, 8)
+    expect(priced).toMatchObject({ cacheCreationTokens: 400_000, cacheCreation1hTokens: 300_000 })
+  })
+
+  it('prices writes without a reported TTL split as 5-minute writes', () => {
+    const unsplit = priceModelUsageWithCache({
+      model: SONNET,
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheCreationTokens: 400_000,
+    })
+    // 600k × $2 + 400k × $2.50
+    expect(unsplit.input).toBeCloseTo(2.2, 8)
+    expect(unsplit.cacheCreation1hTokens).toBe(0)
+  })
+
   it('never lets cache buckets exceed the prompt', () => {
     const priced = priceModelUsageWithCache({
       model: SONNET,
@@ -89,6 +115,33 @@ describe('LocalTurnCostAccumulator', () => {
 })
 
 describe('aggregateLedgerComponents', () => {
+  it('sums 1-hour cache writes into the ledger line', () => {
+    const accumulator = new LocalTurnCostAccumulator()
+    const listen = accumulator.usageListener(SONNET)
+    listen({
+      inputTokens: 30_000,
+      outputTokens: 100,
+      cacheCreationTokens: 14_000,
+      cacheCreation1hTokens: 13_000,
+    })
+    listen({ inputTokens: 31_000, outputTokens: 100, cacheReadTokens: 29_000 })
+    listen({
+      inputTokens: 32_000,
+      outputTokens: 100,
+      cacheReadTokens: 14_000,
+      cacheCreationTokens: 2_000,
+      cacheCreation1hTokens: 1_000,
+    })
+
+    const [line] = aggregateLedgerComponents(accumulator.summarize().components)
+    expect(line).toMatchObject({
+      calls: 3,
+      cacheCreationTokens: 16_000,
+      cacheCreation1hTokens: 14_000,
+      cacheReadTokens: 43_000,
+    })
+  })
+
   it('merges every call of a model into one ledger line so none is dropped', () => {
     const accumulator = new LocalTurnCostAccumulator()
     const listen = accumulator.usageListener(SONNET)
@@ -112,6 +165,7 @@ describe('aggregateLedgerComponents', () => {
     })
     const tool = lines.find((line) => line.kind === 'tool')
     expect(tool).toMatchObject({ id: 'search_online', calls: 2 })
+    expect(model).not.toHaveProperty('cacheCreation1hTokens')
     expect(tool?.cost).toBeCloseTo(0.03, 8)
     expect(lines.reduce((sum, line) => sum + line.cost, 0)).toBeCloseTo(summary.total, 6)
   })

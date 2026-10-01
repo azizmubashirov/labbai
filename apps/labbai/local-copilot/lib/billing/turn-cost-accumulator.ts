@@ -3,7 +3,10 @@ import type {
   TokenUsageListener,
 } from '@/local-copilot/lib/providers/types'
 import { LIST_PRICE_POLICY, type ModelUsage, priceModelUsage } from '@/providers/cost-policy'
-import { ANTHROPIC_CACHE_WRITE_MULTIPLIER } from '@/providers/openai-compat/anthropic-stream'
+import {
+  ANTHROPIC_CACHE_WRITE_1H_MULTIPLIER,
+  ANTHROPIC_CACHE_WRITE_MULTIPLIER,
+} from '@/providers/openai-compat/anthropic-stream'
 import { getModelPricing } from '@/providers/pricing'
 
 /** Tools whose child-workflow cost already lands under `source='workflow'`. */
@@ -25,6 +28,8 @@ export interface LocalTurnCostComponent {
   outputTokens?: number
   cacheReadTokens?: number
   cacheCreationTokens?: number
+  /** The 1-hour-TTL part of `cacheCreationTokens`. */
+  cacheCreation1hTokens?: number
   /** Model / tool calls merged into this component (1 until aggregated for the ledger). */
   calls?: number
   /** Priced input portion (uncached + cache reads + cache writes). */
@@ -63,8 +68,10 @@ export interface PriceModelUsageParams {
   inputTokens: number
   outputTokens: number
   cacheReadTokens?: number
-  /** Anthropic prompt-cache writes (a subset of `inputTokens`). */
+  /** Anthropic prompt-cache writes of every TTL (a subset of `inputTokens`). */
   cacheCreationTokens?: number
+  /** The 1-hour-TTL part of `cacheCreationTokens` (the rest is 5-minute). */
+  cacheCreation1hTokens?: number
 }
 
 export interface PricedModelUsage {
@@ -75,6 +82,7 @@ export interface PricedModelUsage {
   outputTokens: number
   cacheReadTokens: number
   cacheCreationTokens: number
+  cacheCreation1hTokens: number
 }
 
 /**
@@ -92,7 +100,9 @@ function resolvePricingModelId(model: string): string {
  * Prices one model call with the catalog rates (`providers/models.ts`): uncached input at
  * the input price, cache reads at the cached-input price, Anthropic cache writes at the
  * 5-minute premium ({@link ANTHROPIC_CACHE_WRITE_MULTIPLIER} × input — the catalog has no
- * cache-write field). The input tier is chosen from the full prompt size.
+ * cache-write field) or, for the part the usage reports as 1-hour writes, at
+ * {@link ANTHROPIC_CACHE_WRITE_1H_MULTIPLIER} × input. Writes without a reported TTL split
+ * are priced as 5-minute writes. The input tier is chosen from the full prompt size.
  */
 export function priceModelUsageWithCache(params: PriceModelUsageParams): PricedModelUsage {
   const inputTokens = Math.max(0, params.inputTokens)
@@ -102,17 +112,20 @@ export function priceModelUsageWithCache(params: PriceModelUsageParams): PricedM
     Math.max(0, params.cacheCreationTokens ?? 0),
     inputTokens - cacheReadTokens
   )
+  const cacheCreation1hTokens = Math.min(
+    Math.max(0, params.cacheCreation1hTokens ?? 0),
+    cacheCreationTokens
+  )
+  const cacheCreation5mTokens = cacheCreationTokens - cacheCreation1hTokens
+  const cacheWrites = [
+    { tokens: cacheCreation5mTokens, inputRateMultiplier: ANTHROPIC_CACHE_WRITE_MULTIPLIER },
+    { tokens: cacheCreation1hTokens, inputRateMultiplier: ANTHROPIC_CACHE_WRITE_1H_MULTIPLIER },
+  ].filter((write) => write.tokens > 0)
   const usage: ModelUsage = {
     input: inputTokens - cacheReadTokens - cacheCreationTokens,
     output: outputTokens,
     cacheRead: cacheReadTokens,
-    ...(cacheCreationTokens > 0
-      ? {
-          cacheWrites: [
-            { tokens: cacheCreationTokens, inputRateMultiplier: ANTHROPIC_CACHE_WRITE_MULTIPLIER },
-          ],
-        }
-      : {}),
+    ...(cacheWrites.length > 0 ? { cacheWrites } : {}),
   }
   const priced = priceModelUsage(resolvePricingModelId(params.model), usage, LIST_PRICE_POLICY)
 
@@ -124,6 +137,7 @@ export function priceModelUsageWithCache(params: PriceModelUsageParams): PricedM
     outputTokens,
     cacheReadTokens,
     cacheCreationTokens,
+    cacheCreation1hTokens,
   }
 }
 
@@ -143,6 +157,7 @@ export class LocalTurnCostAccumulator {
     outputTokens: number
     cacheReadTokens?: number
     cacheCreationTokens?: number
+    cacheCreation1hTokens?: number
     provider?: string
     vendor?: string
   }): LocalTurnCostComponent | null {
@@ -156,6 +171,7 @@ export class LocalTurnCostAccumulator {
       outputTokens: params.outputTokens,
       cacheReadTokens: params.cacheReadTokens,
       cacheCreationTokens: params.cacheCreationTokens,
+      cacheCreation1hTokens: params.cacheCreation1hTokens,
     })
     if (priced.total <= 0) {
       return null
@@ -169,6 +185,9 @@ export class LocalTurnCostAccumulator {
       outputTokens: priced.outputTokens,
       cacheReadTokens: priced.cacheReadTokens,
       cacheCreationTokens: priced.cacheCreationTokens,
+      ...(priced.cacheCreation1hTokens > 0
+        ? { cacheCreation1hTokens: priced.cacheCreation1hTokens }
+        : {}),
       calls: 1,
       inputCost: priced.input,
       outputCost: priced.output,
@@ -191,6 +210,7 @@ export class LocalTurnCostAccumulator {
         outputTokens: usage.outputTokens,
         cacheReadTokens: usage.cacheReadTokens,
         cacheCreationTokens: usage.cacheCreationTokens,
+        cacheCreation1hTokens: usage.cacheCreation1hTokens,
         ...(provider ? { provider } : {}),
       })
     }
@@ -277,6 +297,10 @@ export function aggregateLedgerComponents(
       existing.cacheCreationTokens,
       component.cacheCreationTokens
     )
+    if (component.cacheCreation1hTokens !== undefined) {
+      existing.cacheCreation1hTokens =
+        (existing.cacheCreation1hTokens ?? 0) + component.cacheCreation1hTokens
+    }
     existing.inputCost = sumOptional(existing.inputCost, component.inputCost)
     existing.outputCost = sumOptional(existing.outputCost, component.outputCost)
   }

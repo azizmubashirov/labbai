@@ -6,7 +6,11 @@ import { loadRelevantSkillGuidance } from '@/local-copilot/lib/context/relevant-
 import { type CopilotTaskState, parseTaskState } from '@/local-copilot/lib/context/task-state'
 import type { ChatMessage } from '@/local-copilot/lib/providers/types'
 import { resolveLocalCopilotTools } from '@/local-copilot/lib/tools/definitions'
-import type { LocalCopilotSkillSummary } from '@/local-copilot/lib/tools/user-skills'
+import {
+  formatUserSkillCatalogSystemMessage,
+  type LocalCopilotSkillSummary,
+  loadWorkspaceSkillSummaries,
+} from '@/local-copilot/lib/tools/user-skills'
 import type { LocalCopilotToolDefinition } from '@/local-copilot/lib/types'
 import {
   type BuildLocalCopilotUserTurnParams,
@@ -24,6 +28,9 @@ export interface PromptContextPrefetchInput {
 
 export interface SettledPromptContextPrefetch {
   relevantSkills: Awaited<ReturnType<typeof loadRelevantSkillGuidance>>
+  /** "Workspace skills available to load_user_skill" (dynamic context), or null. */
+  skillCatalogMessage: ChatMessage | null
+  /** The workspace-independent tool catalog. */
   allTools: LocalCopilotToolDefinition[]
   userTurn: ChatMessage
   taskState: CopilotTaskState | null
@@ -32,9 +39,8 @@ export interface SettledPromptContextPrefetch {
 
 export interface PromptContextPrefetch {
   /**
-   * Started after structured context exposes skill summaries. Refreshes the
-   * tool list so `load_user_skill` matches the catalog (replacing the early
-   * provisional tools resolve).
+   * Started after structured context exposes skill summaries, so the skill bodies and the
+   * load_user_skill catalog come from the same list (no second skills query).
    */
   startSkills: (skills: LocalCopilotSkillSummary[] | undefined) => void
   /** Awaits tools / user turn / chat config / skills (once started). */
@@ -46,8 +52,9 @@ export interface PromptContextPrefetch {
  * overlaps spend-gate / session-memory work (and specialist TTFT when present).
  *
  * Chat config is loaded once and reused for both snapshot deltas and task state.
- * A provisional tool list starts immediately; tools are
- * refreshed when skill summaries arrive so the skill tool is not missing.
+ * The tool catalog is static; the workspace's skill catalog (for load_user_skill) is a
+ * dynamic context message built from the summaries given to `startSkills`, or from a DB
+ * skills query when settle runs first.
  */
 export function startPromptContextPrefetch(
   input: PromptContextPrefetchInput
@@ -61,21 +68,10 @@ export function startPromptContextPrefetch(
   const chatConfigPromise: Promise<CopilotChatConfig | null> = input.chatId
     ? loadCopilotChatConfig(input.chatId, input.userId).catch(() => null)
     : Promise.resolve(null)
+  const toolsPromise = resolveLocalCopilotTools()
 
   let skillsPromise: Promise<Awaited<ReturnType<typeof loadRelevantSkillGuidance>>> | null = null
-  let toolsPromise: Promise<LocalCopilotToolDefinition[]> | null = null
-  let toolsHaveSkillCatalog = false
-
-  const resolveTools = (
-    skills: LocalCopilotSkillSummary[] | undefined
-  ): Promise<LocalCopilotToolDefinition[]> =>
-    resolveLocalCopilotTools(input.workspaceId, {
-      ...(skills !== undefined ? { skills } : {}),
-    })
-
-  // Provisional tools (no skill catalog yet) — overlaps context build. Replaced
-  // when startSkills provides summaries, or settle falls back to a DB skills query.
-  toolsPromise = resolveTools([])
+  let skillSummariesPromise: Promise<LocalCopilotSkillSummary[]> | null = null
 
   return {
     startSkills(skills) {
@@ -85,8 +81,7 @@ export function startPromptContextPrefetch(
           workspaceId: input.workspaceId,
         })
       }
-      toolsHaveSkillCatalog = true
-      toolsPromise = resolveTools(skills ?? [])
+      skillSummariesPromise = Promise.resolve(skills ?? [])
     },
     async settle() {
       if (!skillsPromise) {
@@ -95,18 +90,19 @@ export function startPromptContextPrefetch(
           workspaceId: input.workspaceId,
         })
       }
-      if (!toolsHaveSkillCatalog) {
-        toolsHaveSkillCatalog = true
-        toolsPromise = resolveTools(undefined)
+      if (!skillSummariesPromise) {
+        skillSummariesPromise = loadWorkspaceSkillSummaries(input.workspaceId)
       }
-      const [relevantSkills, allTools, userTurn, chatConfig] = await Promise.all([
+      const [relevantSkills, skillSummaries, allTools, userTurn, chatConfig] = await Promise.all([
         skillsPromise,
-        toolsPromise ?? resolveTools(undefined),
+        skillSummariesPromise,
+        toolsPromise,
         userTurnPromise,
         chatConfigPromise,
       ])
       return {
         relevantSkills,
+        skillCatalogMessage: formatUserSkillCatalogSystemMessage(skillSummaries),
         allTools,
         userTurn,
         taskState: chatConfig ? parseTaskState(chatConfig.taskState) : null,

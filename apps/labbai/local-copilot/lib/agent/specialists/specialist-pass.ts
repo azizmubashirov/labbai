@@ -25,6 +25,10 @@ import {
 import type { LocalTurnCostAccumulator } from '@/local-copilot/lib/billing/turn-cost-accumulator'
 import { resolveLocalCopilotMaxOutputTokens } from '@/local-copilot/lib/context/context-budget'
 import { getLocalCopilotMemorySnapshot } from '@/local-copilot/lib/diagnostics'
+import {
+  buildPromptCacheLayout,
+  orderToolsForPromptCache,
+} from '@/local-copilot/lib/providers/prompt-cache'
 import type { ChatMessage, LocalCopilotProvider } from '@/local-copilot/lib/providers/types'
 import {
   prepareLocalToolConfirmation,
@@ -153,6 +157,11 @@ async function withTimeoutSignal(
   return { signal, clear: () => clearTimeout(timer) }
 }
 
+/**
+ * The specialist's tools, sorted by name. The set depends only on the domain and on whether
+ * nesting is still allowed, so it is one stable prompt-cache prefix per (domain, depth tier)
+ * shared by every account (`providers/prompt-cache.ts`).
+ */
 function buildSpecialistTools(
   domain: LocalCopilotSpecialistDomain,
   allTools: LocalCopilotToolDefinition[],
@@ -165,12 +174,13 @@ function buildSpecialistTools(
     allTools,
     allowed.size > 0 ? allowed : new Set(ALWAYS_ON_TOOL_NAMES)
   )
-  if (depth >= maxDepth) return leafTools
   const leafNames = new Set(leafTools.map((tool) => tool.name))
-  const specialistTools = getParentSpecialistToolDefinitions().filter(
-    (tool) => !leafNames.has(tool.name)
-  )
-  return [...leafTools, ...specialistTools]
+  const specialistTools =
+    depth >= maxDepth
+      ? []
+      : getParentSpecialistToolDefinitions().filter((tool) => !leafNames.has(tool.name))
+  const tools = [...leafTools, ...specialistTools]
+  return orderToolsForPromptCache(tools, new Set(tools.map((tool) => tool.name))).tools
 }
 
 export async function executeSpecialistLoop(
@@ -225,13 +235,20 @@ export async function executeSpecialistLoop(
 
     await emitSpecialistEvent(events, { type: 'status', message: 'Working on it…' }, params.onEvent)
 
+    /** Static per domain: no ids, names or dates — the prompt-cache prefix with `tools`. */
+    const staticSystemPrompt = `You are a focused Labbai specialist (${params.domain}). ${domainSystemHint(params.domain)} Complete the request using your tools — you may perform domain writes when needed. You may call other specialist tools if another domain is required (nesting is budgeted). Keep the final reply under 8 sentences with actionable facts and outcomes.`
+    const promptCache = buildPromptCacheLayout({
+      staticSystemPrompt,
+      tools,
+      stableToolCount: tools.length,
+    })
     const messages: ChatMessage[] = [
-      {
-        role: 'system',
-        content: `You are a focused Labbai specialist (${params.domain}). ${domainSystemHint(params.domain)} Complete the request using your tools — you may perform domain writes when needed. You may call other specialist tools if another domain is required (nesting is budgeted). Keep the final reply under 8 sentences with actionable facts and outcomes.`,
-      },
+      { role: 'system', content: staticSystemPrompt },
       ...(params.toolCtx.relevantSkillGuidance
         ? [{ role: 'system' as const, content: params.toolCtx.relevantSkillGuidance }]
+        : []),
+      ...(params.toolCtx.skillCatalog
+        ? [{ role: 'system' as const, content: params.toolCtx.skillCatalog }]
         : []),
       { role: 'user', content: params.userMessage },
     ]
@@ -289,6 +306,7 @@ export async function executeSpecialistLoop(
           signal,
           /** Billed once per call, also when the round fails or times out mid-stream. */
           onUsage: params.turnCost.usageListener(params.model),
+          promptCache,
         })) {
           if (chunk.type === 'text' && chunk.content) assistantText += chunk.content
           if (chunk.type === 'tool_call' && chunk.toolCall) pendingToolCalls.push(chunk.toolCall)

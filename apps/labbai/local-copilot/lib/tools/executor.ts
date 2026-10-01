@@ -178,6 +178,11 @@ export interface ToolExecutionContext {
    * system message so they follow the same playbook as the parent.
    */
   relevantSkillGuidance?: string
+  /**
+   * The workspace's skill catalog for load_user_skill (the tool definition itself is
+   * workspace-independent). Specialists inject it after `relevantSkillGuidance`.
+   */
+  skillCatalog?: string
   /** First successful create_workflow this turn — later creates must reuse it. */
   createdWorkflowThisTurn?: {
     workflowId: string

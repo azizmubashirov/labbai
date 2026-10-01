@@ -1,6 +1,7 @@
 import { createLogger } from '@labbai/logger'
 import { getErrorMessage } from '@labbai/utils/errors'
 import { getMessageContentText } from '@/local-copilot/lib/providers/message-content'
+import { buildLocalCopilotPromptCacheKey } from '@/local-copilot/lib/providers/prompt-cache'
 import { fetchProviderWithRetry } from '@/local-copilot/lib/providers/provider-fetch'
 import type {
   ChatCompletionRequest,
@@ -32,6 +33,8 @@ interface OpenAiStreamUsage {
   prompt_cache_hit_tokens?: number | null
   /** Anthropic cache writes (translated Cloudflare `anthropic/*` streams). */
   cache_creation_input_tokens?: number
+  /** The 1-hour-TTL part of `cache_creation_input_tokens`. */
+  cache_creation_1h_input_tokens?: number
 }
 
 /** The OpenAI chat-completions chunk fields this reader consumes. */
@@ -174,9 +177,15 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
                 : {}),
               max_tokens: request.maxTokens ?? 4096,
             }),
-        // OpenAI automatic prompt caching: stable key improves prefix reuse across turns.
+        // OpenAI automatic prompt caching: the key names the static prefix (tools + rules),
+        // so every account and chat with the same prefix is routed to the same cache.
         ...(config.provider === 'openai'
-          ? { prompt_cache_key: `local-copilot:${request.model || config.model}` }
+          ? {
+              prompt_cache_key: buildLocalCopilotPromptCacheKey(
+                request.model || config.model,
+                request.promptCache
+              ),
+            }
           : {}),
       }
 
@@ -190,12 +199,20 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
         fetchProviderWithRetry(target, requestInit, 'LLM request failed')
       /**
        * Claude on Cloudflare goes to the Anthropic Messages endpoint with prompt-cache
-       * breakpoints (its SSE is read below like any other stream); other models and
-       * transports post the Chat Completions body unchanged.
+       * breakpoints — 1-hour ones on the static prefix when the request has a cache layout
+       * (its SSE is read below like any other stream); other models and transports post the
+       * Chat Completions body unchanged.
        */
       const response =
         config.provider === 'cloudflare'
-          ? await sendChatCompletionRequest(url, init, send)
+          ? await sendChatCompletionRequest(
+              url,
+              init,
+              send,
+              request.promptCache
+                ? { staticPrefix: { stableToolCount: request.promptCache.stableToolCount } }
+                : {}
+            )
           : await send(url, init)
 
       if (!response.ok) {
@@ -217,6 +234,7 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
       let outputTokens = 0
       let cacheReadTokens = 0
       let cacheCreationTokens = 0
+      let cacheCreation1hTokens = 0
       let lastFinishReason: string | undefined
       let sawDoneMarker = false
       let textChars = 0
@@ -227,6 +245,7 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
         outputTokens,
         ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
         ...(cacheCreationTokens > 0 ? { cacheCreationTokens } : {}),
+        ...(cacheCreation1hTokens > 0 ? { cacheCreation1hTokens } : {}),
       })
 
       let usageReported = false
@@ -276,6 +295,10 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
               const created = parsed.usage.cache_creation_input_tokens
               if (typeof created === 'number' && created > 0) {
                 cacheCreationTokens = created
+              }
+              const createdOneHour = parsed.usage.cache_creation_1h_input_tokens
+              if (typeof createdOneHour === 'number' && createdOneHour > 0) {
+                cacheCreation1hTokens = createdOneHour
               }
             }
 

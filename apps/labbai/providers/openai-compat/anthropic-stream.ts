@@ -13,7 +13,8 @@
  *   blocks only); `input_json_delta` → arguments appended to that index
  * - `thinking_delta` → `delta.reasoning` (reasoning channel, never answer text)
  * - `message_start` / `message_delta` usage → `usage` (cache-inclusive `prompt_tokens`,
- *   `prompt_tokens_details.cached_tokens`, plus `cache_creation_input_tokens`)
+ *   `prompt_tokens_details.cached_tokens`, plus `cache_creation_input_tokens` and, when
+ *   Anthropic reports the TTL split, `cache_creation_1h_input_tokens`)
  * - `stop_reason` → `finish_reason` (`end_turn`→`stop`, `tool_use`→`tool_calls`,
  *   `max_tokens`→`length`)
  * - `error` → thrown {@link AnthropicStreamError}
@@ -41,6 +42,9 @@ const ANTHROPIC_STREAM_EVENT_TYPES = new Set([
  */
 export const ANTHROPIC_CACHE_WRITE_MULTIPLIER = 1.25
 
+/** Anthropic's 1-hour cache write premium over the base input rate (`ttl: "1h"`). */
+export const ANTHROPIC_CACHE_WRITE_1H_MULTIPLIER = 2
+
 /** Anthropic stream event as parsed from one SSE `data:` line. */
 export interface AnthropicStreamEvent {
   type: string
@@ -48,10 +52,14 @@ export interface AnthropicStreamEvent {
 }
 
 /**
- * Chat Completions usage plus Anthropic's cache-write count, which has no OpenAI field.
- * `prompt_tokens` includes cache reads and writes, matching OpenAI's cache-inclusive count.
+ * Chat Completions usage plus Anthropic's cache-write counts, which have no OpenAI field.
+ * `prompt_tokens` includes cache reads and writes, matching OpenAI's cache-inclusive count;
+ * `cache_creation_1h_input_tokens` is the 1-hour-TTL part of `cache_creation_input_tokens`.
  */
-export type AnthropicCompatUsage = CompletionUsage & { cache_creation_input_tokens?: number }
+export type AnthropicCompatUsage = CompletionUsage & {
+  cache_creation_input_tokens?: number
+  cache_creation_1h_input_tokens?: number
+}
 
 /** Translates one event; null when the event carries nothing to forward. */
 export type AnthropicStreamTranslator = (event: AnthropicStreamEvent) => ChatCompletionChunk | null
@@ -116,7 +124,16 @@ export interface AnthropicTokenCounts {
   input: number
   output: number
   cacheRead: number
+  /** Cache writes of every TTL. */
   cacheCreation: number
+  /** 1-hour-TTL part of `cacheCreation` (`cache_creation.ephemeral_1h_input_tokens`). */
+  cacheCreation1h?: number
+}
+
+/** `usage.cache_creation.ephemeral_1h_input_tokens`, when Anthropic reports the TTL split. */
+function readOneHourCacheCreation(usage: Record<string, unknown>): number | undefined {
+  const split = usage.cache_creation
+  return isRecordLike(split) ? readNumber(split.ephemeral_1h_input_tokens) : undefined
 }
 
 /**
@@ -125,12 +142,14 @@ export interface AnthropicTokenCounts {
  */
 export function toAnthropicCompatUsage(usage: AnthropicTokenCounts): AnthropicCompatUsage {
   const prompt = usage.input + usage.cacheRead + usage.cacheCreation
+  const oneHourWrites = Math.min(usage.cacheCreation1h ?? 0, usage.cacheCreation)
   return {
     prompt_tokens: prompt,
     completion_tokens: usage.output,
     total_tokens: prompt + usage.output,
     ...(usage.cacheRead > 0 ? { prompt_tokens_details: { cached_tokens: usage.cacheRead } } : {}),
     ...(usage.cacheCreation > 0 ? { cache_creation_input_tokens: usage.cacheCreation } : {}),
+    ...(oneHourWrites > 0 ? { cache_creation_1h_input_tokens: oneHourWrites } : {}),
   }
 }
 
@@ -142,6 +161,7 @@ export function readAnthropicTokenCounts(raw: unknown): AnthropicTokenCounts {
     output: readNumber(record.output_tokens) ?? 0,
     cacheRead: readNumber(record.cache_read_input_tokens) ?? 0,
     cacheCreation: readNumber(record.cache_creation_input_tokens) ?? 0,
+    cacheCreation1h: readOneHourCacheCreation(record) ?? 0,
   }
 }
 
@@ -162,7 +182,7 @@ export function createAnthropicStreamTranslator(): AnthropicStreamTranslator {
   let id = 'anthropic-stream'
   let model = ''
   const created = Math.floor(Date.now() / 1000)
-  const usage = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 }
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0, cacheCreation1h: 0 }
   const blocks = new Map<number, BlockState>()
   let nextToolIndex = 0
 
@@ -172,10 +192,12 @@ export function createAnthropicStreamTranslator(): AnthropicStreamTranslator {
     const output = readNumber(raw.output_tokens)
     const cacheRead = readNumber(raw.cache_read_input_tokens)
     const cacheCreation = readNumber(raw.cache_creation_input_tokens)
+    const cacheCreation1h = readOneHourCacheCreation(raw)
     if (input !== undefined) usage.input = input
     if (output !== undefined) usage.output = output
     if (cacheRead !== undefined) usage.cacheRead = cacheRead
     if (cacheCreation !== undefined) usage.cacheCreation = cacheCreation
+    if (cacheCreation1h !== undefined) usage.cacheCreation1h = cacheCreation1h
     return (
       input !== undefined ||
       output !== undefined ||

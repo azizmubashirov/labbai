@@ -23,6 +23,7 @@ import {
 } from '@/local-copilot/lib/agent/specialists/classify'
 import {
   domainSystemHint,
+  PARENT_STABLE_TOOL_NAMES,
   resolveHybridParentTools,
 } from '@/local-copilot/lib/agent/specialists/domains'
 import { runParallelSubagents } from '@/local-copilot/lib/agent/specialists/parallel-subagents'
@@ -129,12 +130,16 @@ import {
   recordToolCall,
   savePatch,
 } from '@/local-copilot/lib/persistence/store'
-import { buildLocalCopilotSystemPrompt } from '@/local-copilot/lib/prompts'
+import { buildFullLocalCopilotSystemPrompt } from '@/local-copilot/lib/prompts'
 import {
   createLocalCopilotProvider,
   getLocalCopilotProvider,
 } from '@/local-copilot/lib/providers/registry'
 import { getMessageContentText } from '@/local-copilot/lib/providers/message-content'
+import {
+  buildPromptCacheLayout,
+  orderToolsForPromptCache,
+} from '@/local-copilot/lib/providers/prompt-cache'
 import type { ChatMessage } from '@/local-copilot/lib/providers/types'
 import {
   prepareLocalToolConfirmation,
@@ -152,7 +157,6 @@ import {
   type ToolTurnRecord,
 } from '@/local-copilot/lib/synthesize-assistant-summary'
 import { toolRequiresWorkflowContextRefresh } from '@/local-copilot/lib/tools/context-refresh'
-import { LOCAL_COPILOT_TOOLS } from '@/local-copilot/lib/tools/definitions'
 import type { ToolExecutionContext, ToolExecutionResult } from '@/local-copilot/lib/tools/executor'
 import {
   bindLocalFileIntentChannel,
@@ -543,7 +547,7 @@ async function* runLocalCopilotAgentTurn(
     tokenCountModel
   )
 
-  const { relevantSkills, allTools, userTurn, chatConfig } = settledPrefetch
+  const { relevantSkills, skillCatalogMessage, allTools, userTurn, chatConfig } = settledPrefetch
   let taskState = settledPrefetch.taskState
   if (relevantSkills.names.length > 0) {
     logger.info('Arena Copilot loaded relevant workspace skills', {
@@ -620,11 +624,21 @@ async function* runLocalCopilotAgentTurn(
     intent,
     specialistTools,
   })
-  const tools = hybridTools.tools
   const usedFullCatalog = hybridTools.usedFullCatalog
-  const systemPrompt = buildLocalCopilotSystemPrompt({
-    ...intent,
-    useFullCatalog: usedFullCatalog,
+  /**
+   * Prompt-cache layout (`providers/prompt-cache.ts`): the rules are the full static prompt
+   * for every intent (no dynamic text), and the tools come in a fixed order — the stable
+   * always-on + specialist tools first, the intent-gated domain leaves after them — so the
+   * prefix is byte-identical across accounts, chats and days. Everything per turn follows as
+   * separate system messages.
+   */
+  const orderedTools = orderToolsForPromptCache(hybridTools.tools, PARENT_STABLE_TOOL_NAMES)
+  const tools = orderedTools.tools
+  const staticSystemPrompt = buildFullLocalCopilotSystemPrompt()
+  const promptCache = buildPromptCacheLayout({
+    staticSystemPrompt,
+    tools,
+    stableToolCount: orderedTools.stableToolCount,
   })
 
   const estimatedToolDefinitionTokens = estimateToolDefinitionTokens(tools, tokenCountModel)
@@ -638,8 +652,9 @@ async function* runLocalCopilotAgentTurn(
 
   const messages: ChatMessage[] = fitPromptWithSlots(
     [
-      { role: 'system', content: systemPrompt.content },
+      { role: 'system', content: staticSystemPrompt },
       ...(relevantSkills.message ? [relevantSkills.message] : []),
+      ...(skillCatalogMessage ? [skillCatalogMessage] : []),
       {
         role: 'system',
         content: `Current context:\n${contextJson}`,
@@ -698,10 +713,11 @@ async function* runLocalCopilotAgentTurn(
     specialistPrimary: intent.primary,
     specialistSecondary: intent.secondary,
     useFullCatalog: usedFullCatalog,
-    systemPromptChars: systemPrompt.content.length,
-    systemPromptOmittedSections: systemPrompt.omittedSectionIds,
+    systemPromptChars: staticSystemPrompt.length,
+    promptCachePrefixKey: promptCache.prefixKey,
+    stableToolCount: promptCache.stableToolCount,
     partitioning: 'hybrid',
-    skillToolEnabled: allTools.length > LOCAL_COPILOT_TOOLS.length,
+    skillCatalogPresent: Boolean(skillCatalogMessage),
     memory: getLocalCopilotMemorySnapshot(),
   })
 
@@ -822,6 +838,9 @@ async function* runLocalCopilotAgentTurn(
     turnMutations: createTurnMutations(),
     resolvedSecretTraceRegistry,
     ...(relevantSkills.message ? { relevantSkillGuidance: relevantSkills.message.content } : {}),
+    ...(skillCatalogMessage
+      ? { skillCatalog: getMessageContentText(skillCatalogMessage.content) }
+      : {}),
   }
 
   if (resolvedWorkflowId) {
@@ -849,7 +868,7 @@ async function* runLocalCopilotAgentTurn(
     return toolExecutorModule
   }
 
-  let specialistHintInsertAt = 1 + (relevantSkills.message ? 1 : 0)
+  let specialistHintInsertAt = 1 + (relevantSkills.message ? 1 : 0) + (skillCatalogMessage ? 1 : 0)
   if (!intent.useFullCatalog && intent.primary !== 'general') {
     messages.splice(specialistHintInsertAt, 0, {
       role: 'system',
@@ -1081,6 +1100,8 @@ async function* runLocalCopilotAgentTurn(
         maxTokens: maxOutputTokens,
         signal: params.signal,
         onUsage: turnCost.usageListener(config.model, config.provider),
+        // An `oauth_only` round narrows the tools, so its prefix is not the cached one.
+        ...(roundTools === tools ? { promptCache } : {}),
       }),
       abortSignal: params.signal,
       messages: MODEL_WAIT_STATUS_FALLBACK,
@@ -2251,6 +2272,7 @@ async function* runLocalCopilotAgentTurn(
           maxTokens: maxOutputTokens,
           signal: params.signal,
           onUsage: turnCost.usageListener(config.model, config.provider),
+          promptCache,
         }),
         abortSignal: params.signal,
         messages: MODEL_WAIT_STATUS_FALLBACK,

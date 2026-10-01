@@ -136,6 +136,7 @@ vi.mock('@/providers/utils', async (importOriginal) => ({
 
 import { runLocalCopilotAgent } from '@/local-copilot/lib/agent/orchestrator'
 import type { LocalTurnCostSummary } from '@/local-copilot/lib/billing/turn-cost-accumulator'
+import { buildFullLocalCopilotSystemPrompt } from '@/local-copilot/lib/prompts'
 import type { ChatCompletionRequest } from '@/local-copilot/lib/providers/types'
 import { buildRoundCapPauseMessage } from '@/local-copilot/lib/user-facing-text'
 
@@ -364,6 +365,48 @@ describe('runLocalCopilotAgent billing turn id', () => {
           typeof message.content === 'string' &&
           message.content.includes('stopped at the per-turn step limit')
       )
+    ).toBe(true)
+  })
+
+  it('sends the static rules first and the turn context after them', async () => {
+    for (const [workspaceId, chatId] of [
+      ['ws-1', 'chat-1'],
+      ['ws-2', 'chat-2'],
+    ]) {
+      await drainAgent(
+        runLocalCopilotAgent({
+          userId: 'user-1',
+          workspaceId,
+          chatId,
+          message: 'hello',
+          messageId: `msg-${chatId}`,
+          persistLocally: false,
+        })
+      )
+    }
+
+    /** Main-loop rounds carry the cache layout; side calls (titles, status lines) do not. */
+    const mainRounds = mockChatCompletionStream.mock.calls
+      .map(([request]) => request as ChatCompletionRequest)
+      .filter((request) => request.promptCache !== undefined)
+    expect(mainRounds).toHaveLength(2)
+    const [first, second] = mainRounds
+    expect(first.messages[0]).toEqual({
+      role: 'system',
+      content: buildFullLocalCopilotSystemPrompt(),
+    })
+    expect(second.messages[0]).toEqual(first.messages[0])
+    expect(first.promptCache?.prefixKey).toMatch(/^[0-9a-f]{16}$/)
+    expect(second.promptCache).toEqual(first.promptCache)
+    expect(
+      first.messages
+        .slice(1)
+        .some(
+          (message) =>
+            message.role === 'system' &&
+            typeof message.content === 'string' &&
+            message.content.startsWith('Current context:')
+        )
     ).toBe(true)
   })
 })

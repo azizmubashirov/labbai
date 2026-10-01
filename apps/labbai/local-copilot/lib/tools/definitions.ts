@@ -1,14 +1,6 @@
 import { buildMothershipDelegatedToolDefinitions } from '@/local-copilot/lib/tools/mothership-delegated-tool-defs'
-import {
-  buildLocalCopilotUserSkillTool,
-  buildLocalCopilotUserSkillToolFromSummaries,
-} from '@/local-copilot/lib/tools/user-skills'
+import { LOCAL_COPILOT_USER_SKILL_TOOL } from '@/local-copilot/lib/tools/user-skills'
 import type { LocalCopilotToolDefinition } from '@/local-copilot/lib/types'
-
-export interface ResolveLocalCopilotToolsOptions {
-  /** Skip a second skills query when context already loaded the catalog. */
-  skills?: Array<{ name: string; description: string }>
-}
 
 const CORE_LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   {
@@ -260,18 +252,19 @@ export const LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   ...buildMothershipDelegatedToolDefinitions(),
 ]
 
+/** Every tool the copilot can be offered, including the static load_user_skill tool. */
+const LOCAL_COPILOT_TOOL_CATALOG: LocalCopilotToolDefinition[] = [
+  ...LOCAL_COPILOT_TOOLS,
+  LOCAL_COPILOT_USER_SKILL_TOOL,
+]
+
 /**
- * Resolves the full tool list for a turn, including workspace user skills when present.
+ * The full tool catalog for a turn. It is the same for every workspace — the workspace's
+ * skill catalog is a dynamic context message, not part of a tool — so the tool definitions
+ * stay byte-stable for prompt caching (see `providers/prompt-cache.ts`).
  */
-export async function resolveLocalCopilotTools(
-  workspaceId: string,
-  options?: ResolveLocalCopilotToolsOptions
-): Promise<LocalCopilotToolDefinition[]> {
-  const skillTool =
-    options?.skills !== undefined
-      ? buildLocalCopilotUserSkillToolFromSummaries(options.skills)
-      : await buildLocalCopilotUserSkillTool(workspaceId)
-  return skillTool ? [...LOCAL_COPILOT_TOOLS, skillTool] : LOCAL_COPILOT_TOOLS
+export function resolveLocalCopilotTools(): Promise<LocalCopilotToolDefinition[]> {
+  return Promise.resolve(LOCAL_COPILOT_TOOL_CATALOG)
 }
 
 export function getToolDefinition(name: string): LocalCopilotToolDefinition | undefined {

@@ -17,44 +17,44 @@ export interface LocalCopilotSkillSummary {
   description: string
 }
 
+/** Starts the dynamic system message that lists the workspace's skills. */
+export const USER_SKILL_CATALOG_SYSTEM_PREFIX = 'Workspace skills available to load_user_skill:'
+
 /**
- * Builds the load_user_skill tool from already-loaded skill summaries (no DB).
+ * The load_user_skill tool. The definition is the same for every workspace (no skill names
+ * or enum) so the copilot's tool list stays byte-stable for prompt caching; the workspace's
+ * own catalog travels in the dynamic context ({@link formatUserSkillCatalogSystemMessage}).
+ * Unknown names fail in `executeLoadUserSkill` with "Skill … not found".
  */
-export function buildLocalCopilotUserSkillToolFromSummaries(
-  rows: Array<{ name: string; description: string }>
-): LocalCopilotToolDefinition | null {
-  if (rows.length === 0) return null
-
-  const skillNames = rows.map((row) => row.name)
-  const catalog = rows.map((row) => `- ${row.name}: ${row.description}`).join('\n')
-
-  return {
-    name: LOAD_USER_SKILL_TOOL_NAME,
-    description: `Load a user-created skill's full instructions only when that skill is listed below and its body is not already in the Relevant workspace skills prompt. Do not call this for names that are already inlined. Never act on a skill's name or description alone. Available skills:\n${catalog}`,
-    parameters: {
-      type: 'object',
-      properties: {
-        skill_name: {
-          type: 'string',
-          description: 'Exact name of the user skill to load.',
-          enum: skillNames,
-        },
+export const LOCAL_COPILOT_USER_SKILL_TOOL: LocalCopilotToolDefinition = {
+  name: LOAD_USER_SKILL_TOOL_NAME,
+  description: `Load a user-created skill's full instructions only when that skill is listed under "${USER_SKILL_CATALOG_SYSTEM_PREFIX}" in the context and its body is not already in the Relevant workspace skills prompt. Do not call this for names that are already inlined. Never act on a skill's name or description alone.`,
+  parameters: {
+    type: 'object',
+    properties: {
+      skill_name: {
+        type: 'string',
+        description: 'Exact name of a listed user skill to load.',
       },
-      required: ['skill_name'],
-      additionalProperties: false,
     },
-  }
+    required: ['skill_name'],
+    additionalProperties: false,
+  },
 }
 
 /**
- * Builds the load_user_skill tool for Arena Copilot when the workspace has
- * user-created skills. Mirrors Cloud/Mothership `buildUserSkillTool`.
+ * The workspace's skill catalog (name: description per line, sorted by name) as a dynamic
+ * system message, or null when the workspace has no skills.
  */
-export async function buildLocalCopilotUserSkillTool(
-  workspaceId: string
-): Promise<LocalCopilotToolDefinition | null> {
-  if (!workspaceId) return null
-  return buildLocalCopilotUserSkillToolFromSummaries(await loadWorkspaceSkillSummaries(workspaceId))
+export function formatUserSkillCatalogSystemMessage(
+  rows: Array<{ name: string; description: string }>
+): { role: 'system'; content: string } | null {
+  if (rows.length === 0) return null
+  const catalog = [...rows]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((row) => `- ${row.name}: ${row.description}`)
+    .join('\n')
+  return { role: 'system', content: `${USER_SKILL_CATALOG_SYSTEM_PREFIX}\n${catalog}` }
 }
 
 /**

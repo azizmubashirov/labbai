@@ -658,8 +658,9 @@ with the Anthropic Messages format only (`POST /ai/v1/messages`; whether `/ai/v1
 forwards `cache_control` is undocumented). So every `anthropic/*` chat completion is rewritten to
 `/ai/v1/messages` (same token + `cf-aig-gateway-id`): system, turns, tool calls / results,
 images, tools, tool choice, `response_format` → `output_config.format`, sampling, stop. Breakpoints
-(`{"type":"ephemeral"}`, max 4): last tool, last system block, the latest two user-role turns
-(the newest is the write point for the next round, the previous a guaranteed read). Mid-turn
+(`{"type":"ephemeral"}`, max 4) for Agent blocks: last tool and the latest user-role turns
+(the newest is the write point for the next round, the previous a guaranteed read); the local
+copilot uses the shared static-prefix layout below. Mid-turn
 system messages become user text (several Claude models reject `role: "system"` in
 `messages`). Streams come back as Anthropic SSE (existing translator); non-streaming answers
 are converted back to `chat.completion`. If `/messages` answers 400 / 404 / 422 the original
@@ -668,6 +669,47 @@ chat-completions request is sent instead and that model skips `/messages` for 15
 `prompt_cache_key`; the copilot on the Cloudflare unified endpoint still sends none (Cloudflare
 does not document the field; OpenAI caches long prefixes automatically). Gemini caches
 implicitly — nothing to send.
+
+Shared 1-hour static prefix (local copilot, 2026-10-02; layout documented in
+`local-copilot/lib/providers/prompt-cache.ts`). Every copilot request now starts with a
+byte-identical constant part, cached once for all accounts (one Cloudflare account):
+- **Rules** = the full static prompt (`buildFullLocalCopilotSystemPrompt`, pinned by
+  `system-prompt.golden.txt`, unchanged text) for every intent — no per-intent pruning.
+- **Tools** in a fixed order: the stable set (`PARENT_STABLE_TOOL_NAMES` = always-on leaves
+  except `create_workflow` + the 12 specialist entry tools, ~21k chars) sorted by name, then the
+  intent-gated domain leaves sorted by name. The full catalog is *not* sent every time: it is
+  ~77k chars (~20k tokens) vs ~22k for the stable set, and with ~45 rounds per turn re-reading it
+  would cost more than it saves; the gated tail is a deterministic function of the intent, so
+  each intent signature (general, table, workflow+run, …) is still one prefix shared by every
+  account. `load_user_skill` is now static (no skill names / enum); the workspace's skill
+  catalog is a dynamic system message ("Workspace skills available to load_user_skill:").
+- **Dynamic context** (skills, skill catalog, specialist hint/findings, `Current context`,
+  workspace snapshot, task state, session memory, failures, constraints, directive) stays as
+  separate system messages *after* the rules. OpenAI/Gemini get them as system messages
+  (static-first order maximizes automatic prefix caching); OpenAI's `prompt_cache_key` is
+  `local-copilot:<model>:<sha256(tools+rules)[:16]>`.
+- **Claude (`/ai/v1/messages`)**: `system` = rules only (plain string); the first user turn
+  opens with a constant marker block (`ANTHROPIC_STATIC_CONTEXT_MARKER`) carrying
+  `cache_control {type:'ephemeral', ttl:'1h'}`, followed by each dynamic system message as a
+  `<system_message>…</system_message>` text block, then the conversation. Breakpoints (max 4,
+  1h before 5m): 1h on the last stable tool (only when gated tools follow), 1h on the marker,
+  5m on the latest user turns with what is left. Specialists: same layout, their own prefix
+  (domain tools sorted + the domain system prompt; one prefix per domain and nesting tier).
+- If `/messages` rejects a 1h request (400/404/422) it is retried at once with 5-minute
+  breakpoints and that model stays on 5 minutes for 15 min (warning
+  `Cloudflare /messages rejected the 1-hour cache request`); only then the chat-completions
+  fallback applies.
+- Pricing: `cache_creation.ephemeral_1h_input_tokens` from the usage (stream `message_start` /
+  `message_delta`, non-streaming `usage`) → `cache_creation_1h_input_tokens` →
+  `TokenUsage.cacheCreation1hTokens`; 1h writes are priced at 2 × input, the rest of the writes
+  at 1.25 ×, reads at the cached-input price. Writes without a TTL split are priced as 5-minute.
+  Ledger metadata gains `cacheCreation1hTokens`.
+
+Verify live (1h cache): send the same static prefix twice (different dynamic context) and
+check `usage.cache_creation.ephemeral_1h_input_tokens` > 0 on the first call and
+`cache_read_input_tokens` ≈ prefix size on the second; in `usage_log.metadata`,
+`cacheCreation1hTokens` appears once per hour per prefix. Unverified: whether Cloudflare
+forwards `ttl: "1h"` (the 5-minute retry covers a rejection) and whether it reports the TTL split.
 
 Round cap: `COPILOT_MAX_ROUNDS_PER_TURN` (default 20) model rounds per user message, one shared
 budget for the main loop, specialist passes, parallel subagents and nested specialists

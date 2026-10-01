@@ -222,6 +222,18 @@ export const DOMAIN_TOOL_NAMES: Record<LocalCopilotCloudSpecialistDomain, readon
 
 export const SPECIALIST_ENTRY_TOOL_NAMES = new Set<string>(LOCAL_COPILOT_CLOUD_SPECIALIST_DOMAINS)
 
+/**
+ * The parent turn's prompt-cache-stable tools: offered on every intent, so they lead the
+ * tool list (sorted by name) and their definitions are a prefix shared by every account and
+ * chat; the intent-gated domain leaves follow them (`local-copilot/lib/providers/prompt-cache.ts`).
+ * `create_workflow` is always-on but withheld from non-workflow domain intents
+ * ({@link toolNamesForDomain}), so it sits with the gated tools.
+ */
+export const PARENT_STABLE_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  ...[...ALWAYS_ON_TOOL_NAMES].filter((name) => name !== 'create_workflow'),
+  ...LOCAL_COPILOT_CLOUD_SPECIALIST_DOMAINS,
+])
+
 export interface LocalCopilotIntent {
   primary: LocalCopilotSpecialistDomain
   secondary: LocalCopilotSpecialistDomain[]

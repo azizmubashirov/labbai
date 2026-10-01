@@ -10,18 +10,24 @@
  *
  * - {@link toAnthropicMessagesBody} turns the Chat Completions body into a Messages body
  *   (system, user / assistant / tool turns, images, tools, tool choice, JSON schema
- *   output, sampling, stop) and marks the stable prefix — the last tool, the last system
- *   block and the latest two user-role turns (max {@link ANTHROPIC_MAX_CACHE_BREAKPOINTS}).
+ *   output, sampling, stop) and marks the stable prefix — the last tool and the latest
+ *   user-role turns (max {@link ANTHROPIC_MAX_CACHE_BREAKPOINTS}). With a
+ *   {@link AnthropicStaticPrefix} (local copilot) the static rules + tools get 1-hour
+ *   breakpoints shared by every account and the dynamic context moves after them.
  * - Streams come back as Anthropic SSE, which the shared readers already translate
  *   (`providers/openai-compat/anthropic-stream.ts`); a non-streaming answer is turned
  *   back into a `chat.completion` by {@link toChatCompletionFromAnthropicMessage}.
  * - Usage keeps Anthropic's cache buckets: `prompt_tokens` stays cache-inclusive, reads go
  *   to `prompt_tokens_details.cached_tokens`, writes to `cache_creation_input_tokens`
- *   (priced at `ANTHROPIC_CACHE_WRITE_MULTIPLIER` × input, the 5-minute ephemeral rate).
+ *   (priced at `ANTHROPIC_CACHE_WRITE_MULTIPLIER` × input, the 5-minute ephemeral rate;
+ *   1-hour writes, reported as `cache_creation_1h_input_tokens`, at 2 × input).
  *
  * If `/messages` rejects a request shape (400 / 404 / 422), the original Chat Completions
  * request is sent instead and the model skips `/messages` for a while, so a schema gap on
- * Cloudflare's side costs one failed call, never a broken Agent or copilot turn.
+ * Cloudflare's side costs one failed call, never a broken Agent or copilot turn. A rejected
+ * request that carried 1-hour breakpoints is first retried on `/messages` with 5-minute
+ * ones (and that model keeps using 5 minutes for a while), so an unsupported `ttl` never
+ * costs the prompt cache altogether.
  */
 import { createLogger } from '@labbai/logger'
 import { isRecordLike } from '@labbai/utils/object'
@@ -37,7 +43,36 @@ const logger = createLogger('CloudflareAnthropicMessages')
 /** Anthropic accepts at most four `cache_control` breakpoints per request. */
 export const ANTHROPIC_MAX_CACHE_BREAKPOINTS = 4
 
-const CACHE_CONTROL = { type: 'ephemeral' } as const
+/** Anthropic cache lifetimes: the default 5 minutes, or 1 hour (2 × input to write). */
+export type AnthropicCacheTtl = '5m' | '1h'
+
+/**
+ * A Chat Completions request whose first system message is a static prompt (identical for
+ * every account and chat) and whose first `stableToolCount` tools never change. See
+ * `local-copilot/lib/providers/prompt-cache.ts` for the full layout.
+ */
+export interface AnthropicStaticPrefix {
+  stableToolCount: number
+  /** TTL of the static-prefix breakpoints (default `1h`). */
+  ttl?: AnthropicCacheTtl
+}
+
+export interface AnthropicMessagesOptions {
+  staticPrefix?: AnthropicStaticPrefix
+}
+
+/**
+ * First block of the first user turn in a static-prefix request: constant text that
+ * carries the static-prefix breakpoint (Cloudflare takes `system` only as a string, so the
+ * breakpoint covering tools + system has to sit on a message block) and tells the model how
+ * to read the dynamic system messages that follow it.
+ */
+export const ANTHROPIC_STATIC_CONTEXT_MARKER =
+  'Context from the Labbai runtime follows. Each <system_message> block is a system message (workspace and session context for this turn), not text written by the user; follow it like the system prompt. Everything outside those blocks is the conversation itself.'
+
+function cacheControl(ttl: AnthropicCacheTtl): Record<string, string> {
+  return ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' }
+}
 
 /** `max_tokens` is required by Messages; defaults when the caller sent none. */
 const DEFAULT_MAX_TOKENS_NON_STREAMING = 16_000
@@ -48,6 +83,9 @@ const FALLBACK_STATUSES = new Set([400, 404, 422])
 
 /** How long a model keeps using Chat Completions after `/messages` rejected it. */
 const MESSAGES_FALLBACK_COOLDOWN_MS = 15 * 60 * 1000
+
+/** How long a model keeps 5-minute static-prefix breakpoints after a 1-hour TTL was rejected. */
+const ONE_HOUR_TTL_COOLDOWN_MS = 15 * 60 * 1000
 
 const PLACEHOLDER_USER_TEXT = '(conversation continues)'
 
@@ -62,10 +100,21 @@ interface AnthropicMessage {
 export type SendRequest = (url: string, init: RequestInit) => Promise<Response>
 
 const messagesFallbackUntil = new Map<string, number>()
+const oneHourTtlRejectedUntil = new Map<string, number>()
 
-/** Clears the per-model `/messages` fallback memory (tests). */
+/** Clears the per-model `/messages` fallback and TTL memory (tests). */
 export function resetCloudflareAnthropicMessagesFallback(): void {
   messagesFallbackUntil.clear()
+  oneHourTtlRejectedUntil.clear()
+}
+
+/** True while `until` (a per-model cooldown) is still in the future; clears it once expired. */
+function isCoolingDown(memory: Map<string, number>, model: string): boolean {
+  const until = memory.get(model)
+  if (until === undefined) return false
+  if (until > Date.now()) return true
+  memory.delete(model)
+  return false
 }
 
 /** True for a Claude id on Cloudflare's unified API (`anthropic/...`). */
@@ -229,8 +278,12 @@ function toAnthropicConversation(rawMessages: unknown[]): {
     ]
   }
 
+  return { system, messages }
+}
+
+/** Messages needs a leading user turn: a system-only request's system becomes it. */
+function ensureLeadingUserTurn(system: AnthropicBlock[], messages: AnthropicMessage[]): void {
   if (messages.length === 0) {
-    /** A system-only request: Messages needs at least one user turn. */
     messages.push({
       role: 'user',
       content:
@@ -239,8 +292,28 @@ function toAnthropicConversation(rawMessages: unknown[]): {
   } else if (messages[0].role !== 'user') {
     messages.unshift({ role: 'user', content: [{ type: 'text', text: PLACEHOLDER_USER_TEXT }] })
   }
+}
 
-  return { system, messages }
+/**
+ * Static-prefix layout: only the first system block stays `system` (the static rules); the
+ * other leading system blocks (dynamic context) open the first user turn, after the constant
+ * {@link ANTHROPIC_STATIC_CONTEXT_MARKER} that carries the static-prefix breakpoint.
+ */
+function moveDynamicSystemIntoFirstUserTurn(
+  system: AnthropicBlock[],
+  messages: AnthropicMessage[],
+  ttl: AnthropicCacheTtl
+): void {
+  const dynamic = system.splice(1)
+  const context: AnthropicBlock[] = [
+    { type: 'text', text: ANTHROPIC_STATIC_CONTEXT_MARKER, cache_control: cacheControl(ttl) },
+    ...dynamic.map((block) => {
+      const text = typeof block.text === 'string' ? block.text : ''
+      return { type: 'text', text: `<system_message>\n${text}\n</system_message>` }
+    }),
+  ]
+  if (messages[0]?.role === 'user') messages[0].content.unshift(...context)
+  else messages.unshift({ role: 'user', content: context })
 }
 
 function toAnthropicTools(tools: unknown): AnthropicBlock[] {
@@ -289,15 +362,34 @@ function toOutputConfig(responseFormat: unknown): Record<string, unknown> | unde
   return { format: { type: 'json_schema', schema: jsonSchema.schema } }
 }
 
-function withCacheControl(block: AnthropicBlock): AnthropicBlock {
-  return { ...block, cache_control: CACHE_CONTROL }
+function withCacheControl(block: AnthropicBlock, ttl: AnthropicCacheTtl = '5m'): AnthropicBlock {
+  return { ...block, cache_control: cacheControl(ttl) }
+}
+
+/**
+ * 5-minute breakpoints on the last block of the latest (at most three) user-role turns —
+ * the newest is the write point for the next request (the next tool round or user turn),
+ * the earlier ones are guaranteed read points. Blocks that already carry a breakpoint (the
+ * static-prefix marker) are skipped; at most `available` are placed.
+ */
+function markLatestUserTurns(messages: AnthropicMessage[], available: number): void {
+  let marked = 0
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (marked >= available || marked >= 3) break
+    const message = messages[index]
+    if (message.role !== 'user' || message.content.length === 0) continue
+    const last = message.content.length - 1
+    if (message.content[last].cache_control) continue
+    message.content[last] = withCacheControl(message.content[last])
+    marked++
+  }
 }
 
 /**
  * Marks the stable prefix for Anthropic prompt caching (render order: tools → system →
- * messages): the last tool and the last block of the latest three user-role turns — the
- * newest one is the write point for the next request (the next tool round or user turn),
- * the earlier ones are guaranteed read points.
+ * messages): the last tool and the latest user-role turns. Cloudflare's `/ai/v1/messages`
+ * only accepts `system` as a plain string, so the system prompt carries no breakpoint of its
+ * own; the user-turn breakpoints cache it (it renders before `messages`).
  */
 function applyCacheBreakpoints(tools: AnthropicBlock[], messages: AnthropicMessage[]): void {
   let remaining = ANTHROPIC_MAX_CACHE_BREAKPOINTS
@@ -305,21 +397,30 @@ function applyCacheBreakpoints(tools: AnthropicBlock[], messages: AnthropicMessa
     tools[tools.length - 1] = withCacheControl(tools[tools.length - 1])
     remaining--
   }
-  /**
-   * Cloudflare's `/ai/v1/messages` only accepts `system` as a plain string, so the system
-   * prompt carries no breakpoint of its own; the user-turn breakpoints below cache it
-   * (it renders before `messages`).
-   */
-  let markedTurns = 0
-  for (let index = messages.length - 1; index >= 0; index--) {
-    if (remaining <= 0 || markedTurns >= 3) break
-    const message = messages[index]
-    if (message.role !== 'user' || message.content.length === 0) continue
-    const last = message.content.length - 1
-    message.content[last] = withCacheControl(message.content[last])
+  markLatestUserTurns(messages, remaining)
+}
+
+/**
+ * Static-prefix breakpoints (Anthropic needs longer TTLs before shorter ones, max 4):
+ * 1. `ttl` on the last stable tool — only when intent-gated tools follow it, so the stable
+ *    tools stay shared across intents;
+ * 2. `ttl` on the context marker that opens the first user turn (set by
+ *    {@link moveDynamicSystemIntoFirstUserTurn}) — covers all tools + the static rules;
+ * 3. 5 minutes on the latest user turns with the breakpoints left.
+ */
+function applyStaticPrefixBreakpoints(
+  tools: AnthropicBlock[],
+  messages: AnthropicMessage[],
+  staticPrefix: AnthropicStaticPrefix,
+  ttl: AnthropicCacheTtl
+): void {
+  let remaining = ANTHROPIC_MAX_CACHE_BREAKPOINTS - 1
+  const stableToolCount = Math.min(Math.max(0, staticPrefix.stableToolCount), tools.length)
+  if (stableToolCount > 0 && stableToolCount < tools.length) {
+    tools[stableToolCount - 1] = withCacheControl(tools[stableToolCount - 1], ttl)
     remaining--
-    markedTurns++
   }
+  markLatestUserTurns(messages, remaining)
 }
 
 /**
@@ -327,14 +428,25 @@ function applyCacheBreakpoints(tools: AnthropicBlock[], messages: AnthropicMessa
  * `/ai/v1/messages`, with `cache_control` breakpoints on the stable prefix. The model id
  * (`anthropic/...`) is kept as Cloudflare expects it.
  */
-export function toAnthropicMessagesBody(chat: Record<string, unknown>): Record<string, unknown> {
+export function toAnthropicMessagesBody(
+  chat: Record<string, unknown>,
+  options: AnthropicMessagesOptions = {}
+): Record<string, unknown> {
   const model = typeof chat.model === 'string' ? chat.model : ''
   const stream = chat.stream === true
   const { system, messages } = toAnthropicConversation(
     Array.isArray(chat.messages) ? chat.messages : []
   )
   const tools = toAnthropicTools(chat.tools)
-  applyCacheBreakpoints(tools, messages)
+  const staticPrefix = options.staticPrefix
+  if (staticPrefix && system.length > 0) {
+    const ttl = staticPrefix.ttl ?? '1h'
+    moveDynamicSystemIntoFirstUserTurn(system, messages, ttl)
+    applyStaticPrefixBreakpoints(tools, messages, staticPrefix, ttl)
+  } else {
+    ensureLeadingUserTurn(system, messages)
+    applyCacheBreakpoints(tools, messages)
+  }
 
   const requestedMaxTokens =
     typeof chat.max_tokens === 'number'
@@ -430,10 +542,16 @@ interface AnthropicRoute {
   messagesUrl: string
   init: RequestInit
   stream: boolean
+  /** The same request with 5-minute static-prefix breakpoints, when `init` uses 1 hour. */
+  shortTtlInit?: RequestInit
 }
 
 /** The `/messages` rewrite of a Claude chat-completions POST, or null to send it unchanged. */
-function resolveAnthropicRoute(url: string, init: RequestInit): AnthropicRoute | null {
+function resolveAnthropicRoute(
+  url: string,
+  init: RequestInit,
+  options: AnthropicMessagesOptions
+): AnthropicRoute | null {
   if (!/\/chat\/completions$/.test(url)) return null
   if ((init.method ?? 'GET').toUpperCase() !== 'POST') return null
   if (typeof init.body !== 'string') return null
@@ -444,24 +562,38 @@ function resolveAnthropicRoute(url: string, init: RequestInit): AnthropicRoute |
     return null
   }
   if (!isRecordLike(body)) return null
-  const requestedModel = body.model
+  const chat: Record<string, unknown> = body
+  const requestedModel = chat.model
   if (!isAnthropicModelId(requestedModel)) return null
   const model = requestedModel.trim()
-  const until = messagesFallbackUntil.get(model)
-  if (until !== undefined) {
-    if (until > Date.now()) return null
-    messagesFallbackUntil.delete(model)
-  }
+  if (isCoolingDown(messagesFallbackUntil, model)) return null
 
-  const anthropicBody = toAnthropicMessagesBody(body)
   /** The body changes size; drop any length the caller computed for the original. */
   const headers = new Headers(init.headers)
   headers.delete('content-length')
+  const toInit = (messagesOptions: AnthropicMessagesOptions) => {
+    const anthropicBody = toAnthropicMessagesBody(chat, messagesOptions)
+    return {
+      init: { ...init, headers, body: JSON.stringify(anthropicBody) },
+      stream: anthropicBody.stream === true,
+    }
+  }
+
+  const staticPrefix = options.staticPrefix
+  const wantsOneHour =
+    staticPrefix !== undefined &&
+    (staticPrefix.ttl ?? '1h') === '1h' &&
+    !isCoolingDown(oneHourTtlRejectedUntil, model)
+  const shortTtlOptions: AnthropicMessagesOptions = staticPrefix
+    ? { ...options, staticPrefix: { ...staticPrefix, ttl: '5m' } }
+    : options
+  const primary = toInit(wantsOneHour ? options : shortTtlOptions)
   return {
     model,
     messagesUrl: url.replace(/\/chat\/completions$/, '/messages'),
-    init: { ...init, headers, body: JSON.stringify(anthropicBody) },
-    stream: anthropicBody.stream === true,
+    init: primary.init,
+    stream: primary.stream,
+    ...(wantsOneHour ? { shortTtlInit: toInit(shortTtlOptions).init } : {}),
   }
 }
 
@@ -470,16 +602,30 @@ function resolveAnthropicRoute(url: string, init: RequestInit): AnthropicRoute |
  * Anthropic Messages endpoint (prompt caching). Streaming responses are returned as the
  * Anthropic SSE body (the OpenAI-compat readers translate it); non-streaming responses are
  * converted to a `chat.completion` JSON body. Anything else is sent unchanged.
+ *
+ * `options.staticPrefix` (local copilot) selects the static-prefix layout with 1-hour
+ * breakpoints; Agent blocks send none and keep the default layout.
  */
 export async function sendChatCompletionRequest(
   url: string,
   init: RequestInit,
-  send: SendRequest
+  send: SendRequest,
+  options: AnthropicMessagesOptions = {}
 ): Promise<Response> {
-  const route = resolveAnthropicRoute(url, init)
+  const route = resolveAnthropicRoute(url, init, options)
   if (!route) return send(url, init)
 
-  const response = await send(route.messagesUrl, route.init)
+  let response = await send(route.messagesUrl, route.init)
+  if (FALLBACK_STATUSES.has(response.status) && route.shortTtlInit) {
+    const errorText = await response.text().catch(() => '')
+    oneHourTtlRejectedUntil.set(route.model, Date.now() + ONE_HOUR_TTL_COOLDOWN_MS)
+    logger.warn('Cloudflare /messages rejected the 1-hour cache request; retrying with 5 minutes', {
+      model: route.model,
+      status: response.status,
+      error: errorText.slice(0, 500),
+    })
+    response = await send(route.messagesUrl, route.shortTtlInit)
+  }
   if (FALLBACK_STATUSES.has(response.status)) {
     const errorText = await response.text().catch(() => '')
     messagesFallbackUntil.set(route.model, Date.now() + MESSAGES_FALLBACK_COOLDOWN_MS)
