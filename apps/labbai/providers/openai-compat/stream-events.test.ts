@@ -154,6 +154,93 @@ describe('createOpenAICompatibleAgentEventStream', () => {
     expect(onComplete.mock.calls[0][0].content).toBe('Hello world')
   })
 
+  it('translates Anthropic Messages events (Cloudflare anthropic/* streams)', async () => {
+    const onComplete = vi.fn()
+    const stream = createOpenAICompatibleAgentEventStream(
+      (async function* () {
+        yield* [
+          {
+            type: 'message_start',
+            message: { id: 'msg_1', usage: { input_tokens: 12, output_tokens: 1 } },
+          },
+          { type: 'content_block_start', index: 0, content_block: { type: 'thinking' } },
+          {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'thinking_delta', thinking: 'Plan.' },
+          },
+          { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
+          { type: 'ping' },
+          { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'O' } },
+          { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'K' } },
+          {
+            type: 'content_block_start',
+            index: 2,
+            content_block: { type: 'tool_use', id: 'toolu_1', name: 'lookup', input: {} },
+          },
+          {
+            type: 'content_block_delta',
+            index: 2,
+            delta: { type: 'input_json_delta', partial_json: '{"q"' },
+          },
+          {
+            type: 'content_block_delta',
+            index: 2,
+            delta: { type: 'input_json_delta', partial_json: ':1}' },
+          },
+          {
+            type: 'message_delta',
+            delta: { stop_reason: 'tool_use' },
+            usage: { output_tokens: 6 },
+          },
+          { type: 'message_stop' },
+        ] as any
+      })(),
+      { providerName: 'Cloudflare', emitToolCallStarts: true, onComplete }
+    )
+
+    const events = await collectEvents(stream)
+    expect(events).toEqual([
+      { type: 'thinking_delta', text: 'Plan.' },
+      { type: 'text_delta', text: 'O', turn: 'final' },
+      { type: 'text_delta', text: 'K', turn: 'final' },
+      { type: 'tool_call_start', id: 'toolu_1', name: 'lookup' },
+    ])
+    expect(onComplete.mock.calls[0][0]).toMatchObject({
+      content: 'OK',
+      thinking: 'Plan.',
+      finishReason: 'tool_calls',
+      usage: { prompt_tokens: 12, completion_tokens: 6, total_tokens: 18 },
+      toolCalls: [
+        { id: 'toolu_1', type: 'function', function: { name: 'lookup', arguments: '{"q":1}' } },
+      ],
+    })
+  })
+
+  it('surfaces an Anthropic error event instead of completing empty', async () => {
+    const stream = createOpenAICompatibleAgentEventStream(
+      (async function* () {
+        yield { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } } as any
+      })(),
+      { providerName: 'Cloudflare' }
+    )
+
+    await expect(collectEvents(stream)).rejects.toThrow('Overloaded')
+  })
+
+  it('fails a stream that ends with no content, tool calls, usage or finish_reason', async () => {
+    const onComplete = vi.fn()
+    const stream = createOpenAICompatibleAgentEventStream(
+      (async function* () {
+        yield { type: 'ping' } as any
+      })(),
+      { providerName: 'Cloudflare', onComplete }
+    )
+
+    await expect(collectEvents(stream)).rejects.toThrow('stream ended without any content')
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
   it('surfaces documented in-band provider errors', async () => {
     const stream = createOpenAICompatibleAgentEventStream(
       (async function* () {

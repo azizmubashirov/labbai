@@ -13,6 +13,11 @@ import { createLogger } from '@labbai/logger'
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { CompletionUsage } from 'openai/resources/completions'
 import { captureProviderConversationStep } from '@/providers/conversation-history'
+import {
+  type AnthropicStreamTranslator,
+  createAnthropicStreamTranslator,
+  isAnthropicStreamEvent,
+} from '@/providers/openai-compat/anthropic-stream'
 import { getChatCompletionConversationUsage } from '@/providers/openai-compat/conversation-usage'
 import {
   getOpenRouterReasoningDetailText,
@@ -109,7 +114,9 @@ function extractDeltaReasoning(delta: CompatChunkDelta | undefined): {
 
 /**
  * Converts an OpenAI-compatible chat.completions stream into an in-process
- * {@link AgentStreamEvent} object stream.
+ * {@link AgentStreamEvent} object stream. Anthropic Messages events (Cloudflare's
+ * unified endpoint streams `anthropic/*` models that way) are translated into the
+ * equivalent chunks first, so both formats produce the same events.
  */
 export function createOpenAICompatibleAgentEventStream(
   stream: AsyncIterable<ChatCompletionChunk>,
@@ -138,12 +145,21 @@ export function createOpenAICompatibleAgentEventStream(
         { id?: string; name?: string; args: string; started: boolean }
       >()
 
+      let anthropicTranslator: AnthropicStreamTranslator | undefined
+
       try {
         streamIterator = stream[Symbol.asyncIterator]()
         while (true) {
           const next = await streamIterator.next()
           if (next.done || cancelled) break
-          const chunk = next.value
+          const raw: unknown = next.value
+          let chunk: ChatCompletionChunk = next.value
+          if (isAnthropicStreamEvent(raw)) {
+            anthropicTranslator ??= createAnthropicStreamTranslator()
+            const translated = anthropicTranslator(raw)
+            if (!translated) continue
+            chunk = translated
+          }
           const extension = chunk as ChatCompletionChunk & CompatStreamExtension
           if (extension.error) {
             const message =
@@ -246,6 +262,18 @@ export function createOpenAICompatibleAgentEventStream(
         }
 
         if (cancelled) return
+        if (
+          !fullContent &&
+          !fullThinking &&
+          toolBuffers.size === 0 &&
+          !finishReason &&
+          promptTokens === 0 &&
+          completionTokens === 0
+        ) {
+          throw new Error(
+            `${providerName} stream ended without any content, tool calls, usage or finish_reason`
+          )
+        }
         if (onComplete || options.request) {
           if (promptTokens === 0 && completionTokens === 0) {
             streamLogger.warn(`${providerName} stream completed without usage data`)

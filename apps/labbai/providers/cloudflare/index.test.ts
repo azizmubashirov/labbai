@@ -18,6 +18,12 @@ vi.mock('@/tools', () => ({
 vi.mock('@/providers', () => ({ MAX_TOOL_ITERATIONS: 5 }))
 
 import type { StreamingExecution } from '@/executor/types'
+import {
+  cloudflareAnthropicErrorSse,
+  cloudflareAnthropicTextSse,
+  cloudflareAnthropicToolUseSse,
+  sseResponse,
+} from '@/providers/__fixtures__/cloudflare-anthropic'
 import { cloudflareProvider } from '@/providers/cloudflare'
 import type { ProviderRequest, ProviderResponse, ProviderToolConfig } from '@/providers/types'
 
@@ -340,6 +346,81 @@ describe('cloudflareProvider', () => {
       role: 'tool',
       tool_call_id: 'call_1',
       content: JSON.stringify({ temperature: 21 }),
+    })
+  })
+
+  describe('Anthropic Messages streams (anthropic/* models)', () => {
+    it('streams the answer text, usage and cost', async () => {
+      mockFetch.mockResolvedValueOnce(sseResponse(cloudflareAnthropicTextSse))
+
+      const execution = (await cloudflareProvider.executeRequest({
+        model: 'anthropic/claude-opus-4.6',
+        messages: [{ role: 'user', content: 'Say OK' }],
+        stream: true,
+      })) as StreamingExecution
+
+      const events = await drain(execution)
+
+      expect(events).toEqual([{ type: 'text_delta', text: 'OK', turn: 'final' }])
+      expect(execution.execution.output.content).toBe('OK')
+      expect(execution.execution.output.tokens).toEqual({ input: 12, output: 4, total: 16 })
+    })
+
+    it('runs the streaming tool loop on split tool-call JSON', async () => {
+      mockFetch
+        .mockResolvedValueOnce(sseResponse(cloudflareAnthropicToolUseSse))
+        .mockResolvedValueOnce(sseResponse(cloudflareAnthropicTextSse))
+
+      const execution = (await cloudflareProvider.executeRequest({
+        model: 'anthropic/claude-opus-4.6',
+        messages: [{ role: 'user', content: 'Weather?' }],
+        tools: [weatherTool],
+        stream: true,
+      })) as StreamingExecution
+
+      const events = await drain(execution)
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          { type: 'text_delta', text: 'Checking.', turn: 'pending' },
+          { type: 'tool_call_start', id: 'toolu_01', name: 'get_weather' },
+          { type: 'turn_end', turn: 'intermediate' },
+          { type: 'tool_call_end', id: 'toolu_01', name: 'get_weather', status: 'success' },
+          { type: 'text_delta', text: 'OK', turn: 'pending' },
+          { type: 'turn_end', turn: 'final' },
+        ])
+      )
+      expect(mockExecuteTool).toHaveBeenCalledTimes(1)
+      expect(execution.execution.output.content).toBe('OK')
+      expect(execution.execution.output.tokens).toEqual({ input: 162, output: 19, total: 181 })
+
+      const second = call(1).body
+      expect(second.messages.slice(-2)).toEqual([
+        {
+          role: 'assistant',
+          content: 'Checking.',
+          tool_calls: [
+            {
+              id: 'toolu_01',
+              type: 'function',
+              function: { name: 'get_weather', arguments: '{"city": "Tashkent"}' },
+            },
+          ],
+        },
+        { role: 'tool', tool_call_id: 'toolu_01', content: JSON.stringify({ temperature: 21 }) },
+      ])
+    })
+
+    it('fails the stream with the message of an in-band error event', async () => {
+      mockFetch.mockResolvedValueOnce(sseResponse(cloudflareAnthropicErrorSse))
+
+      const execution = (await cloudflareProvider.executeRequest({
+        model: 'anthropic/claude-opus-4.6',
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+      })) as StreamingExecution
+
+      await expect(drain(execution)).rejects.toThrow('Overloaded')
     })
   })
 })

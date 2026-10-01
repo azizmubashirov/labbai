@@ -21,6 +21,7 @@ import {
 } from '@/providers/conversation-history'
 import { getProviderDefaultModel, getProviderModels } from '@/providers/models'
 import { getChatCompletionConversationUsage } from '@/providers/openai-compat/conversation-usage'
+import { readChatCompletionSse } from '@/providers/openai-compat/sse'
 import { createOpenAICompatibleAgentEventStream } from '@/providers/openai-compat/stream-events'
 import { createOpenAICompatStreamingToolLoopStream } from '@/providers/openai-compat/streaming-tool-loop'
 import { executeProviderTool } from '@/providers/runtime-context'
@@ -72,6 +73,24 @@ export function createCloudflareClient(): OpenAI {
     // Resolved per call so a test (or runtime) fetch stub applies; init (incl. the abort signal) passes through untouched.
     fetch: (input: string | URL | Request, init?: RequestInit) => fetch(input, init),
   })
+}
+
+/**
+ * Opens a streaming chat completion and reads the SSE body with the lenient reader
+ * instead of the OpenAI SDK's: Cloudflare streams `anthropic/*` models as Anthropic
+ * Messages events (padded `data:` lines, no `[DONE]`), which the reader translates into
+ * OpenAI chunks. HTTP errors still throw from the SDK before the body is read.
+ */
+export async function createCloudflareChatCompletionStream(
+  client: OpenAI,
+  params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
+  options?: { signal?: AbortSignal }
+): Promise<AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>> {
+  const response = await client.chat.completions.create(params, options).asResponse()
+  if (!response.body) {
+    throw new Error(`${PROVIDER_NAME} returned an empty streaming response`)
+  }
+  return readChatCompletionSse(response.body, PROVIDER_NAME)
 }
 
 /**
@@ -201,7 +220,8 @@ export const cloudflareProvider: ProviderConfig = {
               // double-cast-allowed: formatMessagesForProvider returns loosely-typed provider messages that are wire-compatible with the OpenAI chat.completions message params the shared loop expects
               formattedMessages as unknown as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
             createStream: async (params, options) =>
-              client.chat.completions.create(
+              createCloudflareChatCompletionStream(
+                client,
                 {
                   ...params,
                   stream: true,
@@ -235,7 +255,8 @@ export const cloudflareProvider: ProviderConfig = {
       const providerStartTime = Date.now()
       const providerStartTimeISO = new Date(providerStartTime).toISOString()
 
-      const streamResponse = await client.chat.completions.create(
+      const streamResponse = await createCloudflareChatCompletionStream(
+        client,
         await prepareConversationGeneration(request, 'chat-completions', {
           ...payload,
           stream: true,
@@ -254,41 +275,37 @@ export const cloudflareProvider: ProviderConfig = {
         isStreaming: true,
         streamFormat: 'agent-events-v1',
         createStream: ({ output, finalizeTiming }) =>
-          createOpenAICompatibleAgentEventStream(
-            // double-cast-allowed: payload is untyped so the SDK cannot resolve the streaming overload; the stream yields OpenAI ChatCompletionChunk objects
-            streamResponse as unknown as AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>,
-            {
-              request,
-              providerName: PROVIDER_NAME,
-              onComplete: (result) => {
-                output.content = result.content
-                output.tokens = {
-                  input: result.usage.prompt_tokens,
-                  output: result.usage.completion_tokens,
-                  total: result.usage.total_tokens,
-                }
+          createOpenAICompatibleAgentEventStream(streamResponse, {
+            request,
+            providerName: PROVIDER_NAME,
+            onComplete: (result) => {
+              output.content = result.content
+              output.tokens = {
+                input: result.usage.prompt_tokens,
+                output: result.usage.completion_tokens,
+                total: result.usage.total_tokens,
+              }
 
-                const costResult = calculateCost(
-                  request.model,
-                  result.usage.prompt_tokens,
-                  result.usage.completion_tokens
-                )
-                output.cost = {
-                  input: costResult.input,
-                  output: costResult.output,
-                  total: costResult.total,
-                }
+              const costResult = calculateCost(
+                request.model,
+                result.usage.prompt_tokens,
+                result.usage.completion_tokens
+              )
+              output.cost = {
+                input: costResult.input,
+                output: costResult.output,
+                total: costResult.total,
+              }
 
-                if (result.thinking) {
-                  const segment = output.providerTiming?.timeSegments?.[0]
-                  if (segment) {
-                    segment.thinkingContent = result.thinking
-                  }
+              if (result.thinking) {
+                const segment = output.providerTiming?.timeSegments?.[0]
+                if (segment) {
+                  segment.thinkingContent = result.thinking
                 }
-                finalizeTiming()
-              },
-            }
-          ),
+              }
+              finalizeTiming()
+            },
+          }),
       })
     }
 

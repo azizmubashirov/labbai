@@ -12,5 +12,14 @@ export function getChatCompletionConversationUsage(value: unknown): Conversation
     : undefined
   const cached = details?.cached_tokens ?? value.prompt_cache_hit_tokens
   const cacheRead = typeof cached === 'number' ? Math.min(prompt, Math.max(0, cached)) : 0
-  return { input: prompt - cacheRead, output, cacheRead }
+  /** Anthropic cache writes (Cloudflare `anthropic/*` streams), also inside `prompt_tokens`. */
+  const written = value.cache_creation_input_tokens
+  const cacheWrite =
+    typeof written === 'number' ? Math.min(prompt - cacheRead, Math.max(0, written)) : 0
+  return {
+    input: prompt - cacheRead - cacheWrite,
+    output,
+    cacheRead,
+    ...(cacheWrite > 0 ? { cacheWrite } : {}),
+  }
 }

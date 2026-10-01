@@ -22,6 +22,10 @@ import {
   captureProviderConversationStep,
   recordProviderConversationToolError,
 } from '@/providers/conversation-history'
+import {
+  createAnthropicStreamTranslator,
+  isAnthropicStreamEvent,
+} from '@/providers/openai-compat/anthropic-stream'
 import { getChatCompletionConversationUsage } from '@/providers/openai-compat/conversation-usage'
 import {
   createOpenAICompatibleAgentEventStream,
@@ -185,10 +189,15 @@ export function createOpenAICompatStreamingToolLoopStream(
           let assembledTools: OpenAICompatAssembledToolCall[] = []
           const liveText: string[] = []
           let sawToolCallDelta = false
+          const anthropicTranslator = createAnthropicStreamTranslator()
           const inspectedStream = (async function* () {
-            for await (const chunk of stream) {
+            for await (const rawChunk of stream) {
+              // Cloudflare streams `anthropic/*` models as Anthropic Messages events.
+              const raw: unknown = rawChunk
+              const chunk = isAnthropicStreamEvent(raw) ? anthropicTranslator(raw) : rawChunk
+              if (!chunk) continue
               if (
-                chunk.choices.some(
+                chunk.choices?.some(
                   (choice) =>
                     Array.isArray(choice.delta.tool_calls) && choice.delta.tool_calls.length > 0
                 )

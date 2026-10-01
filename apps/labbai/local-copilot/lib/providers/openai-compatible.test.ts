@@ -8,7 +8,15 @@ import {
   createOpenAiCompatibleProvider,
   isOpenAiReasoningModel,
 } from '@/local-copilot/lib/providers/openai-compatible'
+import type { ChatCompletionChunk } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
+import {
+  cloudflareAnthropicErrorSse,
+  cloudflareAnthropicTextSse,
+  cloudflareAnthropicThinkingSse,
+  cloudflareAnthropicToolUseSse,
+  sseResponse,
+} from '@/providers/__fixtures__/cloudflare-anthropic'
 
 describe('isOpenAiReasoningModel', () => {
   it('treats gpt-5+, gpt-6 and o-series OpenAI models as reasoning models', () => {
@@ -220,5 +228,60 @@ describe('Cloudflare unified endpoint transport', () => {
     const haiku = JSON.parse(String(fetchMock.mock.calls[1][1]?.body))
     expect(haiku.model).toBe('anthropic/claude-haiku-4.5')
     expect(haiku.temperature).toBe(0.2)
+  })
+
+  describe('Anthropic Messages streams (anthropic/* models)', () => {
+    async function collect(body: string): Promise<ChatCompletionChunk[]> {
+      vi.stubGlobal('fetch', vi.fn(async (..._args: FetchArgs) => sseResponse(body)))
+      const provider = createOpenAiCompatibleProvider(cloudflareConfig)
+      const stream = provider.chatCompletionStream({
+        model: 'anthropic/claude-opus-4.6',
+        messages: [{ role: 'user', content: 'hi' }],
+        tools: [{ name: 'get_weather', description: 'Weather', parameters: { type: 'object' } }],
+      })
+      const chunks: ChatCompletionChunk[] = []
+      for await (const chunk of stream) {
+        chunks.push(chunk)
+      }
+      return chunks
+    }
+
+    it('yields the answer text and usage from padded event-style lines', async () => {
+      expect(await collect(cloudflareAnthropicTextSse)).toEqual([
+        { type: 'text', content: 'OK' },
+        { type: 'done', finishReason: 'stop', usage: { inputTokens: 12, outputTokens: 4 } },
+      ])
+    })
+
+    it('assembles a split tool call and reports cache usage when the body ends', async () => {
+      expect(await collect(cloudflareAnthropicToolUseSse)).toEqual([
+        { type: 'text', content: 'Checking.' },
+        {
+          type: 'tool_call',
+          toolCall: { id: 'toolu_01', name: 'get_weather', arguments: '{"city": "Tashkent"}' },
+        },
+        {
+          type: 'done',
+          finishReason: 'tool_calls',
+          usage: {
+            inputTokens: 150,
+            outputTokens: 15,
+            cacheReadTokens: 100,
+            cacheCreationTokens: 30,
+          },
+        },
+      ])
+    })
+
+    it('keeps thinking out of the answer text', async () => {
+      expect(await collect(cloudflareAnthropicThinkingSse)).toEqual([
+        { type: 'text', content: 'OK' },
+        { type: 'done', finishReason: 'stop', usage: { inputTokens: 8, outputTokens: 9 } },
+      ])
+    })
+
+    it('throws the message of an in-band error event instead of ending empty', async () => {
+      await expect(collect(cloudflareAnthropicErrorSse)).rejects.toThrow('Overloaded')
+    })
   })
 })
