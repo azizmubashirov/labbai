@@ -1,4 +1,9 @@
-import type { ChatMessage, LocalCopilotProvider } from '@/local-copilot/lib/providers/types'
+import type {
+  ChatMessage,
+  LocalCopilotProvider,
+  ModelCallUsageListener,
+  TokenUsage,
+} from '@/local-copilot/lib/providers/types'
 
 /**
  * Streams a chat completion and concatenates the text chunks into a single
@@ -12,7 +17,10 @@ export async function collectCompletionText(params: {
   temperature?: number
   maxTokens?: number
   signal?: AbortSignal
+  /** Bills the call (see {@link ModelCallUsageListener}). */
+  onUsage?: ModelCallUsageListener
 }): Promise<string> {
+  const onUsage = params.onUsage
   let text = ''
   for await (const chunk of params.provider.chatCompletionStream({
     model: params.model,
@@ -20,6 +28,9 @@ export async function collectCompletionText(params: {
     temperature: params.temperature,
     maxTokens: params.maxTokens,
     signal: params.signal,
+    ...(onUsage
+      ? { onUsage: (usage: TokenUsage) => onUsage({ model: params.model, usage }) }
+      : {}),
   })) {
     if (chunk.type === 'text' && chunk.content) {
       text += chunk.content

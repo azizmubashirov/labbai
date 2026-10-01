@@ -5,6 +5,7 @@ import OpenAI from 'openai'
 import type { NormalizedBlockOutput, StreamingExecution } from '@/executor/types'
 import { MAX_TOOL_ITERATIONS } from '@/providers'
 import { formatMessagesForProvider } from '@/providers/attachments'
+import { sendChatCompletionRequest } from '@/providers/cloudflare/anthropic-messages'
 import {
   CLOUDFLARE_AIG_GATEWAY_ID_HEADER,
   getCloudflareAIConfig,
@@ -19,6 +20,7 @@ import {
   recordProviderConversationToolError,
   recordProviderConversationUsage,
 } from '@/providers/conversation-history'
+import { LIST_PRICE_POLICY, priceModelUsage } from '@/providers/cost-policy'
 import { getProviderDefaultModel, getProviderModels } from '@/providers/models'
 import { getChatCompletionConversationUsage } from '@/providers/openai-compat/conversation-usage'
 import { readChatCompletionSse } from '@/providers/openai-compat/sse'
@@ -38,7 +40,6 @@ import type {
 } from '@/providers/types'
 import { ProviderError } from '@/providers/types'
 import {
-  calculateCost,
   isFunctionToolCall,
   prepareToolExecution,
   prepareToolsWithUsageControl,
@@ -70,8 +71,17 @@ export function createCloudflareClient(): OpenAI {
     apiKey: config.apiToken,
     baseURL: getCloudflareUnifiedBaseUrl(config),
     defaultHeaders: { [CLOUDFLARE_AIG_GATEWAY_ID_HEADER]: config.gateway },
-    // Resolved per call so a test (or runtime) fetch stub applies; init (incl. the abort signal) passes through untouched.
-    fetch: (input: string | URL | Request, init?: RequestInit) => fetch(input, init),
+    /**
+     * Resolved per call so a test (or runtime) fetch stub applies; init (incl. the abort
+     * signal) passes through. Claude requests go to the Anthropic Messages endpoint for
+     * prompt caching (see `anthropic-messages.ts`); everything else is sent unchanged.
+     */
+    fetch: (input: string | URL | Request, init?: RequestInit) =>
+      input instanceof Request
+        ? fetch(input, init)
+        : sendChatCompletionRequest(String(input), init ?? {}, (url, requestInit) =>
+            fetch(url, requestInit)
+          ),
   })
 }
 
@@ -93,6 +103,45 @@ export async function createCloudflareChatCompletionStream(
     throw new Error(`${PROVIDER_NAME} returned an empty streaming response`)
   }
   return readChatCompletionSse(response.body, PROVIDER_NAME)
+}
+
+interface ChatUsageTotals {
+  /** `input` excludes cache reads / writes, matching `ProviderResponse['tokens']`. */
+  tokens: { input: number; output: number; total: number; cacheRead?: number; cacheWrite?: number }
+  cost?: NonNullable<ProviderResponse['cost']>
+}
+
+function createChatUsageTotals(): ChatUsageTotals {
+  return { tokens: { input: 0, output: 0, total: 0 } }
+}
+
+/**
+ * Adds one Chat Completions `usage` (cache-inclusive `prompt_tokens`) to the totals: cache
+ * reads and Anthropic cache writes are split out of the input count, and the call is
+ * priced with the catalog rates (reads at the cached-input price, writes at the 5-minute
+ * premium). Missing usage adds nothing.
+ */
+function addChatCompletionUsage(totals: ChatUsageTotals, model: string, raw: unknown): void {
+  const usage = getChatCompletionConversationUsage(raw)
+  if (!usage) return
+  const cacheRead = usage.cacheRead ?? 0
+  const cacheWrite = usage.cacheWrite ?? 0
+  const reportedTotal = isRecordLike(raw) ? raw.total_tokens : undefined
+  totals.tokens.input += usage.input
+  totals.tokens.output += usage.output
+  totals.tokens.total +=
+    typeof reportedTotal === 'number' && reportedTotal > 0
+      ? reportedTotal
+      : usage.input + cacheRead + cacheWrite + usage.output
+  if (cacheRead > 0) totals.tokens.cacheRead = (totals.tokens.cacheRead ?? 0) + cacheRead
+  if (cacheWrite > 0) totals.tokens.cacheWrite = (totals.tokens.cacheWrite ?? 0) + cacheWrite
+  const priced = priceModelUsage(model, usage, LIST_PRICE_POLICY)
+  totals.cost = {
+    input: (totals.cost?.input ?? 0) + priced.input,
+    output: (totals.cost?.output ?? 0) + priced.output,
+    total: (totals.cost?.total ?? 0) + priced.total,
+    pricing: priced.pricing,
+  }
 }
 
 /**
@@ -282,21 +331,13 @@ export const cloudflareProvider: ProviderConfig = {
             providerName: PROVIDER_NAME,
             onComplete: (result) => {
               output.content = result.content
-              output.tokens = {
-                input: result.usage.prompt_tokens,
-                output: result.usage.completion_tokens,
-                total: result.usage.total_tokens,
-              }
-
-              const costResult = calculateCost(
-                request.model,
-                result.usage.prompt_tokens,
-                result.usage.completion_tokens
-              )
+              const usage = createChatUsageTotals()
+              addChatCompletionUsage(usage, request.model, result.usage)
+              output.tokens = usage.tokens
               output.cost = {
-                input: costResult.input,
-                output: costResult.output,
-                total: costResult.total,
+                input: usage.cost?.input ?? 0,
+                output: usage.cost?.output ?? 0,
+                total: usage.cost?.total ?? 0,
               }
 
               if (result.thinking) {
@@ -332,11 +373,8 @@ export const cloudflareProvider: ProviderConfig = {
       const firstResponseTime = Date.now() - initialCallTime
 
       let content = currentResponse.choices[0]?.message?.content || ''
-      const tokens = {
-        input: currentResponse.usage?.prompt_tokens || 0,
-        output: currentResponse.usage?.completion_tokens || 0,
-        total: currentResponse.usage?.total_tokens || 0,
-      }
+      const usage = createChatUsageTotals()
+      addChatCompletionUsage(usage, request.model, currentResponse.usage)
       const toolCalls = []
       const toolResults: Record<string, unknown>[] = []
       const currentMessages = [...formattedMessages]
@@ -589,11 +627,7 @@ export const cloudflareProvider: ProviderConfig = {
           content = currentResponse.choices[0].message.content
         }
 
-        if (currentResponse.usage) {
-          tokens.input += currentResponse.usage.prompt_tokens || 0
-          tokens.output += currentResponse.usage.completion_tokens || 0
-          tokens.total += currentResponse.usage.total_tokens || 0
-        }
+        addChatCompletionUsage(usage, request.model, currentResponse.usage)
 
         iterationCount++
       }
@@ -618,7 +652,11 @@ export const cloudflareProvider: ProviderConfig = {
       return {
         content,
         model: request.model,
-        tokens,
+        tokens: usage.tokens,
+        /** Cache buckets are priced here; cache-free usage is priced by the caller. */
+        ...(usage.cost && (usage.tokens.cacheRead || usage.tokens.cacheWrite)
+          ? { cost: usage.cost }
+          : {}),
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         toolResults: toolResults.length > 0 ? toolResults : undefined,
         timing: {

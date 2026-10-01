@@ -8,6 +8,7 @@ import type {
   TokenUsage,
 } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
+import { sendChatCompletionRequest } from '@/providers/cloudflare/anthropic-messages'
 import { toCloudflareUnifiedModelId } from '@/providers/cloudflare/model-ids'
 import { isKnownModelId, supportsTemperature } from '@/providers/models'
 import { getOpenAIBaseUrl } from '@/providers/openai/client-config'
@@ -179,16 +180,23 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
           : {}),
       }
 
-      const response = await fetchProviderWithRetry(
-        url,
-        {
-          method: 'POST',
-          headers: buildOpenAiCompatibleHeaders(config),
-          body: JSON.stringify(body),
-          signal: request.signal,
-        },
-        'LLM request failed'
-      )
+      const init: RequestInit = {
+        method: 'POST',
+        headers: buildOpenAiCompatibleHeaders(config),
+        body: JSON.stringify(body),
+        signal: request.signal,
+      }
+      const send = (target: string, requestInit: RequestInit) =>
+        fetchProviderWithRetry(target, requestInit, 'LLM request failed')
+      /**
+       * Claude on Cloudflare goes to the Anthropic Messages endpoint with prompt-cache
+       * breakpoints (its SSE is read below like any other stream); other models and
+       * transports post the Chat Completions body unchanged.
+       */
+      const response =
+        config.provider === 'cloudflare'
+          ? await sendChatCompletionRequest(url, init, send)
+          : await send(url, init)
 
       if (!response.ok) {
         const errorText = await response.text()
@@ -221,103 +229,116 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
         ...(cacheCreationTokens > 0 ? { cacheCreationTokens } : {}),
       })
 
-      while (true) {
-        const { done, value } = await reader.read()
-        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = done ? '' : (lines.pop() ?? '')
+      let usageReported = false
+      const reportUsage = () => {
+        if (usageReported || !request.onUsage) return
+        if (inputTokens <= 0 && outputTokens <= 0) return
+        usageReported = true
+        request.onUsage(usageSnapshot())
+      }
 
-        for (const line of lines) {
-          // Trimmed `data:` payload; `event:` lines, comments and blanks are skipped.
-          const payload = readSseDataPayload(line)
-          if (!payload) continue
-          if (payload === '[DONE]') {
-            sawDoneMarker = true
-            yield { type: 'done', finishReason: 'stop', usage: usageSnapshot() }
-            continue
-          }
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          buffer += done ? decoder.decode() : decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = done ? '' : (lines.pop() ?? '')
 
-          /**
-           * OpenAI chunks pass through; Anthropic Messages events (Cloudflare streams
-           * `anthropic/*` models that way) are translated into the same chunk shape.
-           * In-band error events throw here instead of ending the round empty.
-           */
-          const chunk = toChatCompletionChunk(parseSseJson(payload), translateAnthropic)
-          if (!chunk) continue
-          const parsed = chunk as OpenAiStreamChunk
-
-          if (parsed.usage) {
-            inputTokens = parsed.usage.prompt_tokens ?? inputTokens
-            outputTokens = parsed.usage.completion_tokens ?? outputTokens
-            const cached =
-              parsed.usage.prompt_tokens_details?.cached_tokens ??
-              parsed.usage.prompt_cache_hit_tokens ??
-              0
-            if (typeof cached === 'number' && cached > 0) {
-              cacheReadTokens = cached
+          for (const line of lines) {
+            // Trimmed `data:` payload; `event:` lines, comments and blanks are skipped.
+            const payload = readSseDataPayload(line)
+            if (!payload) continue
+            if (payload === '[DONE]') {
+              sawDoneMarker = true
+              yield { type: 'done', finishReason: 'stop', usage: usageSnapshot() }
+              continue
             }
-            const created = parsed.usage.cache_creation_input_tokens
-            if (typeof created === 'number' && created > 0) {
-              cacheCreationTokens = created
-            }
-          }
 
-          const choice = parsed.choices?.[0]
-          if (!choice) continue
-          if (choice.finish_reason) lastFinishReason = choice.finish_reason
+            /**
+             * OpenAI chunks pass through; Anthropic Messages events (Cloudflare streams
+             * `anthropic/*` models that way) are translated into the same chunk shape.
+             * In-band error events throw here instead of ending the round empty.
+             */
+            const chunk = toChatCompletionChunk(parseSseJson(payload), translateAnthropic)
+            if (!chunk) continue
+            const parsed = chunk as OpenAiStreamChunk
 
-          if (choice.delta?.content) {
-            textChars += choice.delta.content.length
-            yield { type: 'text', content: choice.delta.content }
-          }
-
-          for (const toolDelta of choice.delta?.tool_calls ?? []) {
-            const existing = toolCalls.get(toolDelta.index) ?? {
-              id: toolDelta.id ?? '',
-              name: toolDelta.function?.name ?? '',
-              arguments: '',
-            }
-            if (toolDelta.id) existing.id = toolDelta.id
-            if (toolDelta.function?.name) existing.name = toolDelta.function.name
-            if (toolDelta.function?.arguments) {
-              existing.arguments += toolDelta.function.arguments
-            }
-            toolCalls.set(toolDelta.index, existing)
-          }
-
-          if (choice.finish_reason === 'tool_calls') {
-            for (const call of toolCalls.values()) {
-              toolCallCount += 1
-              yield {
-                type: 'tool_call',
-                toolCall: call,
+            if (parsed.usage) {
+              inputTokens = parsed.usage.prompt_tokens ?? inputTokens
+              outputTokens = parsed.usage.completion_tokens ?? outputTokens
+              const cached =
+                parsed.usage.prompt_tokens_details?.cached_tokens ??
+                parsed.usage.prompt_cache_hit_tokens ??
+                0
+              if (typeof cached === 'number' && cached > 0) {
+                cacheReadTokens = cached
+              }
+              const created = parsed.usage.cache_creation_input_tokens
+              if (typeof created === 'number' && created > 0) {
+                cacheCreationTokens = created
               }
             }
-            toolCalls.clear()
+
+            const choice = parsed.choices?.[0]
+            if (!choice) continue
+            if (choice.finish_reason) lastFinishReason = choice.finish_reason
+
+            if (choice.delta?.content) {
+              textChars += choice.delta.content.length
+              yield { type: 'text', content: choice.delta.content }
+            }
+
+            for (const toolDelta of choice.delta?.tool_calls ?? []) {
+              const existing = toolCalls.get(toolDelta.index) ?? {
+                id: toolDelta.id ?? '',
+                name: toolDelta.function?.name ?? '',
+                arguments: '',
+              }
+              if (toolDelta.id) existing.id = toolDelta.id
+              if (toolDelta.function?.name) existing.name = toolDelta.function.name
+              if (toolDelta.function?.arguments) {
+                existing.arguments += toolDelta.function.arguments
+              }
+              toolCalls.set(toolDelta.index, existing)
+            }
+
+            if (choice.finish_reason === 'tool_calls') {
+              for (const call of toolCalls.values()) {
+                toolCallCount += 1
+                yield {
+                  type: 'tool_call',
+                  toolCall: call,
+                }
+              }
+              toolCalls.clear()
+            }
+
+            if (choice.finish_reason === 'stop') {
+              yield { type: 'done', finishReason: 'stop', usage: usageSnapshot() }
+            }
           }
 
-          if (choice.finish_reason === 'stop') {
-            yield { type: 'done', finishReason: 'stop', usage: usageSnapshot() }
-          }
+          if (done) break
         }
 
-        if (done) break
-      }
+        if (textChars === 0 && toolCallCount === 0 && inputTokens === 0 && outputTokens === 0) {
+          logger.warn('LLM stream ended with no text, tool calls or usage', {
+            provider: config.provider,
+            model,
+            finishReason: lastFinishReason ?? null,
+          })
+        }
 
-      if (textChars === 0 && toolCallCount === 0 && inputTokens === 0 && outputTokens === 0) {
-        logger.warn('LLM stream ended with no text, tool calls or usage', {
-          provider: config.provider,
-          model,
-          finishReason: lastFinishReason ?? null,
-        })
-      }
-
-      /**
-       * Anthropic-format streams have no `[DONE]`: report usage (and a non-`stop` finish
-       * such as `tool_calls` or `length`) once the body ends.
-       */
-      if (!sawDoneMarker && lastFinishReason !== 'stop') {
-        yield { type: 'done', finishReason: lastFinishReason ?? 'stop', usage: usageSnapshot() }
+        /**
+         * Anthropic-format streams have no `[DONE]`: report usage (and a non-`stop` finish
+         * such as `tool_calls` or `length`) once the body ends.
+         */
+        if (!sawDoneMarker && lastFinishReason !== 'stop') {
+          yield { type: 'done', finishReason: lastFinishReason ?? 'stop', usage: usageSnapshot() }
+        }
+      } finally {
+        /** Bills the call even when the consumer stops early, the stream errors or aborts. */
+        reportUsage()
       }
     },
   }

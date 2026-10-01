@@ -586,14 +586,15 @@ Workers AI (unchanged): `@cf/meta/llama-3.3-70b-instruct-fp8-fast` 0.293 / – /
 
 Pickers: options carry a readable `label` and a vendor `group` (OpenAI, Anthropic, Google,
 Workers AI); the sub-block combobox renders them as sections (emcn `Combobox` `groups` now
-filter by the typed value too) and typing a model's name stores its id. Not recorded by the
-cost ledger: prompt-cache **write** prices (Anthropic, GPT-6 / GPT-5.6) — `ModelPricing` has no
-field for them. Deploy: `deploy.sh` runs the migrations, which now include 0384 (copilot default
+filter by the typed value too) and typing a model's name stores its id. Prompt-cache
+**write** prices: `ModelPricing` has no field for them; Anthropic writes are priced at 1.25 ×
+input (5-minute ephemeral rate, matches Cloudflare's "Cache creation" price), see "Copilot cost
+and Claude prompt caching" below. Deploy: `deploy.sh` runs the migrations, which now include 0384 (copilot default
 model enum → text).
 
 Uncertain / verify live:
-- Claude through `/ai/v1/chat/completions`: Cloudflare's Claude pages list only the Anthropic
-  Messages format (unchanged risk from the first step) — test tools, JSON output and images.
+- Claude now goes through `/ai/v1/messages` (see "Copilot cost and Claude prompt caching");
+  chat completions remain the automatic fallback — test tools, JSON output and images.
 - Gemini 3.x tool calling through chat completions: Gemini 3 needs its thought signatures sent
   back between tool turns; whether Cloudflare's unified endpoint carries them is not documented.
 - GPT-5.6 is listed by Cloudflare with the Responses format only; it runs on the `/openai`
@@ -624,6 +625,60 @@ set `OPENAI_API_KEY` (remove `OPENAI_BASE_URL` or set `https://api.openai.com/v1
 app and workers. Claude/Gemini/Workers AI models disappear from pickers; workflows that use them
 run on `gpt-5-mini` until edited. Legacy alias: `CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL` (the
 1cc4660d setup, OpenAI only) still works without the account id.
+
+#### Copilot cost and Claude prompt caching (2026-10-01)
+
+Live evidence: one copilot turn ("salom", `anthropic/claude-sonnet-5`) ran ~45 model rounds
+(main + knowledge / table / workflow specialists); Cloudflare billed ~71 requests ≈ $4, but
+`usage_log` had 2 rows ≈ $0.14.
+
+Root cause and fix (local copilot, `local-copilot/lib/billing/**`, `agent/orchestrator.ts`):
+- **Event-key collision (main cause).** Every model round became its own ledger component, and
+  the component event key is `arena-copilot:<chat>:message:<msg>:model:<model id>`. All rounds
+  of a turn (and every specialist round on the same model) shared that key, and the insert is
+  `ON CONFLICT DO NOTHING` — only the first round of each turn was kept. Now
+  `aggregateLedgerComponents` writes **one row per model id / tool id per turn** with summed
+  cost and tokens; metadata carries `inputTokens` (cache-inclusive), `outputTokens`,
+  `cacheReadTokens`, `cacheCreationTokens` and `calls`. Same keys, same `source='copilot'`.
+- **Usage is billed per HTTP call, not per `done` chunk.** `ChatCompletionRequest.onUsage` fires
+  exactly once per model call — also when the stream fails, times out (specialist 90 s budget)
+  or is aborted after usage arrived (Anthropic sends input/cache counts up front).
+- **Turns that fail or are stopped still write the ledger** (`runLocalCopilotAgent` flushes in
+  `finally`; the mothership lifecycle now closes the agent on abort).
+- **Side calls are billed too:** live status lines, session-memory summaries (both into the
+  turn) and chat-title generation (`…:message:chat-title`, once per chat).
+- Pricing: catalog rates (`providers/models.ts`) via `priceModelUsage`: uncached input at the
+  input price, cache reads at `cachedInput`, Anthropic cache writes at 1.25 × input;
+  `openai/<id>` copilot ids price as the bare OpenAI id. Agent blocks on the `cloudflare`
+  provider now split `cacheRead` / `cacheWrite` out of `tokens.input` and price them the same way.
+
+Claude prompt caching (Agent blocks + copilot, `providers/cloudflare/anthropic-messages.ts`):
+Anthropic caches only at explicit `cache_control` breakpoints, and Cloudflare documents Claude
+with the Anthropic Messages format only (`POST /ai/v1/messages`; whether `/ai/v1/chat/completions`
+forwards `cache_control` is undocumented). So every `anthropic/*` chat completion is rewritten to
+`/ai/v1/messages` (same token + `cf-aig-gateway-id`): system, turns, tool calls / results,
+images, tools, tool choice, `response_format` → `output_config.format`, sampling, stop. Breakpoints
+(`{"type":"ephemeral"}`, max 4): last tool, last system block, the latest two user-role turns
+(the newest is the write point for the next round, the previous a guaranteed read). Mid-turn
+system messages become user text (several Claude models reject `role: "system"` in
+`messages`). Streams come back as Anthropic SSE (existing translator); non-streaming answers
+are converted back to `chat.completion`. If `/messages` answers 400 / 404 / 422 the original
+chat-completions request is sent instead and that model skips `/messages` for 15 min (logged as
+`Cloudflare /messages rejected the request`). OpenAI models: the `openai` transport keeps
+`prompt_cache_key`; the copilot on the Cloudflare unified endpoint still sends none (Cloudflare
+does not document the field; OpenAI caches long prefixes automatically). Gemini caches
+implicitly — nothing to send.
+
+Round cap: `COPILOT_MAX_ROUNDS_PER_TURN` (default 20) model rounds per user message, one shared
+budget for the main loop, specialist passes, parallel subagents and nested specialists
+(`specialists/budget.ts` `tryConsumeModelRound`). When it runs out no further model call is
+made: the turn summarizes what was done, replies "I paused here … Should I continue where I left
+off?" with `<options>` Continue / Stop, and a "Continue" reply resumes the task (resume nudge,
+task-state objective kept, specialist pre-pass skipped).
+
+Verify live: `/ai/v1/messages` accepting tools, `output_config.format` and images for Claude;
+`usage.cache_read_input_tokens` > 0 from the second round of a copilot turn (Cloudflare logs /
+`usage_log.metadata.cacheReadTokens`); watch for the fallback warning.
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

@@ -4,9 +4,10 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockRecordLocalCopilotTurnUsage, mockChatCompletionStream } = vi.hoisted(() => ({
+const { mockRecordLocalCopilotTurnUsage, mockChatCompletionStream, roundCap } = vi.hoisted(() => ({
   mockRecordLocalCopilotTurnUsage: vi.fn().mockResolvedValue(undefined),
   mockChatCompletionStream: vi.fn(),
+  roundCap: { value: 20 },
 }))
 
 vi.mock('@/local-copilot/lib/billing/record-turn-usage', async (importOriginal) => ({
@@ -26,6 +27,7 @@ vi.mock('@/local-copilot/lib/config', () => {
     buildLocalCopilotConfigForCatalog: () => config,
     assertLocalCopilotEnabled: () => undefined,
     isLocalCopilotEngagementStatusEnabled: () => false,
+    resolveLocalCopilotMaxRoundsPerTurn: () => roundCap.value,
   }
 })
 
@@ -133,6 +135,9 @@ vi.mock('@/providers/utils', async (importOriginal) => ({
 }))
 
 import { runLocalCopilotAgent } from '@/local-copilot/lib/agent/orchestrator'
+import type { LocalTurnCostSummary } from '@/local-copilot/lib/billing/turn-cost-accumulator'
+import type { ChatCompletionRequest } from '@/local-copilot/lib/providers/types'
+import { buildRoundCapPauseMessage } from '@/local-copilot/lib/user-facing-text'
 
 async function drainAgent(
   generator: AsyncGenerator<unknown, unknown, undefined>
@@ -149,8 +154,10 @@ async function drainAgent(
 describe('runLocalCopilotAgent billing turn id', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockChatCompletionStream.mockImplementation(async function* () {
+    roundCap.value = 20
+    mockChatCompletionStream.mockImplementation(async function* (request: ChatCompletionRequest) {
       yield { type: 'text', content: 'Hi there' }
+      request.onUsage?.({ inputTokens: 10, outputTokens: 5 })
       yield {
         type: 'done',
         usage: { inputTokens: 10, outputTokens: 5 },
@@ -199,5 +206,164 @@ describe('runLocalCopilotAgent billing turn id', () => {
     expect(source).not.toMatch(/\bturnMessageId\b/)
     expect(source).toMatch(/\busageTurnId\b/)
     expect(source).toMatch(/messageId:\s*usageTurnId/)
+  })
+
+  it('records every model call reported through onUsage, with cache tokens', async () => {
+    mockChatCompletionStream.mockImplementation(async function* (request: ChatCompletionRequest) {
+      yield { type: 'text', content: 'Hi there' }
+      request.onUsage?.({
+        inputTokens: 28_000,
+        outputTokens: 200,
+        cacheReadTokens: 20_000,
+        cacheCreationTokens: 5_000,
+      })
+      yield { type: 'done', usage: { inputTokens: 28_000, outputTokens: 200 } }
+      // A second `done` (OpenAI `stop` + `[DONE]`) is display only — never billed twice.
+      yield { type: 'done', usage: { inputTokens: 28_000, outputTokens: 200 } }
+    })
+
+    await drainAgent(
+      runLocalCopilotAgent({
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+        chatId: 'chat-1',
+        message: 'hello',
+        messageId: 'msg-1',
+        persistLocally: false,
+      })
+    )
+
+    expect(mockRecordLocalCopilotTurnUsage).toHaveBeenCalledTimes(1)
+    const summary = mockRecordLocalCopilotTurnUsage.mock.calls[0][0].summary as LocalTurnCostSummary
+    expect(summary.components).toEqual([
+      expect.objectContaining({
+        kind: 'model',
+        id: 'gpt-5.5',
+        inputTokens: 28_000,
+        outputTokens: 200,
+        cacheReadTokens: 20_000,
+        cacheCreationTokens: 5_000,
+      }),
+    ])
+    expect(summary.total).toBeGreaterThan(0)
+  })
+
+  it('still writes the ledger when the turn fails after a paid model call', async () => {
+    mockChatCompletionStream.mockImplementation(async function* (request: ChatCompletionRequest) {
+      yield { type: 'text', content: 'Hi' }
+      request.onUsage?.({ inputTokens: 1_000, outputTokens: 10 })
+      throw new Error('provider stream broke')
+    })
+
+    await expect(
+      drainAgent(
+        runLocalCopilotAgent({
+          userId: 'user-1',
+          workspaceId: 'ws-1',
+          chatId: 'chat-1',
+          message: 'hello',
+          messageId: 'msg-2',
+          persistLocally: false,
+        })
+      )
+    ).rejects.toThrow('provider stream broke')
+
+    expect(mockRecordLocalCopilotTurnUsage).toHaveBeenCalledTimes(1)
+    const call = mockRecordLocalCopilotTurnUsage.mock.calls[0][0]
+    expect(call.messageId).toBe('msg-2')
+    expect((call.summary as LocalTurnCostSummary).components).toHaveLength(1)
+  })
+
+  it('still writes the ledger when the consumer stops the turn early', async () => {
+    let usageReported = false
+    mockChatCompletionStream.mockImplementation(async function* (request: ChatCompletionRequest) {
+      request.onUsage?.({ inputTokens: 2_000, outputTokens: 20 })
+      usageReported = true
+      yield { type: 'text', content: 'Hi there' }
+      yield { type: 'done', usage: { inputTokens: 2_000, outputTokens: 20 } }
+    })
+    const agent = runLocalCopilotAgent({
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+      chatId: 'chat-1',
+      message: 'hello',
+      messageId: 'msg-3',
+      persistLocally: false,
+    })
+    let next = await agent.next()
+    while (!next.done && !usageReported) {
+      next = await agent.next()
+    }
+    expect(next.done).toBe(false)
+    await agent.return(undefined)
+
+    expect(mockRecordLocalCopilotTurnUsage).toHaveBeenCalledTimes(1)
+    const call = mockRecordLocalCopilotTurnUsage.mock.calls[0][0]
+    expect(call.messageId).toBe('msg-3')
+    expect((call.summary as LocalTurnCostSummary).components).toEqual([
+      expect.objectContaining({ kind: 'model', inputTokens: 2_000, outputTokens: 20 }),
+    ])
+  })
+
+  it('stops calling the model at the round cap and asks whether to continue', async () => {
+    roundCap.value = 1
+    mockChatCompletionStream.mockImplementation(async function* (request: ChatCompletionRequest) {
+      // Narrated intent without a tool call forces another round in the normal loop.
+      yield { type: 'text', content: "I'm applying the changes now." }
+      request.onUsage?.({ inputTokens: 10, outputTokens: 5 })
+      yield { type: 'done', usage: { inputTokens: 10, outputTokens: 5 } }
+    })
+
+    const { events } = await drainAgent(
+      runLocalCopilotAgent({
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+        chatId: 'chat-1',
+        message: 'update the workflow',
+        messageId: 'msg-4',
+        persistLocally: false,
+      })
+    )
+
+    expect(mockChatCompletionStream).toHaveBeenCalledTimes(1)
+    const text = events
+      .filter(
+        (event): event is { type: 'text_delta'; content: string } =>
+          typeof event === 'object' &&
+          event !== null &&
+          (event as { type?: string }).type === 'text_delta'
+      )
+      .map((event) => event.content)
+      .join('')
+    expect(text).toContain(buildRoundCapPauseMessage())
+    expect(text).toMatch(/<options>.*"Continue".*"Stop".*<\/options>/s)
+    expect(mockRecordLocalCopilotTurnUsage).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes the paused task when the user answers Continue', async () => {
+    await drainAgent(
+      runLocalCopilotAgent({
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+        chatId: 'chat-1',
+        message: 'Continue',
+        messageId: 'msg-5',
+        persistLocally: false,
+        priorMessages: [
+          { role: 'user', content: 'build the workflow' },
+          { role: 'assistant', content: `Created the workflow.\n\n${buildRoundCapPauseMessage()}` },
+        ],
+      })
+    )
+
+    const request = mockChatCompletionStream.mock.calls[0][0] as ChatCompletionRequest
+    expect(
+      request.messages.some(
+        (message) =>
+          message.role === 'system' &&
+          typeof message.content === 'string' &&
+          message.content.includes('stopped at the per-turn step limit')
+      )
+    ).toBe(true)
   })
 })

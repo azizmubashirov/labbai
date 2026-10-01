@@ -726,6 +726,9 @@ export async function runLocalCopilotMothershipLifecycle(
           durationMs: Date.now() - startedAt,
           memory: getLocalCopilotMemorySnapshot(),
         })
+        // Close the agent so its cleanup runs (it writes the usage of the model calls
+        // already made; an abandoned generator would never record them).
+        await agent.return(undefined).catch(() => undefined)
         break
       }
 

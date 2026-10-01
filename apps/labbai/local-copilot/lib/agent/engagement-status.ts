@@ -6,7 +6,10 @@ import { getLocalCopilotConfig } from '@/local-copilot/lib/config'
 import { collectCompletionText } from '@/local-copilot/lib/providers/collect-text'
 import { createOpenAiCompatibleProvider } from '@/local-copilot/lib/providers/openai-compatible'
 import { getLocalCopilotProvider } from '@/local-copilot/lib/providers/registry'
-import type { LocalCopilotProvider } from '@/local-copilot/lib/providers/types'
+import type {
+  LocalCopilotProvider,
+  ModelCallUsageListener,
+} from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig, LocalCopilotProviderId } from '@/local-copilot/lib/types'
 import {
   getOpenAIAuthHeaders,
@@ -34,6 +37,8 @@ export interface EngagementStatusContext {
   /** Optional short user-turn hint so lines feel task-aware (never secrets). */
   userHint?: string
   signal?: AbortSignal
+  /** Bills the status-line call to the copilot turn that asked for it. */
+  onUsage?: ModelCallUsageListener
 }
 
 /**
@@ -143,7 +148,8 @@ export function engagementContextFromTool(
   toolName: string,
   args: Record<string, unknown>,
   signal?: AbortSignal,
-  userHint?: string
+  userHint?: string,
+  onUsage?: ModelCallUsageListener
 ): EngagementStatusContext {
   const workflowName =
     typeof args.workflowName === 'string' && args.workflowName.trim()
@@ -156,6 +162,7 @@ export function engagementContextFromTool(
     workflowName,
     ...(userHint?.trim() ? { userHint: userHint.trim() } : {}),
     signal,
+    ...(onUsage ? { onUsage } : {}),
   }
 }
 
@@ -220,6 +227,7 @@ export async function generateEngagementStatusMessages(
       temperature: ENGAGEMENT_TEMPERATURE,
       maxTokens: ENGAGEMENT_MAX_TOKENS,
       signal: timeout.signal,
+      ...(ctx.onUsage ? { onUsage: ctx.onUsage } : {}),
     })
     const raced = await Promise.race([
       completion.then((text) => ({ ok: true as const, text })),

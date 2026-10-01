@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { resetEnvMock, setEnv } from '@labbai/testing'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildOpenAiCompatibleHeaders,
   createOpenAiCompatibleProvider,
@@ -10,6 +10,7 @@ import {
 } from '@/local-copilot/lib/providers/openai-compatible'
 import type { ChatCompletionChunk } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
+import { resetCloudflareAnthropicMessagesFallback } from '@/providers/cloudflare/anthropic-messages'
 import {
   cloudflareAnthropicErrorSse,
   cloudflareAnthropicTextSse,
@@ -283,5 +284,148 @@ describe('Cloudflare unified endpoint transport', () => {
     it('throws the message of an in-band error event instead of ending empty', async () => {
       await expect(collect(cloudflareAnthropicErrorSse)).rejects.toThrow('Overloaded')
     })
+  })
+
+  describe('Claude prompt caching through the Anthropic Messages endpoint', () => {
+    beforeEach(() => {
+      resetCloudflareAnthropicMessagesFallback()
+    })
+
+    it('posts to /messages with cache breakpoints and bills the call once with cache tokens', async () => {
+      const fetchMock = vi.fn(async (..._args: FetchArgs) =>
+        sseResponse(cloudflareAnthropicToolUseSse)
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const onUsage = vi.fn()
+
+      const chunks: ChatCompletionChunk[] = []
+      for await (const chunk of createOpenAiCompatibleProvider(
+        cloudflareConfig
+      ).chatCompletionStream({
+        model: 'anthropic/claude-sonnet-5',
+        messages: [
+          { role: 'system', content: 'You are Labbai.' },
+          { role: 'system', content: 'Current context: {}' },
+          { role: 'user', content: 'Weather?' },
+        ],
+        tools: [{ name: 'get_weather', description: 'Weather', parameters: { type: 'object' } }],
+        onUsage,
+      })) {
+        chunks.push(chunk)
+      }
+
+      const [url, init] = fetchMock.mock.calls[0]
+      expect(url).toBe(`${UNIFIED}/messages`)
+      const headers = new Headers(init?.headers)
+      expect(headers.get('authorization')).toBe('Bearer cf-token')
+      expect(headers.get('cf-aig-gateway-id')).toBe('labbai')
+      const body = JSON.parse(String(init?.body))
+      expect(body).toMatchObject({
+        model: 'anthropic/claude-sonnet-5',
+        stream: true,
+        max_tokens: 4096,
+        tool_choice: { type: 'auto' },
+        system: [
+          { type: 'text', text: 'You are Labbai.' },
+          { type: 'text', text: 'Current context: {}', cache_control: { type: 'ephemeral' } },
+        ],
+        tools: [
+          {
+            name: 'get_weather',
+            description: 'Weather',
+            input_schema: { type: 'object', properties: {} },
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'Weather?', cache_control: { type: 'ephemeral' } }],
+          },
+        ],
+      })
+      expect(body).not.toHaveProperty('stream_options')
+      expect(body).not.toHaveProperty('temperature')
+
+      expect(onUsage).toHaveBeenCalledTimes(1)
+      expect(onUsage).toHaveBeenCalledWith({
+        inputTokens: 150,
+        outputTokens: 15,
+        cacheReadTokens: 100,
+        cacheCreationTokens: 30,
+      })
+      expect(chunks.at(-1)).toMatchObject({ type: 'done', finishReason: 'tool_calls' })
+    })
+
+    it('bills the input already reported when the stream fails mid-message', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (..._args: FetchArgs) => sseResponse(cloudflareAnthropicErrorSse))
+      )
+      const onUsage = vi.fn()
+
+      const stream = createOpenAiCompatibleProvider(cloudflareConfig).chatCompletionStream({
+        model: 'anthropic/claude-opus-4.6',
+        messages: [{ role: 'user', content: 'hi' }],
+        onUsage,
+      })
+      await expect(
+        (async () => {
+          for await (const _chunk of stream) {
+            // drain
+          }
+        })()
+      ).rejects.toThrow('Overloaded')
+
+      expect(onUsage).toHaveBeenCalledTimes(1)
+      expect(onUsage).toHaveBeenCalledWith({ inputTokens: 5, outputTokens: 1 })
+    })
+
+    it('keeps OpenAI models on chat completions (no Anthropic rewrite)', async () => {
+      const fetchMock = vi.fn(async (..._args: FetchArgs) => sse([]))
+      vi.stubGlobal('fetch', fetchMock)
+      for await (const _chunk of createOpenAiCompatibleProvider(
+        cloudflareConfig
+      ).chatCompletionStream({ model: 'gpt-5.5', messages: [{ role: 'user', content: 'hi' }] })) {
+        // drain
+      }
+      expect(fetchMock.mock.calls[0][0]).toBe(`${UNIFIED}/chat/completions`)
+    })
+  })
+})
+
+describe('OpenAI transport prompt caching', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps sending a stable prompt_cache_key per model', async () => {
+    const fetchMock = vi.fn(
+      async (..._args: FetchArgs) =>
+        new Response('data: [DONE]\n\n', {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const provider = createOpenAiCompatibleProvider({
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-5.5',
+      specialistModel: 'gpt-5-mini',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+    })
+    for await (const _chunk of provider.chatCompletionStream({
+      model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'hi' }],
+    })) {
+      // drain
+    }
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+    expect(body.prompt_cache_key).toBe('local-copilot:gpt-5.5')
+    expect(body).not.toHaveProperty('cache_control')
   })
 })

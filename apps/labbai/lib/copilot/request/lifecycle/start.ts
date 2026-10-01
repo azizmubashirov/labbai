@@ -41,10 +41,15 @@ import {
 import { SSE_RESPONSE_HEADERS } from '@/lib/copilot/request/session/sse'
 import { TraceCollector } from '@/lib/copilot/request/trace'
 import { generateLocalChatTitle } from '@/local-copilot/lib/agent/chat-title'
+import { recordLocalCopilotTurnUsage } from '@/local-copilot/lib/billing/record-turn-usage'
+import { LocalTurnCostAccumulator } from '@/local-copilot/lib/billing/turn-cost-accumulator'
 
 export { SSE_RESPONSE_HEADERS }
 
 const logger = createLogger('CopilotChatStreaming')
+
+/** Ledger message id for the one title-generation call of a chat. */
+const CHAT_TITLE_USAGE_MESSAGE_ID = 'chat-title'
 
 type CurrentChatSummary = {
   title?: string | null
@@ -459,7 +464,7 @@ function fireTitleGeneration(params: {
   } = params
   if (!chatId || currentChat?.title || !isNewChat) return
 
-  requestChatTitle({ message })
+  requestChatTitle({ message, chatId, userId, workspaceId })
     .then(async (title) => {
       if (!title) return
       // Only stamp the generated title while the chat has none. Title
@@ -484,8 +489,32 @@ function fireTitleGeneration(params: {
     })
 }
 
-/** Generates a chat title with the local copilot's engagement model. */
-export async function requestChatTitle(params: { message: string }): Promise<string | null> {
+/**
+ * Generates a chat title with the local copilot's engagement model. The title call is
+ * billed to the workspace (one ledger line per chat, `…:message:chat-title`) when the
+ * actor and workspace are known.
+ */
+export async function requestChatTitle(params: {
+  message: string
+  chatId?: string
+  userId?: string
+  workspaceId?: string
+}): Promise<string | null> {
   if (!params.message) return null
-  return generateLocalChatTitle(params.message)
+  const titleCost = new LocalTurnCostAccumulator()
+  const title = await generateLocalChatTitle(params.message, {
+    onUsage: titleCost.recordModelCall,
+  })
+  const { userId, workspaceId } = params
+  if (userId && workspaceId) {
+    /** Never throws (logs instead); not awaited so the title is not delayed by the write. */
+    void recordLocalCopilotTurnUsage({
+      userId,
+      workspaceId,
+      ...(params.chatId ? { chatId: params.chatId } : {}),
+      messageId: CHAT_TITLE_USAGE_MESSAGE_ID,
+      summary: titleCost.summarize(),
+    })
+  }
+  return title
 }

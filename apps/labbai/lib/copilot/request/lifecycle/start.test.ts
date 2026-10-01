@@ -29,6 +29,7 @@ const {
   releasePendingChatStream,
   unregisterActiveStream,
   generateLocalChatTitle,
+  recordLocalCopilotTurnUsage,
 } = vi.hoisted(() => ({
   runCopilotLifecycle: vi.fn(),
   createRunSegment: vi.fn(),
@@ -45,6 +46,7 @@ const {
   releasePendingChatStream: vi.fn(),
   unregisterActiveStream: vi.fn(),
   generateLocalChatTitle: vi.fn(),
+  recordLocalCopilotTurnUsage: vi.fn(async () => undefined),
 }))
 
 vi.mock('@/lib/copilot/request/lifecycle/run', () => ({
@@ -111,6 +113,10 @@ vi.mock('@/lib/copilot/chat-status', () => ({
 
 vi.mock('@/local-copilot/lib/agent/chat-title', () => ({
   generateLocalChatTitle,
+}))
+
+vi.mock('@/local-copilot/lib/billing/record-turn-usage', () => ({
+  recordLocalCopilotTurnUsage,
 }))
 
 import { createSSEStream, requestChatTitle } from './start'
@@ -358,7 +364,9 @@ describe('createSSEStream terminal error handling', () => {
 
     await drainStream(stream)
     await vi.waitFor(() => expect(generateLocalChatTitle).toHaveBeenCalled())
-    expect(generateLocalChatTitle).toHaveBeenLastCalledWith('hello secret-value')
+    expect(generateLocalChatTitle).toHaveBeenLastCalledWith('hello secret-value', {
+      onUsage: expect.any(Function),
+    })
   })
 })
 
@@ -370,7 +378,55 @@ describe('requestChatTitle', () => {
 
   it('generates the title with the local copilot', async () => {
     await expect(requestChatTitle({ message: 'explain billing' })).resolves.toBe('Local title')
-    expect(generateLocalChatTitle).toHaveBeenCalledWith('explain billing')
+    expect(generateLocalChatTitle).toHaveBeenCalledWith('explain billing', {
+      onUsage: expect.any(Function),
+    })
+  })
+
+  it('bills the title call to the workspace under a per-chat ledger key', async () => {
+    generateLocalChatTitle.mockImplementation(
+      async (
+        _message: string,
+        deps: {
+          onUsage: (call: {
+            model: string
+            usage: { inputTokens: number; outputTokens: number }
+          }) => void
+        }
+      ) => {
+        deps.onUsage({ model: 'gpt-4.1-nano', usage: { inputTokens: 1000, outputTokens: 10 } })
+        return 'Local title'
+      }
+    )
+
+    await expect(
+      requestChatTitle({
+        message: 'explain billing',
+        chatId: 'chat-1',
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      })
+    ).resolves.toBe('Local title')
+
+    expect(recordLocalCopilotTurnUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+        chatId: 'chat-1',
+        messageId: 'chat-title',
+        summary: expect.objectContaining({
+          total: expect.any(Number),
+          components: [
+            expect.objectContaining({
+              kind: 'model',
+              id: 'gpt-4.1-nano',
+              inputTokens: 1000,
+              outputTokens: 10,
+            }),
+          ],
+        }),
+      })
+    )
   })
 
   it('skips title work for an empty message', async () => {

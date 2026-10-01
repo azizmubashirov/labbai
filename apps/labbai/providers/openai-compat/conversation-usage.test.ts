@@ -19,7 +19,13 @@ describe('Chat Completions checkpoint usage', () => {
         prompt_tokens_details: { cached_tokens: 30 },
         cache_creation_input_tokens: 50,
       })
-    ).toEqual({ input: 20, output: 20, cacheRead: 30, cacheWrite: 50 })
+    ).toEqual({
+      input: 20,
+      output: 20,
+      cacheRead: 30,
+      cacheWrite: 50,
+      cacheWrites: [{ tokens: 50, inputRateMultiplier: 1.25 }],
+    })
   })
 
   it('does not invent usage when the provider omitted it', () => {

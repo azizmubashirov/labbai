@@ -25,11 +25,13 @@ import {
   sseResponse,
 } from '@/providers/__fixtures__/cloudflare-anthropic'
 import { cloudflareProvider } from '@/providers/cloudflare'
+import { resetCloudflareAnthropicMessagesFallback } from '@/providers/cloudflare/anthropic-messages'
 import type { ProviderRequest, ProviderResponse, ProviderToolConfig } from '@/providers/types'
 
 type FetchArgs = [input: string | URL | Request, init?: RequestInit]
 
 const UNIFIED_URL = 'https://api.cloudflare.com/client/v4/accounts/acct/ai/v1/chat/completions'
+const MESSAGES_URL = 'https://api.cloudflare.com/client/v4/accounts/acct/ai/v1/messages'
 
 const mockFetch = vi.fn<(...args: FetchArgs) => Promise<Response>>()
 const originalFetch = globalThis.fetch
@@ -103,6 +105,7 @@ describe('cloudflareProvider', () => {
   beforeEach(() => {
     mockFetch.mockReset()
     mockExecuteTool.mockClear()
+    resetCloudflareAnthropicMessagesFallback()
     vi.stubGlobal('fetch', mockFetch)
     setEnv({
       CLOUDFLARE_ACCOUNT_ID: 'acct',
@@ -121,7 +124,7 @@ describe('cloudflareProvider', () => {
     mockFetch.mockResolvedValueOnce(Response.json(completion({ content: 'ok' }, 'stop')))
 
     const request: ProviderRequest = {
-      model: 'anthropic/claude-haiku-4.5',
+      model: 'google/gemini-2.5-flash',
       apiKey: 'cloudflare-unified-billing',
       systemPrompt: 'Be brief.',
       messages: [{ role: 'user', content: 'hi' }],
@@ -135,7 +138,7 @@ describe('cloudflareProvider', () => {
     const response = (await cloudflareProvider.executeRequest(request)) as ProviderResponse
 
     expect(response.content).toBe('ok')
-    expect(response.model).toBe('anthropic/claude-haiku-4.5')
+    expect(response.model).toBe('google/gemini-2.5-flash')
     expect(response.tokens).toEqual({ input: 10, output: 5, total: 15 })
 
     const { url, headers, body } = call(0)
@@ -148,7 +151,7 @@ describe('cloudflareProvider', () => {
       expect(value).not.toContain('cloudflare-unified-billing')
     })
     expect(body).toMatchObject({
-      model: 'anthropic/claude-haiku-4.5',
+      model: 'google/gemini-2.5-flash',
       messages: [
         { role: 'system', content: 'Be brief.' },
         { role: 'user', content: 'hi' },
@@ -364,6 +367,22 @@ describe('cloudflareProvider', () => {
       expect(events).toEqual([{ type: 'text_delta', text: 'OK', turn: 'final' }])
       expect(execution.execution.output.content).toBe('OK')
       expect(execution.execution.output.tokens).toEqual({ input: 12, output: 4, total: 16 })
+
+      const { url, headers, body } = call(0)
+      expect(url).toBe(MESSAGES_URL)
+      expect(headers.get('authorization')).toBe('Bearer cf-token')
+      expect(headers.get('cf-aig-gateway-id')).toBe('labbai')
+      expect(body).toMatchObject({
+        model: 'anthropic/claude-opus-4.6',
+        stream: true,
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'Say OK', cache_control: { type: 'ephemeral' } }],
+          },
+        ],
+      })
+      expect(body).not.toHaveProperty('stream_options')
     })
 
     it('runs the streaming tool loop on split tool-call JSON', async () => {
@@ -392,23 +411,115 @@ describe('cloudflareProvider', () => {
       )
       expect(mockExecuteTool).toHaveBeenCalledTimes(1)
       expect(execution.execution.output.content).toBe('OK')
-      expect(execution.execution.output.tokens).toEqual({ input: 162, output: 19, total: 181 })
+      // Cache reads / writes are split out of the input count and priced at their own rates.
+      expect(execution.execution.output.tokens).toEqual({
+        input: 32,
+        output: 19,
+        total: 181,
+        cacheRead: 100,
+        cacheWrite: 30,
+      })
+      expect(execution.execution.output.cost?.total).toBeGreaterThan(0)
 
-      const second = call(1).body
-      expect(second.messages.slice(-2)).toEqual([
+      const first = call(0)
+      expect(first.url).toBe(MESSAGES_URL)
+      expect(first.body.tools).toEqual([
+        {
+          name: 'get_weather',
+          description: 'Weather for a city',
+          input_schema: expect.objectContaining({ type: 'object' }),
+          cache_control: { type: 'ephemeral' },
+        },
+      ])
+
+      const second = call(1)
+      expect(second.url).toBe(MESSAGES_URL)
+      expect(second.body.messages.slice(-2)).toEqual([
         {
           role: 'assistant',
-          content: 'Checking.',
-          tool_calls: [
+          content: [
+            { type: 'text', text: 'Checking.' },
+            { type: 'tool_use', id: 'toolu_01', name: 'get_weather', input: { city: 'Tashkent' } },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
             {
-              id: 'toolu_01',
-              type: 'function',
-              function: { name: 'get_weather', arguments: '{"city": "Tashkent"}' },
+              type: 'tool_result',
+              tool_use_id: 'toolu_01',
+              content: JSON.stringify({ temperature: 21 }),
+              cache_control: { type: 'ephemeral' },
             },
           ],
         },
-        { role: 'tool', tool_call_id: 'toolu_01', content: JSON.stringify({ temperature: 21 }) },
       ])
+    })
+
+    it('answers non-streaming Claude calls from /messages with cache-aware usage and cost', async () => {
+      mockFetch.mockResolvedValueOnce(
+        Response.json({
+          id: 'msg_9',
+          model: 'claude-haiku-4-5',
+          content: [{ type: 'text', text: 'ok' }],
+          stop_reason: 'end_turn',
+          usage: {
+            input_tokens: 10,
+            output_tokens: 5,
+            cache_read_input_tokens: 1_000,
+            cache_creation_input_tokens: 200,
+          },
+        })
+      )
+
+      const response = (await cloudflareProvider.executeRequest({
+        model: 'anthropic/claude-haiku-4.5',
+        systemPrompt: 'Be brief.',
+        messages: [{ role: 'user', content: 'hi' }],
+        maxTokens: 256,
+        responseFormat: {
+          name: 'answer',
+          schema: { type: 'object', properties: { text: { type: 'string' } } },
+        },
+      })) as ProviderResponse
+
+      expect(response.content).toBe('ok')
+      expect(response.tokens).toEqual({
+        input: 10,
+        output: 5,
+        total: 1_215,
+        cacheRead: 1_000,
+        cacheWrite: 200,
+      })
+      // Haiku 4.5: $1 input, $0.10 cached, $5 output; writes at 1.25 × input.
+      expect(response.cost?.input).toBeCloseTo((10 * 1 + 1_000 * 0.1 + 200 * 1.25) / 1e6, 10)
+      expect(response.cost?.output).toBeCloseTo((5 * 5) / 1e6, 10)
+
+      const { url, body } = call(0)
+      expect(url).toBe(MESSAGES_URL)
+      expect(body).toMatchObject({
+        model: 'anthropic/claude-haiku-4.5',
+        max_tokens: 256,
+        system: [{ type: 'text', text: 'Be brief.', cache_control: { type: 'ephemeral' } }],
+        output_config: { format: { type: 'json_schema' } },
+      })
+      expect(body).not.toHaveProperty('response_format')
+    })
+
+    it('falls back to chat completions when /messages rejects the request', async () => {
+      mockFetch
+        .mockResolvedValueOnce(new Response('{"error":{"message":"unknown"}}', { status: 400 }))
+        .mockResolvedValueOnce(Response.json(completion({ content: 'ok' }, 'stop')))
+
+      const response = (await cloudflareProvider.executeRequest({
+        model: 'anthropic/claude-sonnet-4.5',
+        messages: [{ role: 'user', content: 'hi' }],
+      })) as ProviderResponse
+
+      expect(response.content).toBe('ok')
+      expect(call(0).url).toBe(MESSAGES_URL)
+      expect(call(1).url).toBe(UNIFIED_URL)
+      expect(call(1).body.messages).toEqual([{ role: 'user', content: 'hi' }])
     })
 
     it('fails the stream with the message of an in-band error event', async () => {

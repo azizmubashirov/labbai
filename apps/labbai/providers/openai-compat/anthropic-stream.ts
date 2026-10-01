@@ -34,6 +34,13 @@ const ANTHROPIC_STREAM_EVENT_TYPES = new Set([
   'error',
 ])
 
+/**
+ * Anthropic's 5-minute ephemeral cache write premium over the model's base input rate
+ * (Cloudflare lists it as "Cache creation", e.g. Sonnet 5: $2.50 vs $2.00 input). The
+ * catalog (`providers/models.ts`) has no cache-write field, so writes are priced with it.
+ */
+export const ANTHROPIC_CACHE_WRITE_MULTIPLIER = 1.25
+
 /** Anthropic stream event as parsed from one SSE `data:` line. */
 export interface AnthropicStreamEvent {
   type: string
@@ -73,7 +80,8 @@ export function isAnthropicStreamEvent(value: unknown): value is AnthropicStream
   )
 }
 
-function toFinishReason(stopReason: unknown): CompatFinishReason {
+/** Maps an Anthropic `stop_reason` to the Chat Completions `finish_reason`. */
+export function toFinishReason(stopReason: unknown): CompatFinishReason {
   if (typeof stopReason !== 'string' || !stopReason) return null
   if (stopReason === 'tool_use') return 'tool_calls'
   if (stopReason === 'max_tokens' || stopReason === 'model_context_window_exceeded') {
@@ -101,6 +109,40 @@ function errorEventMessage(event: AnthropicStreamEvent): { message: string; type
     type ||
     'Anthropic stream error'
   return { message, type }
+}
+
+/** Anthropic Messages token counts (each bucket separate, as Anthropic reports them). */
+export interface AnthropicTokenCounts {
+  input: number
+  output: number
+  cacheRead: number
+  cacheCreation: number
+}
+
+/**
+ * Anthropic usage → Chat Completions usage: cache-inclusive `prompt_tokens`, cache reads as
+ * `prompt_tokens_details.cached_tokens`, cache writes as `cache_creation_input_tokens`.
+ */
+export function toAnthropicCompatUsage(usage: AnthropicTokenCounts): AnthropicCompatUsage {
+  const prompt = usage.input + usage.cacheRead + usage.cacheCreation
+  return {
+    prompt_tokens: prompt,
+    completion_tokens: usage.output,
+    total_tokens: prompt + usage.output,
+    ...(usage.cacheRead > 0 ? { prompt_tokens_details: { cached_tokens: usage.cacheRead } } : {}),
+    ...(usage.cacheCreation > 0 ? { cache_creation_input_tokens: usage.cacheCreation } : {}),
+  }
+}
+
+/** Reads Anthropic's usage object (missing / invalid counts are 0). */
+export function readAnthropicTokenCounts(raw: unknown): AnthropicTokenCounts {
+  const record: Record<string, unknown> = isRecordLike(raw) ? raw : {}
+  return {
+    input: readNumber(record.input_tokens) ?? 0,
+    output: readNumber(record.output_tokens) ?? 0,
+    cacheRead: readNumber(record.cache_read_input_tokens) ?? 0,
+    cacheCreation: readNumber(record.cache_creation_input_tokens) ?? 0,
+  }
 }
 
 interface BlockState {
@@ -142,18 +184,7 @@ export function createAnthropicStreamTranslator(): AnthropicStreamTranslator {
     )
   }
 
-  const currentUsage = (): AnthropicCompatUsage => {
-    const prompt = usage.input + usage.cacheRead + usage.cacheCreation
-    return {
-      prompt_tokens: prompt,
-      completion_tokens: usage.output,
-      total_tokens: prompt + usage.output,
-      ...(usage.cacheRead > 0
-        ? { prompt_tokens_details: { cached_tokens: usage.cacheRead } }
-        : {}),
-      ...(usage.cacheCreation > 0 ? { cache_creation_input_tokens: usage.cacheCreation } : {}),
-    }
-  }
+  const currentUsage = (): AnthropicCompatUsage => toAnthropicCompatUsage(usage)
 
   const toChunk = (
     choices: ChatCompletionChunk.Choice[],

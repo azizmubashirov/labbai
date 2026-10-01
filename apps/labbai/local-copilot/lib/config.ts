@@ -1,4 +1,5 @@
 import { isHosted } from '@/lib/core/config/env-flags'
+import { DEFAULT_MAX_MODEL_ROUNDS_PER_TURN } from '@/local-copilot/lib/agent/specialists/budget'
 import {
   DEFAULT_LOCAL_COPILOT_CATALOG_ID,
   type LocalCopilotCatalogId,
@@ -62,6 +63,19 @@ export function isLocalCopilotEngagementStatusEnabled(
   override = process.env.COPILOT_ENGAGEMENT_STATUS
 ): boolean {
   return parseBoolean(override, false)
+}
+
+/**
+ * Model rounds allowed per user message — main loop, specialists and parallel subagents
+ * share one budget (`COPILOT_MAX_ROUNDS_PER_TURN`, default
+ * {@link DEFAULT_MAX_MODEL_ROUNDS_PER_TURN}). Unset, non-numeric or < 1 falls back to the
+ * default. When the budget runs out the turn stops and asks the user whether to continue.
+ */
+export function resolveLocalCopilotMaxRoundsPerTurn(
+  override = process.env.COPILOT_MAX_ROUNDS_PER_TURN
+): number {
+  const parsed = Number.parseInt(override?.trim() ?? '', 10)
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : DEFAULT_MAX_MODEL_ROUNDS_PER_TURN
 }
 
 const ALLOWED_PROVIDERS: readonly LocalCopilotProviderId[] = [

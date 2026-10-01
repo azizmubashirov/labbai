@@ -12,7 +12,10 @@ import {
   buildLocalCopilotComponentEventKey,
   buildLocalCopilotTurnEventKey,
 } from '@/local-copilot/lib/billing/event-keys'
-import type { LocalTurnCostSummary } from '@/local-copilot/lib/billing/turn-cost-accumulator'
+import {
+  aggregateLedgerComponents,
+  type LocalTurnCostSummary,
+} from '@/local-copilot/lib/billing/turn-cost-accumulator'
 
 const logger = createLogger('LocalCopilotTurnBilling')
 
@@ -39,7 +42,9 @@ export interface RecordLocalCopilotTurnUsageParams {
 
 /**
  * Writes one idempotent Local Arena Copilot turn to the ledger as component
- * rows (model + hosted tools). Excludes zero-cost turns. Child workflow cost
+ * rows (one per model id and per hosted tool, each summing every call of the turn,
+ * with input / cached / cache-write tokens and the call count in metadata).
+ * Excludes zero-cost turns. Child workflow cost
  * must already be excluded from `summary` by the accumulator.
  *
  * Passes vendor COGS as `cost`; `recordUsage` applies USAGE_LOG_COST_MULTIPLIER.
@@ -74,6 +79,8 @@ export async function recordLocalCopilotTurnUsage(
     }
 
     const billingContext = toBillingContext(attribution)
+    /** One row per model / tool id: per-call rows would share an event key and be dropped. */
+    const ledgerComponents = aggregateLedgerComponents(params.summary.components)
 
     // New Labbai's ledger has no chat/run/actor columns; keep them in entry metadata.
     await recordUsage({
@@ -86,7 +93,7 @@ export async function recordLocalCopilotTurnUsage(
       },
       workflowId: params.workflowId,
       ...(params.parentExecutionId ? { executionId: params.parentExecutionId } : {}),
-      entries: params.summary.components.map((component) => {
+      entries: ledgerComponents.map((component) => {
         const eventKey = buildLocalCopilotComponentEventKey({
           turnEventKey,
           component: component.kind,
@@ -103,6 +110,11 @@ export async function recordLocalCopilotTurnUsage(
             backend: 'local',
             ...(component.inputTokens != null ? { inputTokens: component.inputTokens } : {}),
             ...(component.outputTokens != null ? { outputTokens: component.outputTokens } : {}),
+            ...(component.cacheReadTokens ? { cacheReadTokens: component.cacheReadTokens } : {}),
+            ...(component.cacheCreationTokens
+              ? { cacheCreationTokens: component.cacheCreationTokens }
+              : {}),
+            ...(component.calls != null ? { calls: component.calls } : {}),
             ...(component.provider ? { provider: component.provider } : {}),
             ...(component.vendor ? { vendor: component.vendor } : {}),
             ...(component.toolId ? { toolId: component.toolId } : {}),
@@ -125,7 +137,11 @@ export async function recordLocalCopilotTurnUsage(
       turnEventKey,
       billingEntityType: billingContext.billingEntity.type,
       billingEntityId: billingContext.billingEntity.id,
-      componentCount: params.summary.components.length,
+      componentCount: ledgerComponents.length,
+      modelCalls: ledgerComponents.reduce(
+        (sum, component) => sum + (component.kind === 'model' ? (component.calls ?? 1) : 0),
+        0
+      ),
       total: params.summary.total,
     })
   } catch (error) {

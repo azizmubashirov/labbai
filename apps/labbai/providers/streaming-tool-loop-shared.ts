@@ -21,7 +21,8 @@ export const STREAMING_TOOL_CALL_PROVIDERS: ReadonlySet<string> = new Set(['open
 /** Aggregate result reported by a streaming tool loop when its stream closes. */
 export interface StreamingToolLoopComplete {
   content: string
-  tokens: { input: number; output: number; total: number }
+  /** `input` excludes cache reads / writes when the provider reports them separately. */
+  tokens: { input: number; output: number; total: number; cacheRead?: number; cacheWrite?: number }
   cost: NormalizedBlockOutput['cost']
   toolCalls?: { list: unknown[]; count: number }
   modelTime: number

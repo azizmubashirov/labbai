@@ -62,6 +62,9 @@ const logger = createLogger('LocalCopilotSpecialistPass')
 export const SPECIALIST_PASS_MAX_ROUNDS = 10
 const MAX_SPECIALIST_FORCED_FOLLOW_UP_ROUNDS = 4
 export const SPECIALIST_FINDINGS_MAX_CHARS = 12_000
+/** Appended to a specialist's findings when the turn's model round budget ran out. */
+export const SPECIALIST_ROUND_CAP_NOTE =
+  '[Stopped: the per-turn step limit was reached before this specialist finished.]'
 
 export interface RunSpecialistPassParams {
   domain: LocalCopilotSpecialistDomain
@@ -263,8 +266,14 @@ export async function executeSpecialistLoop(
       : params.toolCtx.fileIntentChannelId
 
     const maxRounds = SPECIALIST_PASS_MAX_ROUNDS + MAX_SPECIALIST_FORCED_FOLLOW_UP_ROUNDS
+    let stoppedAtRoundCap = false
     for (let round = 0; round < maxRounds; round++) {
       if (signal.aborted) break
+      /** Every specialist round draws on the turn's shared model round budget. */
+      if (!params.budget.tryConsumeModelRound()) {
+        stoppedAtRoundCap = true
+        break
+      }
 
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = []
       let assistantText = ''
@@ -278,18 +287,14 @@ export async function executeSpecialistLoop(
           tools,
           maxTokens: resolveLocalCopilotMaxOutputTokens(params.model),
           signal,
+          /** Billed once per call, also when the round fails or times out mid-stream. */
+          onUsage: params.turnCost.usageListener(params.model),
         })) {
           if (chunk.type === 'text' && chunk.content) assistantText += chunk.content
           if (chunk.type === 'tool_call' && chunk.toolCall) pendingToolCalls.push(chunk.toolCall)
           if (chunk.type === 'done' && chunk.usage) {
             roundInputTokens = chunk.usage.inputTokens
             roundOutputTokens = chunk.usage.outputTokens
-            params.turnCost.addModelUsage({
-              model: params.model,
-              inputTokens: roundInputTokens,
-              outputTokens: roundOutputTokens,
-              cacheReadTokens: chunk.usage.cacheReadTokens,
-            })
           }
         }
       } catch (error) {
@@ -301,13 +306,13 @@ export async function executeSpecialistLoop(
         break
       }
 
-      // Model cost is recorded from the stream `done` usage chunk above.
-
       logger.info('Arena Copilot specialist round finished', {
         domain: params.domain,
         depth: entered.depth,
         round,
         usageTurnId: params.usageTurnId,
+        inputTokens: roundInputTokens,
+        outputTokens: roundOutputTokens,
         toolCallCount: pendingToolCalls.length,
         toolNames: pendingToolCalls.map((call) => call.name),
         budget: params.budget.snapshot(),
@@ -465,6 +470,7 @@ export async function executeSpecialistLoop(
             args: parsedArgs,
             // Tool execution uses parent abort so image/media gen can outlive specialist LLM budget.
             abortSignal: params.signal,
+            onModelUsage: params.turnCost.recordModelCall,
             execute: (onProgress) =>
               executeLocalCopilotTool(call.name, parsedArgs, {
                 ...params.toolCtx,
@@ -599,6 +605,16 @@ export async function executeSpecialistLoop(
           billing: toolResult.billing,
         })
       }
+    }
+
+    if (stoppedAtRoundCap) {
+      findings.push(SPECIALIST_ROUND_CAP_NOTE)
+      logger.info('Arena Copilot specialist stopped at the turn round cap', {
+        domain: params.domain,
+        depth: entered.depth,
+        toolRoundCount,
+        budget: params.budget.snapshot(),
+      })
     }
 
     const findingsText = truncate(

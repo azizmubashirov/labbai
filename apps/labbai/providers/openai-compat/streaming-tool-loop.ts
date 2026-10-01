@@ -26,6 +26,7 @@ import {
   createAnthropicStreamTranslator,
   isAnthropicStreamEvent,
 } from '@/providers/openai-compat/anthropic-stream'
+import { LIST_PRICE_POLICY, priceModelUsage } from '@/providers/cost-policy'
 import { getChatCompletionConversationUsage } from '@/providers/openai-compat/conversation-usage'
 import {
   createOpenAICompatibleAgentEventStream,
@@ -121,7 +122,9 @@ export function createOpenAICompatStreamingToolLoopStream(
       let modelTime = 0
       let toolsTime = 0
       let firstResponseTime = 0
-      const tokens = { input: 0, output: 0, total: 0 }
+      const tokens: StreamingToolLoopComplete['tokens'] = { input: 0, output: 0, total: 0 }
+      /** Priced per model turn so cache reads / writes (Anthropic) use their own rates. */
+      const modelCost = { input: 0, output: 0, total: 0 }
       const toolCalls: unknown[] = []
       const toolResults: Record<string, unknown>[] = []
       const openToolStarts = new Map<string, string>()
@@ -131,7 +134,6 @@ export function createOpenAICompatStreamingToolLoopStream(
       let usedForcedTools: string[] = []
       let hasUsedForcedTool = false
       const reportProgress = () => {
-        const modelCost = calculateCost(request.model, tokens.input, tokens.output)
         const toolCost = sumToolCosts(toolResults)
         onComplete({
           content,
@@ -336,10 +338,22 @@ export function createOpenAICompatStreamingToolLoopStream(
               provider: providerName.toLowerCase(),
             }
           )
-          tokens.input += turnUsage.prompt_tokens
+          const turnModelUsage = getChatCompletionConversationUsage(turnUsage)
+          const turnCacheRead = turnModelUsage?.cacheRead ?? 0
+          const turnCacheWrite = turnModelUsage?.cacheWrite ?? 0
+          tokens.input += turnModelUsage ? turnModelUsage.input : turnUsage.prompt_tokens
           tokens.output += turnUsage.completion_tokens
           tokens.total +=
             turnUsage.total_tokens || turnUsage.prompt_tokens + turnUsage.completion_tokens
+          if (turnCacheRead > 0) tokens.cacheRead = (tokens.cacheRead ?? 0) + turnCacheRead
+          if (turnCacheWrite > 0) tokens.cacheWrite = (tokens.cacheWrite ?? 0) + turnCacheWrite
+          const turnCost =
+            turnModelUsage && (turnCacheRead > 0 || turnCacheWrite > 0)
+              ? priceModelUsage(request.model, turnModelUsage, LIST_PRICE_POLICY)
+              : calculateCost(request.model, turnUsage.prompt_tokens, turnUsage.completion_tokens)
+          modelCost.input += turnCost.input
+          modelCost.output += turnCost.output
+          modelCost.total += turnCost.total
 
           if (pendingTools.length === 0) {
             sawFinalTurn = true

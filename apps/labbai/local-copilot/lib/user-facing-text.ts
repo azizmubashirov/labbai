@@ -492,3 +492,42 @@ export function pendingFollowUpsAreOauthOnly(pending: Array<{ resolveWith: strin
     )
   )
 }
+
+/** Follow-up choices offered when a turn pauses at the per-turn model round cap. */
+export const ROUND_CAP_CONTINUE_OPTION = 'Continue'
+export const ROUND_CAP_STOP_OPTION = 'Stop'
+
+const ROUND_CAP_PAUSE_MESSAGE =
+  'I paused here so this request does not run too long. Should I continue where I left off?'
+
+/**
+ * User-visible reply when a turn used its whole model round budget
+ * (`COPILOT_MAX_ROUNDS_PER_TURN`) before finishing. The turn appends the Continue / Stop
+ * options to it; replying "Continue" resumes the task on the next turn.
+ */
+export function buildRoundCapPauseMessage(): string {
+  return ROUND_CAP_PAUSE_MESSAGE
+}
+
+/** True when an assistant reply is a round-cap pause (see {@link buildRoundCapPauseMessage}). */
+export function isRoundCapPauseMessage(text: string): boolean {
+  return text.includes(ROUND_CAP_PAUSE_MESSAGE)
+}
+
+const CONTINUE_REQUEST_PATTERN =
+  /^\s*(?:continue|go on|keep going|carry on|resume|proceed|yes|ok(?:ay)?|davom(?:\s*et)?|ha|продолж\S*|да)(?=$|[\s.!,?])/iu
+
+/** True when a short user message asks to go on (e.g. the "Continue" option). */
+export function isContinueRequest(message: string): boolean {
+  const trimmed = message.trim()
+  return trimmed.length > 0 && trimmed.length <= 80 && CONTINUE_REQUEST_PATTERN.test(trimmed)
+}
+
+/** Model-facing nudge for the turn that resumes after a round-cap pause. */
+export function buildRoundCapResumeSystemMessage(): string {
+  return (
+    '[System] The previous turn stopped at the per-turn step limit before the task was finished, ' +
+    'and the user asked to continue. Resume the unfinished task from where it stopped, using the ' +
+    'conversation, task state and results above. Do not repeat steps that already succeeded.'
+  )
+}

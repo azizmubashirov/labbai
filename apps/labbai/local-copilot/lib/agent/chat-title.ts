@@ -8,7 +8,10 @@ import {
 } from '@/local-copilot/lib/agent/engagement-status'
 import { getLocalCopilotConfig } from '@/local-copilot/lib/config'
 import { collectCompletionText } from '@/local-copilot/lib/providers/collect-text'
-import type { LocalCopilotProvider } from '@/local-copilot/lib/providers/types'
+import type {
+  LocalCopilotProvider,
+  ModelCallUsageListener,
+} from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
 
 const logger = createLogger('LocalCopilotChatTitle')
@@ -62,6 +65,8 @@ export async function generateLocalChatTitle(
     config?: LocalCopilotConfig
     provider?: LocalCopilotProvider
     model?: string
+    /** Bills the title call (the caller writes it to the usage ledger). */
+    onUsage?: ModelCallUsageListener
   }
 ): Promise<string | null> {
   const trimmed = message.trim()
@@ -83,6 +88,7 @@ export async function generateLocalChatTitle(
       temperature: TITLE_TEMPERATURE,
       maxTokens: TITLE_MAX_TOKENS,
       signal: timeout.signal,
+      ...(deps?.onUsage ? { onUsage: deps.onUsage } : {}),
     })
     const raced = await Promise.race([
       completion.then((text) => ({ ok: true as const, text })),

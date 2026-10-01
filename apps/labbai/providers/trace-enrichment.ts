@@ -1,6 +1,7 @@
 import { isRecordLike } from '@labbai/utils/object'
 import type { BlockTokens, IterationToolCall, ProviderTimingSegment } from '@/executor/types'
 import { LIST_PRICE_POLICY, priceModelUsage } from '@/providers/cost-policy'
+import { ANTHROPIC_CACHE_WRITE_MULTIPLIER } from '@/providers/openai-compat/anthropic-stream'
 import {
   getOpenRouterReasoningDetailText,
   type OpenRouterReasoningDetail,
@@ -34,6 +35,8 @@ interface ChatCompletionLike {
     completion_tokens_details?: { reasoning_tokens?: number | null } | null
     /** DeepSeek's legacy cache shape (not nested under prompt_tokens_details). */
     prompt_cache_hit_tokens?: number | null
+    /** Anthropic cache writes (Cloudflare `anthropic/*`), inside `prompt_tokens`. */
+    cache_creation_input_tokens?: number | null
   } | null
 }
 
@@ -212,12 +215,20 @@ export function enrichLastModelSegmentFromChatCompletions(
   if (!derivedCost && extras?.model && promptTokens != null && completionTokens != null) {
     // OpenAI-compatible vendors report cached tokens as a subset of the prompt
     // total, so the uncached remainder is the subtraction.
+    const cacheWrite = Math.max(0, usage?.cache_creation_input_tokens ?? 0)
     const full = priceModelUsage(
       extras.model,
       {
-        input: Math.max(0, promptTokens - cacheRead),
+        input: Math.max(0, promptTokens - cacheRead - cacheWrite),
         output: completionTokens,
         cacheRead,
+        ...(cacheWrite > 0
+          ? {
+              cacheWrites: [
+                { tokens: cacheWrite, inputRateMultiplier: ANTHROPIC_CACHE_WRITE_MULTIPLIER },
+              ],
+            }
+          : {}),
       },
       LIST_PRICE_POLICY
     )

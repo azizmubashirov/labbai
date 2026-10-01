@@ -15,7 +15,11 @@ import { mergeConstraints } from '@/local-copilot/lib/context/follow-up-directiv
 import { promoteDurableSessionMemoryToUserMemory } from '@/local-copilot/lib/context/promote-durable-memory'
 import { collectCompletionText } from '@/local-copilot/lib/providers/collect-text'
 import { getMessageContentText } from '@/local-copilot/lib/providers/message-content'
-import type { ChatMessage, LocalCopilotProvider } from '@/local-copilot/lib/providers/types'
+import type {
+  ChatMessage,
+  LocalCopilotProvider,
+  ModelCallUsageListener,
+} from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
 
 const logger = createLogger('LocalCopilotSessionMemory')
@@ -514,6 +518,8 @@ export async function ensureSessionMemory(params: {
   historyMessages: ChatMessage[]
   turns: SessionMemoryTurn[]
   signal?: AbortSignal
+  /** Bills the summarizer call to the copilot turn. */
+  onModelUsage?: ModelCallUsageListener
   deps?: {
     config?: LocalCopilotConfig
     provider?: LocalCopilotProvider
@@ -569,6 +575,7 @@ export async function ensureSessionMemory(params: {
       config: params.deps?.config,
       provider: params.deps?.provider,
       model: params.deps?.model,
+      ...(params.onModelUsage ? { onModelUsage: params.onModelUsage } : {}),
     })
 
     if (!updated) return previous
@@ -618,6 +625,7 @@ export async function summarizeSessionMemory(params: {
   config?: LocalCopilotConfig
   provider?: LocalCopilotProvider
   model?: string
+  onModelUsage?: ModelCallUsageListener
 }): Promise<SessionMemory | null> {
   if (params.uncoveredTurns.length === 0) return params.previous
 
@@ -659,6 +667,7 @@ export async function summarizeSessionMemory(params: {
       temperature: 0.2,
       maxTokens: SESSION_MEMORY_MAX_TOKENS,
       signal: timeout.signal,
+      ...(params.onModelUsage ? { onUsage: params.onModelUsage } : {}),
     })
 
     const raced = await Promise.race([

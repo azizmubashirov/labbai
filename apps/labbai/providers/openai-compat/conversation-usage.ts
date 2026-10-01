@@ -1,7 +1,12 @@
 import { isPlainRecord } from '@labbai/utils/object'
 import type { ConversationUsage } from '@/lib/memory/conversation-types'
+import { ANTHROPIC_CACHE_WRITE_MULTIPLIER } from '@/providers/openai-compat/anthropic-stream'
 
-/** Converts cache-inclusive Chat Completions usage to the shared pricing buckets. */
+/**
+ * Converts cache-inclusive Chat Completions usage to the shared pricing buckets. Cache
+ * writes only come from Anthropic (`cache_creation_input_tokens`), so they are priced at
+ * Anthropic's 5-minute write premium.
+ */
 export function getChatCompletionConversationUsage(value: unknown): ConversationUsage | undefined {
   if (!isPlainRecord(value)) return undefined
   const prompt = typeof value.prompt_tokens === 'number' ? Math.max(0, value.prompt_tokens) : 0
@@ -20,6 +25,13 @@ export function getChatCompletionConversationUsage(value: unknown): Conversation
     input: prompt - cacheRead - cacheWrite,
     output,
     cacheRead,
-    ...(cacheWrite > 0 ? { cacheWrite } : {}),
+    ...(cacheWrite > 0
+      ? {
+          cacheWrite,
+          cacheWrites: [
+            { tokens: cacheWrite, inputRateMultiplier: ANTHROPIC_CACHE_WRITE_MULTIPLIER },
+          ],
+        }
+      : {}),
   }
 }

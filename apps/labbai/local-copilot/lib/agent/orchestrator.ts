@@ -52,6 +52,7 @@ import {
   buildLocalCopilotConfigForCatalog,
   getLocalCopilotConfig,
   isLocalCopilotEngagementStatusEnabled,
+  resolveLocalCopilotMaxRoundsPerTurn,
 } from '@/local-copilot/lib/config'
 import { createArtifactStore, persistArtifacts } from '@/local-copilot/lib/context/artifacts'
 import {
@@ -133,6 +134,7 @@ import {
   createLocalCopilotProvider,
   getLocalCopilotProvider,
 } from '@/local-copilot/lib/providers/registry'
+import { getMessageContentText } from '@/local-copilot/lib/providers/message-content'
 import type { ChatMessage } from '@/local-copilot/lib/providers/types'
 import {
   prepareLocalToolConfirmation,
@@ -170,15 +172,21 @@ import {
 import type { LocalCopilotStreamEvent, WorkflowPatch } from '@/local-copilot/lib/types'
 import {
   buildBlocksMetadataReuseSystemMessage,
+  buildRoundCapPauseMessage,
+  buildRoundCapResumeSystemMessage,
   buildUnfulfilledIntentContinuationMessage,
   buildWorkflowBuildCompleteSystemMessage,
   createAssistantRoundTextStreamer,
   editResultNeedsFollowUp,
   emptyAssistantTurnFallback,
   isBridgingAssistantNarration,
+  isContinueRequest,
+  isRoundCapPauseMessage,
   isUnfulfilledMutationIntentNarration,
   type PostBuildToolMode,
   pendingFollowUpsAreOauthOnly,
+  ROUND_CAP_CONTINUE_OPTION,
+  ROUND_CAP_STOP_OPTION,
   resolvePostBuildRoundTools,
   shouldEmitEmptyAssistantFallback,
   shouldSynthesizeAssistantSummary,
@@ -250,9 +258,51 @@ export interface RunAgentParams {
   billingAttribution?: BillingAttributionSnapshot
 }
 
+/**
+ * The turn's cost ledger: every model / tool cost made on behalf of the user message
+ * accumulates in `turnCost`, and `flush` (set once billing attribution is known, only
+ * when this turn writes the chat ledger) writes it exactly once.
+ */
+interface TurnLedger {
+  readonly turnCost: LocalTurnCostAccumulator
+  flush?: () => Promise<void>
+  flushed: boolean
+}
+
+async function flushTurnLedger(ledger: TurnLedger): Promise<void> {
+  if (ledger.flushed || !ledger.flush) return
+  ledger.flushed = true
+  await ledger.flush()
+}
+
+/**
+ * Runs one Arena Copilot turn. The usage ledger is written when the turn completes and
+ * also when it fails or is stopped (the consumer returns early / the request aborts), so
+ * model calls already paid for are never missing from `usage_log`.
+ */
 export async function* runLocalCopilotAgent(
   params: RunAgentParams
 ): AsyncGenerator<LocalCopilotStreamEvent, LocalTurnCostSummary | undefined, undefined> {
+  const ledger: TurnLedger = { turnCost: new LocalTurnCostAccumulator(), flushed: false }
+  try {
+    return yield* runLocalCopilotAgentTurn(params, ledger)
+  } finally {
+    if (!ledger.flushed && ledger.flush) {
+      logger.warn('Arena Copilot turn did not complete; recording its usage so far', {
+        workspaceId: params.workspaceId,
+        chatId: params.chatId ?? null,
+        turnCost: ledger.turnCost.summarize().total,
+      })
+    }
+    await flushTurnLedger(ledger)
+  }
+}
+
+async function* runLocalCopilotAgentTurn(
+  params: RunAgentParams,
+  ledger: TurnLedger
+): AsyncGenerator<LocalCopilotStreamEvent, LocalTurnCostSummary | undefined, undefined> {
+  const turnCost = ledger.turnCost
   const startedAt = Date.now()
   const timing = createLocalCopilotTurnTiming(startedAt)
   const catalogId = params.catalogId ?? DEFAULT_LOCAL_COPILOT_CATALOG_ID
@@ -319,6 +369,7 @@ export async function* runLocalCopilotAgent(
         historyMessages: params.priorMessages,
         turns: params.sessionMemoryTurns ?? [],
         signal: params.signal,
+        onModelUsage: turnCost.recordModelCall,
       })
     : null
   // Overlap with context / session / prefetch. Prefer attributed payer check so
@@ -364,9 +415,41 @@ export async function* runLocalCopilotAgent(
 
   const persistLocally = params.persistLocally !== false
   const writeChatLedger = params.writeChatLedger !== false
-  const turnCost = new LocalTurnCostAccumulator()
 
   let conversationId = params.conversationId
+  /** Set once resolved below; until then the ledger write resolves the payer itself. */
+  let ledgerBillingAttribution = params.billingAttribution
+  if (writeChatLedger) {
+    ledger.flush = async () => {
+      const summary = turnCost.summarize()
+      await recordLocalCopilotTurnUsage({
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        workflowId: params.workflowId,
+        chatId: params.chatId,
+        runId: params.runId,
+        conversationId: conversationId ?? undefined,
+        messageId: usageTurnId,
+        summary,
+        executionActor: { actorUserId: params.userId, actorType: 'user' },
+        parentExecutionId: params.parentExecutionId,
+        rootExecutionId: params.parentExecutionId,
+        triggeringChatId: params.chatId,
+        triggeringRunId: params.runId,
+        ...(ledgerBillingAttribution ? { billingAttribution: ledgerBillingAttribution } : {}),
+      })
+      recordLocalOpsEvent({
+        counter: LOCAL_OPS_COUNTERS.costRecorded,
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+        workflowId: params.workflowId,
+        conversationId,
+        chatId: params.chatId,
+        runId: params.runId,
+        metadata: { total: summary.total },
+      })
+    }
+  }
   const extractedDirectives = extractFollowUpDirectives(params.message)
   if (extractedDirectives.preferences.length > 0) {
     void persistInferredUserMemories({
@@ -428,6 +511,7 @@ export async function* runLocalCopilotAgent(
         historyMessages: rawHistory,
         turns: params.sessionMemoryTurns ?? [],
         signal: params.signal,
+        onModelUsage: turnCost.recordModelCall,
       }),
     promptPrefetch.settle(),
   ])
@@ -520,7 +604,16 @@ export async function* runLocalCopilotAgent(
     ? formatRecentToolFailuresSystemMessage(sessionMemory.failures)
     : null
 
-  const intent = classifyLocalCopilotIntent(params.message)
+  /** "Continue" right after a round-cap pause resumes the unfinished task. */
+  const lastHistoryAssistant = [...rawHistory].reverse().find((item) => item.role === 'assistant')
+  const resumingAfterRoundCap =
+    isContinueRequest(params.message) &&
+    Boolean(lastHistoryAssistant) &&
+    isRoundCapPauseMessage(getMessageContentText(lastHistoryAssistant?.content ?? ''))
+  // A resume is routed (tools / specialists) by the paused task, not by the word "continue".
+  const intent = classifyLocalCopilotIntent(
+    resumingAfterRoundCap && taskState?.objective ? taskState.objective : params.message
+  )
   const specialistTools = getParentSpecialistToolDefinitions()
   const hybridTools = resolveHybridParentTools({
     allTools,
@@ -573,7 +666,14 @@ export async function* runLocalCopilotAgent(
     tokenCountModel
   )
 
-  const specialistBudget = createSpecialistBudget()
+  if (resumingAfterRoundCap) {
+    messages.push({ role: 'system', content: buildRoundCapResumeSystemMessage() })
+  }
+
+  /** Specialist slots plus the turn's shared model round budget (main + specialists). */
+  const specialistBudget = createSpecialistBudget({
+    maxModelRounds: resolveLocalCopilotMaxRoundsPerTurn(),
+  })
   timing.mark('promptReady')
 
   logger.info('Arena Copilot prompt budget applied', {
@@ -677,6 +777,7 @@ export async function* runLocalCopilotAgent(
   ) {
     throw new Error('Arena Copilot billing attribution does not match its actor and workspace')
   }
+  ledgerBillingAttribution = billingAttribution
   let resolvedSecretTraceRegistry: ToolExecutionContext['resolvedSecretTraceRegistry']
   try {
     const { prepareCopilotEnvironmentContext } = await import('@/lib/copilot/environment-context')
@@ -757,7 +858,9 @@ export async function* runLocalCopilotAgent(
     specialistHintInsertAt += 1
   }
 
-  const parallelDomains = selectParallelSubagentDomains(intent)
+  // A resume continues in the main loop (which can still delegate); the pre-pass would
+  // re-run specialists on the paused task from scratch.
+  const parallelDomains = resumingAfterRoundCap ? [] : selectParallelSubagentDomains(intent)
   if (parallelDomains.length >= 2) {
     const parallel = runParallelSubagents({
       domains: parallelDomains,
@@ -797,7 +900,7 @@ export async function* runLocalCopilotAgent(
       memory: getLocalCopilotMemorySnapshot(),
     })
   } else {
-    const passDomain = specialistPassDomain(intent)
+    const passDomain = resumingAfterRoundCap ? null : specialistPassDomain(intent)
     if (passDomain && passDomain !== 'general') {
       const pass = runSpecialistPass({
         domain: passDomain,
@@ -874,6 +977,11 @@ export async function* runLocalCopilotAgent(
   let turnOutputTokens = 0
   const stagnationTracker = createToolStagnationTracker()
   let stagnationStopMessage: string | null = null
+  /** The turn's model round budget ran out before the model could answer. */
+  let roundCapReached = false
+  /** Tool results were added that no model round has read yet. */
+  let awaitingModelAfterTools = false
+  let stoppedBySpendCap = false
 
   for (let round = 0; round < maxToolRounds; round++) {
     if (stagnationStopMessage) break
@@ -901,8 +1009,20 @@ export async function* runLocalCopilotAgent(
         type: 'error',
         message: midTurnSpend.error ?? 'Usage limit exceeded',
       }
+      stoppedBySpendCap = true
       break
     }
+
+    if (!specialistBudget.tryConsumeModelRound()) {
+      roundCapReached = true
+      logger.info('Arena Copilot model round cap reached; pausing the turn', {
+        usageTurnId,
+        round,
+        budget: specialistBudget.snapshot(),
+      })
+      break
+    }
+    awaitingModelAfterTools = false
 
     const pendingToolCalls: Array<{
       id: string
@@ -960,6 +1080,7 @@ export async function* runLocalCopilotAgent(
         tools: roundTools,
         maxTokens: maxOutputTokens,
         signal: params.signal,
+        onUsage: turnCost.usageListener(config.model, config.provider),
       }),
       abortSignal: params.signal,
       messages: MODEL_WAIT_STATUS_FALLBACK,
@@ -971,6 +1092,7 @@ export async function* runLocalCopilotAgent(
               phase: 'model_wait',
               userHint: params.message,
               signal: abortSignal,
+              onUsage: turnCost.recordModelCall,
             })
         : undefined,
     })) {
@@ -1067,21 +1189,10 @@ export async function* runLocalCopilotAgent(
       memory: getLocalCopilotMemorySnapshot(),
     })
 
+    // Model cost is billed by the request's `onUsage` listener (once per call, also when
+    // a call fails mid-stream); these counters only feed logs and the `done` event.
     turnInputTokens += roundInputTokens
     turnOutputTokens += roundOutputTokens
-
-    if (roundInputTokens > 0 || roundOutputTokens > 0) {
-      // Arena Copilot (local mothership) accumulates model cost for one end-of-turn
-      // ledger write. Labbai Cloud mothership uses Go pricing + `workspace-chat` /
-      // `mothership_block` via `/api/billing/update-cost` — keep these separate.
-      turnCost.addModelUsage({
-        model: config.model,
-        inputTokens: roundInputTokens,
-        outputTokens: roundOutputTokens,
-        cacheReadTokens: roundCacheReadTokens,
-        provider: config.provider,
-      })
-    }
 
     if (pendingToolCalls.length === 0) {
       const shouldForceOauthFollowUp =
@@ -1714,6 +1825,7 @@ export async function* runLocalCopilotAgent(
               onProgress,
               activeToolCallId: call.id,
             }),
+          onModelUsage: turnCost.recordModelCall,
         })
         let result = await toolStatus.next()
         while (!result.done) {
@@ -2091,6 +2203,7 @@ export async function* runLocalCopilotAgent(
     for (const deferred of deferredSystemMessages) {
       messages.push(deferred)
     }
+    awaitingModelAfterTools = true
 
     if (!stagnationStopMessage && !endTurnAfterThisRound) {
       yield { type: 'status', message: 'Reviewing results…' }
@@ -2123,51 +2236,51 @@ export async function* runLocalCopilotAgent(
   }
 
   if (stagnationStopMessage) {
-    // One more model round with the stagnation system nudge. Keep tools attached
-    // — some providers require tools when history already has tool content.
-    // If the model stays silent, surface the stop message directly.
+    // One more model round with the stagnation system nudge (if the round budget allows).
+    // Keep tools attached — some providers require tools when history already has tool
+    // content. If the model stays silent, surface the stop message directly.
     const priorAssistantChars = assistantText.length
-    for await (const event of iterateWithIdleStatus({
-      source: provider.chatCompletionStream({
-        model: config.model,
-        messages,
-        tools,
-        maxTokens: maxOutputTokens,
-        signal: params.signal,
-      }),
-      abortSignal: params.signal,
-      messages: MODEL_WAIT_STATUS_FALLBACK,
-      idleMs: 0,
-      intervalMs: 2500,
-    })) {
-      if (event.type === 'status') {
-        yield event
-        continue
-      }
-      const chunk = event.item
-      if (chunk.type === 'text' && chunk.content) {
-        const cleaned = stripIdsFromUserFacingText(
-          stripLeakedToolMarkers(chunk.content, { trim: false })
-        )
-        if (!cleaned) continue
-        assistantText += cleaned
-        streamedUserFacingText += cleaned
-        yield { type: 'text_delta', content: cleaned }
-      }
-      if (chunk.type === 'done') {
-        if (chunk.finishReason) lastFinishReason = chunk.finishReason
-        if (chunk.usage) {
-          turnCost.addModelUsage({
-            model: config.model,
-            inputTokens: chunk.usage.inputTokens,
-            outputTokens: chunk.usage.outputTokens,
-            cacheReadTokens: chunk.usage.cacheReadTokens,
-            provider: config.provider,
-          })
-          turnInputTokens += chunk.usage.inputTokens
-          turnOutputTokens += chunk.usage.outputTokens
+    if (specialistBudget.tryConsumeModelRound()) {
+      let stagnationRoundInputTokens = 0
+      let stagnationRoundOutputTokens = 0
+      for await (const event of iterateWithIdleStatus({
+        source: provider.chatCompletionStream({
+          model: config.model,
+          messages,
+          tools,
+          maxTokens: maxOutputTokens,
+          signal: params.signal,
+          onUsage: turnCost.usageListener(config.model, config.provider),
+        }),
+        abortSignal: params.signal,
+        messages: MODEL_WAIT_STATUS_FALLBACK,
+        idleMs: 0,
+        intervalMs: 2500,
+      })) {
+        if (event.type === 'status') {
+          yield event
+          continue
+        }
+        const chunk = event.item
+        if (chunk.type === 'text' && chunk.content) {
+          const cleaned = stripIdsFromUserFacingText(
+            stripLeakedToolMarkers(chunk.content, { trim: false })
+          )
+          if (!cleaned) continue
+          assistantText += cleaned
+          streamedUserFacingText += cleaned
+          yield { type: 'text_delta', content: cleaned }
+        }
+        if (chunk.type === 'done') {
+          if (chunk.finishReason) lastFinishReason = chunk.finishReason
+          if (chunk.usage) {
+            stagnationRoundInputTokens = chunk.usage.inputTokens
+            stagnationRoundOutputTokens = chunk.usage.outputTokens
+          }
         }
       }
+      turnInputTokens += stagnationRoundInputTokens
+      turnOutputTokens += stagnationRoundOutputTokens
     }
     if (assistantText.length === priorAssistantChars) {
       const safe = stripIdsFromUserFacingText(stagnationStopMessage)
@@ -2175,6 +2288,27 @@ export async function* runLocalCopilotAgent(
       streamedUserFacingText += safe
       yield { type: 'text_delta', content: safe }
     }
+  }
+
+  /**
+   * The turn used its whole model round budget (`COPILOT_MAX_ROUNDS_PER_TURN`) — or ran
+   * out of loop rounds right after a tool batch — before the model could finish. No more
+   * model calls: what was done is summarized and the user is asked whether to continue.
+   */
+  const pausedAtRoundCap =
+    !params.signal?.aborted &&
+    !stagnationStopMessage &&
+    !stoppedBySpendCap &&
+    !endTurnAfterThisRound &&
+    postBuildToolMode !== 'done' &&
+    (roundCapReached || awaitingModelAfterTools)
+  if (pausedAtRoundCap) {
+    logger.info('Arena Copilot turn paused at the model round cap', {
+      usageTurnId,
+      workspaceId: params.workspaceId,
+      toolCallCount: turnToolRecords.length,
+      budget: specialistBudget.snapshot(),
+    })
   }
 
   // Prefer the full streamed user-facing transcript for persistence — per-round
@@ -2233,6 +2367,7 @@ export async function* runLocalCopilotAgent(
 
   if (
     !params.signal?.aborted &&
+    !pausedAtRoundCap &&
     shouldEmitEmptyAssistantFallback({
       streamedUserFacingText,
       toolRecordCount: turnToolRecords.length,
@@ -2246,14 +2381,26 @@ export async function* runLocalCopilotAgent(
     yield { type: 'text_delta', content: safe }
   }
 
+  if (pausedAtRoundCap) {
+    const pauseText = stripIdsFromUserFacingText(buildRoundCapPauseMessage())
+    const chunk = stripOptionsTagsForDisplay(streamedUserFacingText, false).trim()
+      ? `\n\n${pauseText}`
+      : pauseText
+    assistantText += chunk
+    streamedUserFacingText += chunk
+    yield { type: 'text_delta', content: chunk }
+  }
+
   // Emit at most one follow-up block for the whole turn (never after each tool round).
-  const followUpItems =
-    recommendations.length > 0
+  // A round-cap pause offers only Continue / Stop.
+  const followUpItems = pausedAtRoundCap
+    ? [ROUND_CAP_CONTINUE_OPTION, ROUND_CAP_STOP_OPTION]
+    : recommendations.length > 0
       ? recommendations
       : modelFollowUpTitles.length > 0
         ? modelFollowUpTitles
         : []
-  if (followUpItems.length > 0 && !hasOptionsTag(assistantText)) {
+  if (followUpItems.length > 0 && (pausedAtRoundCap || !hasOptionsTag(assistantText))) {
     const optionsTag = formatOptionsTag(followUpItems)
     assistantText += optionsTag
     streamedUserFacingText += optionsTag
@@ -2371,7 +2518,8 @@ export async function* runLocalCopilotAgent(
   if (params.chatId) {
     const nextTask = updateTaskStateFromTurn({
       previous: taskState,
-      objectiveHint: params.message.slice(0, 280),
+      // A resume ("Continue") keeps the paused task's objective.
+      objectiveHint: resumingAfterRoundCap ? null : params.message.slice(0, 280),
       approvals: approvalLines,
       verification: turnVerifications.map((record) => ({
         tool: record.verifierToolName,
@@ -2488,34 +2636,8 @@ export async function* runLocalCopilotAgent(
     marks: timing.snapshot(),
   })
 
-  if (writeChatLedger) {
-    await recordLocalCopilotTurnUsage({
-      userId: params.userId,
-      workspaceId: params.workspaceId,
-      workflowId: params.workflowId,
-      chatId: params.chatId,
-      runId: params.runId,
-      conversationId: conversationId ?? undefined,
-      messageId: usageTurnId,
-      summary: costSummary,
-      executionActor: { actorUserId: params.userId, actorType: 'user' },
-      parentExecutionId: params.parentExecutionId,
-      rootExecutionId: params.parentExecutionId,
-      triggeringChatId: params.chatId,
-      triggeringRunId: params.runId,
-      billingAttribution,
-    })
-    recordLocalOpsEvent({
-      counter: LOCAL_OPS_COUNTERS.costRecorded,
-      userId: params.userId,
-      workspaceId: params.workspaceId,
-      workflowId: params.workflowId,
-      conversationId,
-      chatId: params.chatId,
-      runId: params.runId,
-      metadata: { total: costSummary.total },
-    })
-  }
+  // Writes the turn's usage ledger (only when this turn owns the chat ledger).
+  await flushTurnLedger(ledger)
 
   yield {
     type: 'done',

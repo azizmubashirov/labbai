@@ -8,6 +8,7 @@ import {
   buildLocalCopilotConfigForCatalog,
   DEFAULT_LOCAL_COPILOT_MODEL,
   getLocalCopilotConfig,
+  resolveLocalCopilotMaxRoundsPerTurn,
 } from '@/local-copilot/lib/config'
 
 const { mockGetOpenAIBaseUrl, mockGetOpenAIAuthHeaders } = vi.hoisted(() => ({
@@ -239,5 +240,20 @@ describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () =>
     const config = buildLocalCopilotConfigForCatalog('anthropic/claude-sonnet-5')
     expect(config.provider).toBe('openai')
     expect(config.model).toBe('gpt-5.5')
+  })
+})
+
+describe('resolveLocalCopilotMaxRoundsPerTurn', () => {
+  it('defaults to 20 model rounds per user message', () => {
+    expect(resolveLocalCopilotMaxRoundsPerTurn(undefined)).toBe(20)
+    expect(resolveLocalCopilotMaxRoundsPerTurn('')).toBe(20)
+  })
+
+  it('reads COPILOT_MAX_ROUNDS_PER_TURN and ignores invalid values', () => {
+    expect(resolveLocalCopilotMaxRoundsPerTurn('35')).toBe(35)
+    expect(resolveLocalCopilotMaxRoundsPerTurn(' 5 ')).toBe(5)
+    expect(resolveLocalCopilotMaxRoundsPerTurn('0')).toBe(20)
+    expect(resolveLocalCopilotMaxRoundsPerTurn('-3')).toBe(20)
+    expect(resolveLocalCopilotMaxRoundsPerTurn('many')).toBe(20)
   })
 })

@@ -9,6 +9,7 @@ import {
   truncateStatusMessage,
 } from '@/local-copilot/lib/agent/status-messages'
 import { isLocalCopilotEngagementStatusEnabled } from '@/local-copilot/lib/config'
+import type { ModelCallUsageListener } from '@/local-copilot/lib/providers/types'
 import type { ToolExecutionResult } from '@/local-copilot/lib/tools/executor'
 import type { LocalCopilotStreamEvent } from '@/local-copilot/lib/types'
 
@@ -38,6 +39,8 @@ export async function* runToolWithStatus(params: {
   args: Record<string, unknown>
   abortSignal?: AbortSignal
   execute: (onProgress: (message: string) => void) => Promise<ToolExecutionResult>
+  /** Bills the optional live status-line model call to the turn. */
+  onModelUsage?: ModelCallUsageListener
 }): AsyncGenerator<LocalCopilotStreamEvent, ToolExecutionResult, undefined> {
   const { toolCallId, toolName, args, abortSignal, execute } = params
   const heartbeatMs = LONG_RUNNING_TOOLS.has(toolName)
@@ -61,7 +64,13 @@ export async function* runToolWithStatus(params: {
   abortSignal?.addEventListener('abort', onParentAbort, { once: true })
   const enrichPromise = isLocalCopilotEngagementStatusEnabled()
     ? generateEngagementStatusMessages(
-        engagementContextFromTool(toolName, args, enrichController.signal)
+        engagementContextFromTool(
+          toolName,
+          args,
+          enrichController.signal,
+          undefined,
+          params.onModelUsage
+        )
       )
         .then((messages) => {
           if (messages && messages.length > 0) {
