@@ -10,6 +10,7 @@ import {
 } from '@/lib/core/utils/stream-limits'
 import { TtsOperationError } from '@/lib/internal/tts/errors'
 import { getTtsMimeType } from '@/lib/internal/tts/formats'
+import { getOpenAIAuthHeaders, getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import type { ElevenLabsTtsParams } from '@/tools/elevenlabs/types'
 import type {
   AzureTtsParams,
@@ -109,11 +110,11 @@ export async function synthesizeOpenAi(
   const voice = input.voice || 'alloy'
   const format = input.responseFormat || 'mp3'
   const response = await providerFetch(
-    'https://api.openai.com/v1/audio/speech',
+    `${getOpenAIBaseUrl()}/audio/speech`,
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${input.apiKey}`,
+        ...getOpenAIAuthHeaders(input.apiKey),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

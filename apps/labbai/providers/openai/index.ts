@@ -1,7 +1,11 @@
 import { createLogger } from '@labbai/logger'
 import type { StreamingExecution } from '@/executor/types'
 import { getProviderDefaultModel, getProviderModels } from '@/providers/models'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import {
+  getOpenAIAuthHeaders,
+  getOpenAIBaseUrl,
+  isOpenAIGatewayMode,
+} from '@/providers/openai/client-config'
 import type { ProviderConfig, ProviderRequest, ProviderResponse } from '@/providers/types'
 import { executeResponsesProviderRequest } from './core'
 
@@ -18,7 +22,8 @@ export const openaiProvider: ProviderConfig = {
   executeRequest: async (
     request: ProviderRequest
   ): Promise<ProviderResponse | StreamingExecution> => {
-    if (!request.apiKey) {
+    // Gateway mode (CLOUDFLARE_AIG_TOKEN) authenticates with the gateway token, not a key.
+    if (!request.apiKey && !isOpenAIGatewayMode()) {
       throw new Error('API key is required for OpenAI')
     }
 
@@ -26,11 +31,10 @@ export const openaiProvider: ProviderConfig = {
       providerId: 'openai',
       providerLabel: 'OpenAI',
       modelName: request.model,
-      // Labbai: OPENAI_BASE_URL / OPENAI_EXTRA_HEADERS let a gateway sit in front later.
+      // Labbai: OPENAI_BASE_URL + auth headers (API key, or the Cloudflare AI Gateway token).
       endpoint: `${getOpenAIBaseUrl()}/responses`,
       headers: {
-        ...getOpenAIExtraHeaders(),
-        Authorization: `Bearer ${request.apiKey}`,
+        ...getOpenAIAuthHeaders(request.apiKey),
         'Content-Type': 'application/json',
         'OpenAI-Beta': 'responses=v1',
       },

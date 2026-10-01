@@ -5,7 +5,11 @@ import {
   resolveLocalCopilotCatalogEntry,
 } from '@/local-copilot/lib/model-catalog'
 import type { LocalCopilotConfig, LocalCopilotProviderId } from '@/local-copilot/lib/types'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import {
+  getOpenAIAuthHeaders,
+  getOpenAIBaseUrl,
+  isOpenAIGatewayMode,
+} from '@/providers/openai/client-config'
 import { OPENAI_MODEL_GPT_5_5, OPENAI_MODEL_GPT_5_MINI } from '@/providers/openai/model-ids'
 
 /**
@@ -79,11 +83,21 @@ export function resolveSpecialistModel(
 }
 
 /**
+ * True when the `openai` transport authenticates with the Cloudflare AI Gateway
+ * token (`CLOUDFLARE_AIG_TOKEN`): no key and no `Authorization` header are sent.
+ */
+function usesGatewayAuth(provider: LocalCopilotProviderId): boolean {
+  return provider === 'openai' && isOpenAIGatewayMode()
+}
+
+/**
  * Credential for the configured provider: `COPILOT_PROVIDER_API_KEY` override,
  * else the platform OpenAI key pool (`OPENAI_API_KEY`, `OPENAI_API_KEY_1..3`)
  * for `openai` / `openai-compatible`. Sent as `Authorization: Bearer <key>`.
+ * None for `openai` in Cloudflare AI Gateway mode.
  */
 function resolveApiKey(provider: LocalCopilotProviderId): string | undefined {
+  if (usesGatewayAuth(provider)) return undefined
   const override = process.env.COPILOT_PROVIDER_API_KEY?.trim()
   if (override) return override
   if (provider === 'openai' || provider === 'openai-compatible') {
@@ -106,10 +120,13 @@ function resolveBaseUrl(provider: LocalCopilotProviderId): string | undefined {
   return undefined
 }
 
-/** `OPENAI_EXTRA_HEADERS` (JSON object) merged into every `openai` request. */
+/**
+ * `OPENAI_EXTRA_HEADERS` (JSON object) merged into every `openai` request, plus
+ * `cf-aig-authorization` in Cloudflare AI Gateway mode.
+ */
 function resolveExtraHeaders(provider: LocalCopilotProviderId): Record<string, string> | undefined {
   if (provider !== 'openai') return undefined
-  const headers = getOpenAIExtraHeaders()
+  const headers = getOpenAIAuthHeaders()
   return Object.keys(headers).length > 0 ? headers : undefined
 }
 
@@ -117,7 +134,8 @@ function resolveExtraHeaders(provider: LocalCopilotProviderId): Record<string, s
  * Reads Local Copilot configuration from environment variables.
  *
  * Default transport is the OpenAI API (`OPENAI_API_KEY`, optional
- * `OPENAI_BASE_URL` / `OPENAI_EXTRA_HEADERS`). Overrides:
+ * `OPENAI_BASE_URL` / `OPENAI_EXTRA_HEADERS`), or the Cloudflare AI Gateway
+ * (`CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL`, no key). Overrides:
  * `COPILOT_PROVIDER` (`openai` | `azure-openai` | `openai-compatible`),
  * `COPILOT_MODEL`, `COPILOT_SPECIALIST_MODEL`,
  * `COPILOT_BASE_URL`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_THINKING_LEVEL`,
@@ -137,6 +155,7 @@ export function getLocalCopilotConfig(): LocalCopilotConfig {
     apiKey: resolveApiKey(provider),
     baseUrl: resolveBaseUrl(provider),
     extraHeaders: resolveExtraHeaders(provider),
+    gatewayAuth: usesGatewayAuth(provider),
   }
 }
 
@@ -179,10 +198,12 @@ export function assertLocalCopilotEnabled(
     return
   }
 
+  if (config.provider === 'openai' && config.gatewayAuth) return
+
   if (!config.apiKey) {
     throw new Error(
       config.provider === 'openai'
-        ? 'Labbai Copilot is not configured on this server. Set OPENAI_API_KEY.'
+        ? 'Labbai Copilot is not configured on this server. Set OPENAI_API_KEY (or CLOUDFLARE_AIG_TOKEN).'
         : `Labbai Copilot requires COPILOT_PROVIDER_API_KEY for the configured provider (${config.provider}).`
     )
   }

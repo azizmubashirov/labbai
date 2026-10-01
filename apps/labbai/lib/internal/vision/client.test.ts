@@ -1,19 +1,11 @@
 /**
  * @vitest-environment node
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const clientConfig = vi.hoisted(() => ({
-  baseUrl: 'https://api.openai.com/v1',
-  extraHeaders: {} as Record<string, string>,
-}))
+import { resetEnvMock, setEnv } from '@labbai/testing'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/core/security/input-validation.server', () => ({
   MAX_JSON_API_RESPONSE_BYTES: 10 * 1024 * 1024,
-}))
-vi.mock('@/providers/openai/client-config', () => ({
-  getOpenAIBaseUrl: () => clientConfig.baseUrl,
-  getOpenAIExtraHeaders: () => clientConfig.extraHeaders,
 }))
 
 import { analyzeVision } from '@/lib/internal/vision/client'
@@ -22,9 +14,14 @@ describe('Vision client', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.restoreAllMocks()
-    clientConfig.baseUrl = 'https://api.openai.com/v1'
-    clientConfig.extraHeaders = {}
+    setEnv({
+      OPENAI_BASE_URL: undefined,
+      OPENAI_EXTRA_HEADERS: undefined,
+      CLOUDFLARE_AIG_TOKEN: undefined,
+    })
   })
+
+  afterEach(resetEnvMock)
 
   it('sends an OpenAI image_url request and projects usage, with cancellation', async () => {
     const controller = new AbortController()
@@ -110,8 +107,10 @@ describe('Vision client', () => {
   })
 
   it('uses OPENAI_BASE_URL and OPENAI_EXTRA_HEADERS without letting them replace the key', async () => {
-    clientConfig.baseUrl = 'https://gateway.example/v1'
-    clientConfig.extraHeaders = { 'x-gateway': 'yes', Authorization: 'Bearer other' }
+    setEnv({
+      OPENAI_BASE_URL: 'https://gateway.example/v1',
+      OPENAI_EXTRA_HEADERS: JSON.stringify({ 'x-gateway': 'yes', Authorization: 'Bearer other' }),
+    })
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(Response.json({ choices: [{ message: { content: 'ok' } }] }))
@@ -127,6 +126,31 @@ describe('Vision client', () => {
     expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
       'x-gateway': 'yes',
       Authorization: 'Bearer secret',
+      'Content-Type': 'application/json',
+    })
+  })
+
+  it('goes through the Cloudflare AI Gateway without sending the key', async () => {
+    setEnv({
+      OPENAI_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai',
+      CLOUDFLARE_AIG_TOKEN: 'cf-token',
+    })
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(Response.json({ choices: [{ message: { content: 'ok' } }] }))
+
+    await analyzeVision({
+      apiKey: 'secret',
+      imageSource: 'data:image/png;base64,YQ==',
+      model: 'gpt-4.1-mini',
+      prompt: 'Describe it',
+    })
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/openai/chat/completions'
+    )
+    expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
+      'cf-aig-authorization': 'Bearer cf-token',
       'Content-Type': 'application/json',
     })
   })

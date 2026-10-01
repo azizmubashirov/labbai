@@ -1,5 +1,5 @@
 import type { EmbeddingAdapterFactory } from '@/lib/embeddings/types'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import { getOpenAIAuthHeaders, getOpenAIBaseUrl } from '@/providers/openai/client-config'
 
 /** OpenAI `/v1/embeddings` response envelope. */
 export interface OpenAIEmbeddingResponse<TEmbedding = number[]> {
@@ -27,7 +27,8 @@ function decodeEmbedding(encoded: string, dimensions: number): number[] {
 
 /**
  * OpenAI `/v1/embeddings` at {@link getOpenAIBaseUrl} (`OPENAI_BASE_URL`, default
- * the public API) with any `OPENAI_EXTRA_HEADERS`. Omitting `dimensions` yields the model's native
+ * the public API) with any `OPENAI_EXTRA_HEADERS`, authenticated by the key or, in
+ * Cloudflare AI Gateway mode, by the gateway token alone. Omitting `dimensions` yields the model's native
  * dimensionality. Base64 carries Float32 coordinates with less JSON overhead,
  * matching the native OpenAI SDK's transport; callers still receive number arrays.
  */
@@ -40,8 +41,7 @@ export const createOpenAIAdapter: EmbeddingAdapterFactory = ({
   buildRequest: ({ inputs, dimensions }) => ({
     apiUrl: `${getOpenAIBaseUrl()}/embeddings`,
     headers: {
-      ...getOpenAIExtraHeaders(),
-      Authorization: `Bearer ${apiKey}`,
+      ...getOpenAIAuthHeaders(apiKey),
       'Content-Type': 'application/json',
     },
     body: {

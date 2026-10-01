@@ -6,6 +6,7 @@ import { LRUCache } from 'lru-cache'
 import { isOrganizationBYOKEntitledCached } from '@/lib/api-key/byok-entitlement'
 import { getRotatingApiKey } from '@/lib/core/config/api-keys'
 import { decryptSecret } from '@/lib/core/security/encryption'
+import { isOpenAIGatewayMode, OPENAI_GATEWAY_API_KEY } from '@/providers/openai/client-config'
 import type { BYOKProviderId } from '@/tools/types'
 
 const logger = createLogger('BYOKKeys')
@@ -185,6 +186,10 @@ export async function getBYOKKey(
  * `getRotatingApiKey`). There is no workspace BYOK and no block-level API key
  * for LLMs; `workspaceId` and `userProvidedKey` are accepted for call-site
  * compatibility and ignored.
+ *
+ * In Cloudflare AI Gateway mode (`CLOUDFLARE_AIG_TOKEN`) no OpenAI key is needed:
+ * the placeholder {@link OPENAI_GATEWAY_API_KEY} is returned and the request
+ * headers carry the gateway token instead of any key.
  */
 export async function getApiKeyWithBYOK(
   provider: string,
@@ -196,12 +201,16 @@ export async function getApiKeyWithBYOK(
     throw new Error(`Provider "${provider}" is not available for ${model}`)
   }
 
+  if (isOpenAIGatewayMode()) {
+    return { apiKey: OPENAI_GATEWAY_API_KEY, isBYOK: false }
+  }
+
   let apiKey: string
   try {
     apiKey = getRotatingApiKey('openai')
   } catch {
     throw new Error(
-      'OpenAI is not configured: set OPENAI_API_KEY (or OPENAI_API_KEY_1..3) in the server environment'
+      'OpenAI is not configured: set OPENAI_API_KEY (or OPENAI_API_KEY_1..3), or CLOUDFLARE_AIG_TOKEN for the Cloudflare AI Gateway, in the server environment'
     )
   }
 

@@ -925,12 +925,15 @@ export function shouldBillModelUsage(model: string): boolean {
  * Get the credential for a provider request (server-side only).
  *
  * Labbai: OpenAI is the only provider and always runs on the platform key
- * (OPENAI_API_KEY or its rotation pool). There are no per-block LLM keys.
+ * (OPENAI_API_KEY or its rotation pool), or on the Cloudflare AI Gateway token
+ * (`CLOUDFLARE_AIG_TOKEN`, placeholder key). There are no per-block LLM keys.
  */
 export function getApiKey(provider: string, model: string, _userProvidedKey?: string): string {
   if (provider !== 'openai') {
     throw new Error(`Provider "${provider}" is not available for ${model}`)
   }
+  const gateway = require('@/providers/openai/client-config')
+  if (gateway.isOpenAIGatewayMode()) return gateway.OPENAI_GATEWAY_API_KEY
   const { getRotatingApiKey } = require('@/lib/core/config/api-keys')
   return getRotatingApiKey('openai')
 }

@@ -1,26 +1,21 @@
 /**
  * @vitest-environment node
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
-const clientConfig = vi.hoisted(() => ({
-  baseUrl: 'https://api.openai.com/v1',
-  extraHeaders: {} as Record<string, string>,
-}))
-
-vi.mock('@/providers/openai/client-config', () => ({
-  getOpenAIBaseUrl: () => clientConfig.baseUrl,
-  getOpenAIExtraHeaders: () => clientConfig.extraHeaders,
-}))
-
+import { resetEnvMock, setEnv } from '@labbai/testing'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createOpenAIAdapter, getAdapterFactory } from '@/lib/embeddings/providers'
 
 const INPUTS = ['alpha', 'beta']
 
 beforeEach(() => {
-  clientConfig.baseUrl = 'https://api.openai.com/v1'
-  clientConfig.extraHeaders = {}
+  setEnv({
+    OPENAI_BASE_URL: undefined,
+    OPENAI_EXTRA_HEADERS: undefined,
+    CLOUDFLARE_AIG_TOKEN: undefined,
+  })
 })
+
+afterEach(resetEnvMock)
 
 describe('adapter registry', () => {
   it('serves OpenAI as the only embedding provider', () => {
@@ -62,11 +57,29 @@ describe('OpenAI adapter', () => {
   })
 
   it('posts to the configured base URL with the configured extra headers', () => {
-    clientConfig.baseUrl = 'https://gateway.example/v1'
-    clientConfig.extraHeaders = { 'x-extra': 'yes', Authorization: 'Bearer overridden' }
+    setEnv({
+      OPENAI_BASE_URL: 'https://gateway.example/v1',
+      OPENAI_EXTRA_HEADERS: JSON.stringify({
+        'x-extra': 'yes',
+        Authorization: 'Bearer overridden',
+      }),
+    })
     const request = adapter.buildRequest({ inputs: INPUTS, taskType: 'document' })
     expect(request.apiUrl).toBe('https://gateway.example/v1/embeddings')
     expect(request.headers['x-extra']).toBe('yes')
     expect(request.headers.Authorization).toBe('Bearer sk-test')
+  })
+
+  it('posts to the Cloudflare AI Gateway with cf-aig-authorization and no Authorization', () => {
+    setEnv({
+      OPENAI_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai',
+      CLOUDFLARE_AIG_TOKEN: 'cf-token',
+    })
+    const request = adapter.buildRequest({ inputs: INPUTS, taskType: 'document' })
+    expect(request.apiUrl).toBe('https://gateway.ai.cloudflare.com/v1/acct/gw/openai/embeddings')
+    expect(request.headers).toEqual({
+      'cf-aig-authorization': 'Bearer cf-token',
+      'Content-Type': 'application/json',
+    })
   })
 })

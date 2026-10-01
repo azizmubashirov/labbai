@@ -124,6 +124,14 @@ describe('env capabilities', () => {
       ).toEqual([])
     })
 
+    it('resolves the Cloudflare AI Gateway token as an OpenAI embedding transport', () => {
+      expect(
+        inspectCapability(KNOWLEDGE_EMBEDDINGS_CAPABILITY, {
+          CLOUDFLARE_AIG_TOKEN: 'cf-token',
+        }).providerIds
+      ).toEqual(['openai'])
+    })
+
     it('resolves every ready email provider subset in declaration order', () => {
       for (let mask = 0; mask < 1 << EMAIL_PROVIDER_ORDER.length; mask += 1) {
         const expected = EMAIL_PROVIDER_ORDER.filter((_, index) => (mask & (1 << index)) !== 0)

@@ -15,7 +15,7 @@ import {
   LARGE_FILE_PATH_THRESHOLD_BYTES,
   shouldUseLargeFilePath,
 } from '@/providers/attachments'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import { getOpenAIAuthHeaders, getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import type { Message, ProviderId, ProviderRequest } from '@/providers/types'
 
 const logger = createLogger('ProviderFileAttachments')
@@ -243,7 +243,7 @@ async function uploadOpenAIFile(
 
   const response = await fetch(`${getOpenAIBaseUrl()}/files`, {
     method: 'POST',
-    headers: { ...getOpenAIExtraHeaders(), Authorization: `Bearer ${apiKey}` },
+    headers: getOpenAIAuthHeaders(apiKey),
     body: form,
     signal,
   })

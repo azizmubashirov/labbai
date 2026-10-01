@@ -3,7 +3,11 @@ import { getErrorMessage } from '@labbai/utils/errors'
 import { isPlainRecord, toRecord } from '@labbai/utils/object'
 import { env } from '@/lib/core/config/env'
 import { getNotificationModel } from '@/lib/notifications/config'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import {
+  getOpenAIAuthHeaders,
+  getOpenAIBaseUrl,
+  isOpenAIGatewayMode,
+} from '@/providers/openai/client-config'
 import { isOpenAIReasoningModelId } from '@/providers/openai/model-ids'
 
 const logger = createLogger('NotificationEvaluator')
@@ -160,10 +164,13 @@ const JUDGE_TIMEOUT_MS = 30_000
 
 /**
  * The judge on the platform OpenAI key (`OPENAI_API_KEY`, `OPENAI_BASE_URL`,
- * `OPENAI_EXTRA_HEADERS`), like wand: one Chat Completions call asking for a JSON object.
+ * `OPENAI_EXTRA_HEADERS`) or the Cloudflare AI Gateway (`CLOUDFLARE_AIG_TOKEN`),
+ * like wand: one Chat Completions call asking for a JSON object.
  */
 export const completeWithOpenAI: JudgeCompleter = async ({ system, user }) => {
-  if (!env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured')
+  if (!isOpenAIGatewayMode() && !env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured')
+  }
   const model = getNotificationModel()
   const sampling = isOpenAIReasoningModelId(model)
     ? { max_completion_tokens: 4000 }
@@ -172,9 +179,8 @@ export const completeWithOpenAI: JudgeCompleter = async ({ system, user }) => {
   const response = await fetch(`${getOpenAIBaseUrl()}/chat/completions`, {
     method: 'POST',
     headers: {
-      ...getOpenAIExtraHeaders(),
+      ...getOpenAIAuthHeaders(env.OPENAI_API_KEY),
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
       model,

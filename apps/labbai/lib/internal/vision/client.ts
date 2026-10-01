@@ -4,7 +4,7 @@ import type { EgressProfile } from '@/lib/core/security/egress/profiles'
 import { MAX_JSON_API_RESPONSE_BYTES } from '@/lib/core/security/input-validation.server'
 import { readResponseJsonWithLimit } from '@/lib/core/utils/stream-limits'
 import { VisionOperationError } from '@/lib/internal/vision/errors'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import { getOpenAIAuthHeaders, getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import { isOpenAIReasoningModelId, resolveOpenAIModelId } from '@/providers/openai/model-ids'
 
 const logger = createLogger('VisionClient')
@@ -96,7 +96,7 @@ function openAiRequest(input: VisionClientInput, model: string): Record<string, 
  * Labbai: vision runs on OpenAI only (chat completions with an `image_url` part,
  * at `OPENAI_BASE_URL`). A stored Claude / Gemini / retired OpenAI model id maps
  * to the closest curated OpenAI model via {@link resolveOpenAIModelId}. The
- * caller's key is an OpenAI key.
+ * caller's key is an OpenAI key; in Cloudflare AI Gateway mode it is not sent.
  */
 export async function analyzeVision(
   input: VisionClientInput,
@@ -104,9 +104,8 @@ export async function analyzeVision(
 ): Promise<VisionAnalysisResult> {
   const model = resolveOpenAIModelId(input.model)
   const headers: Record<string, string> = {
-    ...getOpenAIExtraHeaders(),
+    ...getOpenAIAuthHeaders(input.apiKey),
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${input.apiKey}`,
   }
 
   signal?.throwIfAborted()

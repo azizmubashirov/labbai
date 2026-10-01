@@ -9,15 +9,17 @@ import {
   getLocalCopilotConfig,
 } from '@/local-copilot/lib/config'
 
-const { mockGetOpenAIBaseUrl, mockGetOpenAIExtraHeaders } = vi.hoisted(() => ({
+const { mockGetOpenAIBaseUrl, mockGetOpenAIAuthHeaders } = vi.hoisted(() => ({
   mockGetOpenAIBaseUrl: vi.fn(() => 'https://api.openai.com/v1'),
-  mockGetOpenAIExtraHeaders: vi.fn((): Record<string, string> => ({})),
+  mockGetOpenAIAuthHeaders: vi.fn((): Record<string, string> => ({})),
 }))
+const mockIsOpenAIGatewayMode = vi.hoisted(() => vi.fn(() => false))
 
 vi.mock('@/lib/core/config/env-flags', () => ({ isHosted: false }))
 vi.mock('@/providers/openai/client-config', () => ({
   getOpenAIBaseUrl: mockGetOpenAIBaseUrl,
-  getOpenAIExtraHeaders: mockGetOpenAIExtraHeaders,
+  getOpenAIAuthHeaders: mockGetOpenAIAuthHeaders,
+  isOpenAIGatewayMode: mockIsOpenAIGatewayMode,
 }))
 
 const ENV_KEYS = [
@@ -43,7 +45,8 @@ beforeEach(() => {
     delete process.env[key]
   }
   mockGetOpenAIBaseUrl.mockReturnValue('https://api.openai.com/v1')
-  mockGetOpenAIExtraHeaders.mockReturnValue({})
+  mockGetOpenAIAuthHeaders.mockReturnValue({})
+  mockIsOpenAIGatewayMode.mockReturnValue(false)
 })
 
 afterEach(() => {
@@ -71,7 +74,7 @@ describe('getLocalCopilotConfig', () => {
   it('uses the key pool, OPENAI_BASE_URL and OPENAI_EXTRA_HEADERS', () => {
     process.env.OPENAI_API_KEY_2 = 'sk-pool'
     mockGetOpenAIBaseUrl.mockReturnValue('https://gateway.example.com/openai')
-    mockGetOpenAIExtraHeaders.mockReturnValue({ 'x-meta': '1' })
+    mockGetOpenAIAuthHeaders.mockReturnValue({ 'x-meta': '1' })
 
     const config = getLocalCopilotConfig()
     expect(config.apiKey).toBe('sk-pool')
@@ -81,6 +84,41 @@ describe('getLocalCopilotConfig', () => {
 
   it('fails closed when no OpenAI key is configured', () => {
     expect(() => assertLocalCopilotEnabled(getLocalCopilotConfig())).toThrow(/OPENAI_API_KEY/)
+  })
+
+  it('runs on the Cloudflare AI Gateway token with no OpenAI key', () => {
+    process.env.OPENAI_API_KEY = 'sk-platform'
+    process.env.COPILOT_PROVIDER_API_KEY = 'sk-override'
+    mockIsOpenAIGatewayMode.mockReturnValue(true)
+    mockGetOpenAIBaseUrl.mockReturnValue('https://gateway.ai.cloudflare.com/v1/acct/gw/openai')
+    mockGetOpenAIAuthHeaders.mockReturnValue({ 'cf-aig-authorization': 'Bearer cf-token' })
+
+    const config = getLocalCopilotConfig()
+    expect(config.gatewayAuth).toBe(true)
+    expect(config.apiKey).toBeUndefined()
+    expect(config.baseUrl).toBe('https://gateway.ai.cloudflare.com/v1/acct/gw/openai')
+    expect(config.extraHeaders).toEqual({ 'cf-aig-authorization': 'Bearer cf-token' })
+    expect(() => assertLocalCopilotEnabled(config)).not.toThrow()
+    expect(buildLocalCopilotConfigForCatalog('gpt-5-mini').gatewayAuth).toBe(true)
+  })
+
+  it('accepts gateway mode without any OpenAI key in the environment', () => {
+    mockIsOpenAIGatewayMode.mockReturnValue(true)
+    mockGetOpenAIAuthHeaders.mockReturnValue({ 'cf-aig-authorization': 'Bearer cf-token' })
+
+    expect(() => assertLocalCopilotEnabled(getLocalCopilotConfig())).not.toThrow()
+  })
+
+  it('keeps an openai-compatible endpoint on its own key in gateway mode', () => {
+    mockIsOpenAIGatewayMode.mockReturnValue(true)
+    process.env.COPILOT_PROVIDER = 'openai-compatible'
+    process.env.COPILOT_BASE_URL = 'https://llm.example.com/v1'
+    process.env.COPILOT_PROVIDER_API_KEY = 'sk-x'
+
+    const config = getLocalCopilotConfig()
+    expect(config.gatewayAuth).toBe(false)
+    expect(config.apiKey).toBe('sk-x')
+    expect(config.extraHeaders).toBeUndefined()
   })
 
   it('keeps COPILOT_* overrides for a generic OpenAI-compatible endpoint', () => {

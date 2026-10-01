@@ -115,7 +115,11 @@ describe('OpenAI large-file attachment lifecycle', () => {
   })
 
   it('uploads to the Files API and references the file by id instead of inlining it', async () => {
-    setEnv({ OPENAI_BASE_URL: undefined, OPENAI_EXTRA_HEADERS: undefined })
+    setEnv({
+      OPENAI_BASE_URL: undefined,
+      OPENAI_EXTRA_HEADERS: undefined,
+      CLOUDFLARE_AIG_TOKEN: undefined,
+    })
     const request = makeRequest(CSV_BYTES)
 
     await attachLargeFileRemoteUrls(request, 'openai')
@@ -165,6 +169,23 @@ describe('OpenAI large-file attachment lifecycle', () => {
       'cf-aig-authorization': 'Bearer gateway-token',
       Authorization: 'Bearer sk-test',
     })
+    expect(request.messages?.[0].files?.[0].providerFileId).toBe('file-abc')
+  })
+
+  it('uploads through the Cloudflare AI Gateway without an Authorization header', async () => {
+    setEnv({
+      OPENAI_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai',
+      OPENAI_EXTRA_HEADERS: undefined,
+      CLOUDFLARE_AIG_TOKEN: 'cf-token',
+    })
+    const request = makeRequest(CSV_BYTES)
+
+    await attachLargeFileRemoteUrls(request, 'openai')
+    await uploadLargeFilesToProvider(request, 'openai')
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(url).toBe('https://gateway.ai.cloudflare.com/v1/acct/gw/openai/files')
+    expect(init.headers).toEqual({ 'cf-aig-authorization': 'Bearer cf-token' })
     expect(request.messages?.[0].files?.[0].providerFileId).toBe('file-abc')
   })
 

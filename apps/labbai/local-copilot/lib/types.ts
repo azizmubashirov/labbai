@@ -35,6 +35,12 @@ export interface LocalCopilotConfig {
   baseUrl?: string
   /** Extra request headers merged into every LLM call (`OPENAI_EXTRA_HEADERS`). */
   extraHeaders?: Record<string, string>
+  /**
+   * True on the `openai` transport in Cloudflare AI Gateway mode
+   * (`CLOUDFLARE_AIG_TOKEN`): {@link extraHeaders} carries `cf-aig-authorization`,
+   * no {@link apiKey} is needed and no `Authorization` header is sent.
+   */
+  gatewayAuth?: boolean
 }
 
 export interface LocalCopilotWorkspaceContext {

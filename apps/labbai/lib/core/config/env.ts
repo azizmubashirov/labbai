@@ -209,6 +209,7 @@ export const env = createEnv({
     OPENAI_API_KEY:                        z.string().min(1).optional(),           // Primary OpenAI API key (Labbai: the platform key for every LLM call)
     OPENAI_BASE_URL:                       z.string().url().optional(),            // Labbai: optional OpenAI-compatible base URL (default https://api.openai.com/v1), e.g. a gateway later
     OPENAI_EXTRA_HEADERS:                  z.string().optional(),                  // Labbai: optional JSON object of extra headers for OpenAI requests (e.g. {"cf-aig-authorization":"Bearer …"})
+    CLOUDFLARE_AIG_TOKEN:                  z.string().min(1).optional(),           // Labbai: Cloudflare AI Gateway token. Set = gateway mode (Unified Billing): OpenAI calls go to OPENAI_BASE_URL with cf-aig-authorization and NO Authorization header; OPENAI_API_KEY not needed
     OPENAI_API_KEY_1:                      z.string().min(1).optional(),           // Additional OpenAI API key for load balancing
     OPENAI_API_KEY_2:                      z.string().min(1).optional(),           // Additional OpenAI API key for load balancing
     OPENAI_API_KEY_3:                      z.string().min(1).optional(),           // Additional OpenAI API key for load balancing

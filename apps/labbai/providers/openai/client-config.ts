@@ -1,11 +1,19 @@
 /**
- * Labbai: where OpenAI requests go (server only).
+ * Labbai: where OpenAI requests go and how they authenticate (server only).
  *
- * Defaults to the public OpenAI API. Two optional env vars make a later move to a
- * gateway (e.g. Cloudflare AI Gateway) a config change only:
+ * Every OpenAI call path builds its URL from {@link getOpenAIBaseUrl} and its auth
+ * headers from {@link getOpenAIAuthHeaders} (raw `fetch`) or uses
+ * {@link createOpenAIFetch} (the `openai` SDK), so the transport is decided here.
+ *
  * - OPENAI_BASE_URL        — API base URL, e.g. `https://api.openai.com/v1` (default)
- * - OPENAI_EXTRA_HEADERS   — JSON object of extra headers sent on every request,
- *                            e.g. `{"cf-aig-authorization":"Bearer …"}`
+ *                            or the Cloudflare AI Gateway
+ *                            `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openai`
+ * - OPENAI_EXTRA_HEADERS   — JSON object of extra headers sent on every request
+ * - CLOUDFLARE_AIG_TOKEN   — gateway mode (Cloudflare Unified Billing): every request
+ *                            carries `cf-aig-authorization: Bearer <token>` and NO
+ *                            `Authorization` header (a provider key would make the
+ *                            gateway bill/forward it as a BYO OpenAI key), and
+ *                            `OPENAI_API_KEY` is not required.
  */
 import { createLogger } from '@labbai/logger'
 import { env } from '@/lib/core/config/env'
@@ -13,6 +21,19 @@ import { env } from '@/lib/core/config/env'
 const logger = createLogger('OpenAIClientConfig')
 
 export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1'
+
+/** Gateway-mode header carrying the Cloudflare AI Gateway token. */
+export const CLOUDFLARE_AIG_AUTH_HEADER = 'cf-aig-authorization'
+
+/**
+ * Stand-in credential for code paths that require a non-empty key (the provider
+ * request contract, the SDK constructor) in gateway mode. It is never sent:
+ * {@link getOpenAIAuthHeaders} and {@link createOpenAIFetch} drop `Authorization`.
+ */
+export const OPENAI_GATEWAY_API_KEY = 'cloudflare-ai-gateway'
+
+/** `fetch` signature accepted by the `openai` SDK's `fetch` client option. */
+export type OpenAIFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
 /** OpenAI API base URL without a trailing slash. */
 export function getOpenAIBaseUrl(): string {
@@ -38,5 +59,63 @@ export function getOpenAIExtraHeaders(): Record<string, string> {
   } catch {
     logger.warn('OPENAI_EXTRA_HEADERS is not valid JSON; ignoring it')
     return {}
+  }
+}
+
+function getCloudflareAigToken(): string | undefined {
+  return env.CLOUDFLARE_AIG_TOKEN?.trim() || undefined
+}
+
+/** True when CLOUDFLARE_AIG_TOKEN is set: OpenAI traffic goes through Cloudflare AI Gateway. */
+export function isOpenAIGatewayMode(): boolean {
+  return Boolean(getCloudflareAigToken())
+}
+
+/**
+ * Auth headers for one OpenAI request, merged over OPENAI_EXTRA_HEADERS.
+ *
+ * Default mode: the extra headers plus `Authorization: Bearer <apiKey>` (exactly as
+ * before). Gateway mode: the extra headers plus `cf-aig-authorization`, with every
+ * `Authorization` header removed and `apiKey` ignored.
+ */
+export function getOpenAIAuthHeaders(apiKey?: string | null): Record<string, string> {
+  const headers = getOpenAIExtraHeaders()
+  const token = getCloudflareAigToken()
+  if (!token) {
+    return apiKey ? { ...headers, Authorization: `Bearer ${apiKey}` } : headers
+  }
+
+  const gatewayHeaders: Record<string, string> = {}
+  for (const [name, value] of Object.entries(headers)) {
+    const lower = name.toLowerCase()
+    if (lower === 'authorization' || lower === CLOUDFLARE_AIG_AUTH_HEADER) continue
+    gatewayHeaders[name] = value
+  }
+  gatewayHeaders[CLOUDFLARE_AIG_AUTH_HEADER] = `Bearer ${token}`
+  return gatewayHeaders
+}
+
+/**
+ * `fetch` for the `openai` SDK. In gateway mode it rewrites each request's headers:
+ * adds `cf-aig-authorization` and deletes the `Authorization` header the SDK always
+ * builds from its `apiKey`. Stripping it at the fetch layer does not depend on how a
+ * given SDK version treats `defaultHeaders`. In default mode it is a pass-through.
+ * The mode (and the global `fetch`, when no `baseFetch` is given) is read per
+ * request, so env changes and fetch stubs apply without building a new client.
+ */
+export function createOpenAIFetch(baseFetch?: OpenAIFetch): OpenAIFetch {
+  return (input, init) => {
+    const send: OpenAIFetch = baseFetch ?? fetch
+    if (!isOpenAIGatewayMode()) return send(input, init)
+
+    const headers = new Headers(input instanceof Request ? input.headers : undefined)
+    new Headers(init?.headers).forEach((value, name) => {
+      headers.set(name, value)
+    })
+    headers.delete('authorization')
+    for (const [name, value] of Object.entries(getOpenAIAuthHeaders())) {
+      headers.set(name, value)
+    }
+    return send(input, { ...init, headers })
   }
 }

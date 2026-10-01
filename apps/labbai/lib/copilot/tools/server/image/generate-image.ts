@@ -20,14 +20,20 @@ import { MAX_MEDIA_BYTES } from '@/lib/media/falai'
 import { createWorkspaceFileSecretProvenanceFromRegistry } from '@/lib/uploads/contexts/workspace/workspace-file-secret-provenance'
 import { fileOperations } from '@/lib/workspace-files/application/operations'
 import { readWorkspaceFileContent } from '@/lib/workspace-files/application/read-workspace-file-content'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import {
+  getOpenAIAuthHeaders,
+  getOpenAIBaseUrl,
+  isOpenAIGatewayMode,
+  OPENAI_GATEWAY_API_KEY,
+} from '@/providers/openai/client-config'
 
 const logger = createLogger('GenerateImageTool')
 
 /**
  * Labbai: copilot image generation runs on OpenAI's image model with the
- * platform `OPENAI_API_KEY` (previously Gemini "Nano Banana"). With no key
- * configured the tool is disabled.
+ * platform `OPENAI_API_KEY` (previously Gemini "Nano Banana"), or on the
+ * Cloudflare AI Gateway (`CLOUDFLARE_AIG_TOKEN`). With neither configured the
+ * tool is disabled.
  */
 const OPENAI_IMAGE_MODEL = 'gpt-image-1'
 
@@ -47,6 +53,7 @@ const ASPECT_RATIO_TO_SIZE: Record<string, OpenAIImageSize> = {
 }
 
 function getOpenAIImageApiKey(): string | null {
+  if (isOpenAIGatewayMode()) return OPENAI_GATEWAY_API_KEY
   return env.OPENAI_API_KEY?.trim() || null
 }
 
@@ -73,10 +80,7 @@ async function requestOpenAIImage(
   references: ReferenceImage[],
   signal?: AbortSignal
 ): Promise<OpenAIImageResponse> {
-  const headers: Record<string, string> = {
-    ...getOpenAIExtraHeaders(),
-    Authorization: `Bearer ${apiKey}`,
-  }
+  const headers: Record<string, string> = getOpenAIAuthHeaders(apiKey)
   let response: Response
   if (references.length > 0) {
     const form = new FormData()

@@ -7,13 +7,14 @@ import type {
   LocalCopilotProvider,
 } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
+import { getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import { isOpenAIReasoningModelId } from '@/providers/openai/model-ids'
 
 const logger = createLogger('LocalCopilotOpenAIProvider')
 
 function resolveBaseUrl(config: LocalCopilotConfig): string {
   if (config.baseUrl) return config.baseUrl.replace(/\/$/, '')
-  if (config.provider === 'openai') return 'https://api.openai.com/v1'
+  if (config.provider === 'openai') return getOpenAIBaseUrl()
   if (config.provider === 'azure-openai') {
     throw new Error('Azure OpenAI requires COPILOT_BASE_URL to be set.')
   }
@@ -23,11 +24,19 @@ function resolveBaseUrl(config: LocalCopilotConfig): string {
 /**
  * Request headers: JSON content type, configured extra headers
  * (`OPENAI_EXTRA_HEADERS`, e.g. gateway metadata), then `Authorization: Bearer <key>`.
+ * In Cloudflare AI Gateway mode (`gatewayAuth`) the extra headers carry
+ * `cf-aig-authorization` and every `Authorization` header is left out.
  */
 export function buildOpenAiCompatibleHeaders(config: LocalCopilotConfig): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(config.extraHeaders ?? {}),
+  }
+  if (config.gatewayAuth) {
+    for (const name of Object.keys(headers)) {
+      if (name.toLowerCase() === 'authorization') delete headers[name]
+    }
+    return headers
   }
   const key = config.apiKey?.trim()
   if (key) headers.Authorization = `Bearer ${key}`

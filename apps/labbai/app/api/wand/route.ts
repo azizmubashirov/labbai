@@ -20,7 +20,13 @@ import { generateRequestId } from '@/lib/core/utils/request'
 import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
 import { enrichTableSchema } from '@/lib/table/llm/wand'
 import { verifyWorkspaceMembership } from '@/app/api/workflows/utils'
-import { getOpenAIBaseUrl, getOpenAIExtraHeaders } from '@/providers/openai/client-config'
+import {
+  createOpenAIFetch,
+  getOpenAIAuthHeaders,
+  getOpenAIBaseUrl,
+  isOpenAIGatewayMode,
+  OPENAI_GATEWAY_API_KEY,
+} from '@/providers/openai/client-config'
 import { isOpenAIReasoningModelId, OPENAI_DEFAULT_MODEL } from '@/providers/openai/model-ids'
 import { calculateCost } from '@/providers/utils'
 
@@ -30,23 +36,33 @@ export const maxDuration = 60
 
 const logger = createLogger('WandGenerateAPI')
 
-/** Labbai: wand runs on the platform OpenAI key (OPENAI_API_KEY) — no BYOK, no Azure. */
+/**
+ * Labbai: wand runs on the platform OpenAI key (OPENAI_API_KEY) or the Cloudflare
+ * AI Gateway (CLOUDFLARE_AIG_TOKEN) — no BYOK, no Azure.
+ */
 const WAND_MODEL = OPENAI_DEFAULT_MODEL
 const WAND_MAX_OUTPUT_TOKENS = 10000
 
 function isWandConfigured(): boolean {
-  return Boolean(env.OPENAI_API_KEY)
+  return isOpenAIGatewayMode() || Boolean(env.OPENAI_API_KEY)
 }
 
 if (!isWandConfigured()) {
   logger.warn('OPENAI_API_KEY is not configured. Wand generation API will not function.')
 }
 
+/**
+ * In gateway mode the SDK still gets a placeholder `apiKey` (its constructor
+ * requires one) and `createOpenAIFetch` strips the `Authorization` header it
+ * builds from it, so only `cf-aig-authorization` reaches Cloudflare.
+ */
 function createWandClient(): OpenAI {
+  const gateway = isOpenAIGatewayMode()
   return new OpenAI({
-    apiKey: env.OPENAI_API_KEY,
+    apiKey: gateway ? OPENAI_GATEWAY_API_KEY : env.OPENAI_API_KEY,
     baseURL: getOpenAIBaseUrl(),
-    defaultHeaders: getOpenAIExtraHeaders(),
+    defaultHeaders: getOpenAIAuthHeaders(),
+    fetch: createOpenAIFetch(),
   })
 }
 
@@ -235,7 +251,9 @@ export const POST = withRouteHandler(async (req: NextRequest) => {
     })
 
     if (!isWandConfigured()) {
-      logger.error(`[${requestId}] AI client not initialized. Missing OPENAI_API_KEY.`)
+      logger.error(
+        `[${requestId}] AI client not initialized. Missing OPENAI_API_KEY or CLOUDFLARE_AIG_TOKEN.`
+      )
       return NextResponse.json(
         { success: false, error: 'Wand generation service is not configured.' },
         { status: 503 }

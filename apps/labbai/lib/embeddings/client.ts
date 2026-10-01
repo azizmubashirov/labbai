@@ -54,6 +54,7 @@ import {
   getAccurateTokenCount,
   truncateToTokenLimit,
 } from '@/lib/tokenization/accurate'
+import { isOpenAIGatewayMode } from '@/providers/openai/client-config'
 
 const logger = createLogger('EmbeddingClient')
 
@@ -332,7 +333,8 @@ interface ResolvedProvider {
 /**
  * Labbai: one provider (OpenAI). A caller-supplied key (the Embeddings block's
  * pasted key) wins, then the workspace's OpenAI BYOK key, then the platform
- * `OPENAI_API_KEY`.
+ * `OPENAI_API_KEY`. In Cloudflare AI Gateway mode no key is sent at all (the
+ * platform's Cloudflare credits pay), so a pasted key is ignored and the call billed.
  */
 async function resolveProvider(
   model: string,
@@ -342,9 +344,10 @@ async function resolveProvider(
   const dimensions = resolveDimensions(info, options.dimensions)
   const modelName = normalizeEmbeddingModelId(model)
 
-  const { apiKey, isBYOK } = options.apiKey
-    ? { apiKey: options.apiKey, isBYOK: true }
-    : await resolveProviderKey(info.provider, options.workspaceId)
+  const { apiKey, isBYOK } =
+    options.apiKey && !isOpenAIGatewayMode()
+      ? { apiKey: options.apiKey, isBYOK: true }
+      : await resolveProviderKey(info.provider, options.workspaceId)
 
   return {
     adapter: getAdapterFactory(info.provider)({

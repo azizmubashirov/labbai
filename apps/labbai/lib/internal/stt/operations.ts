@@ -26,6 +26,7 @@ import {
 } from '@/lib/uploads/utils/file-utils.server'
 import { MAX_FILE_SIZE } from '@/lib/uploads/utils/validation'
 import { assertToolFileAccess } from '@/app/api/files/authorization'
+import { getOpenAIAuthHeaders, getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import type { TranscriptSegment } from '@/tools/stt/types'
 
 const logger = createLogger('SttOperations')
@@ -495,11 +496,9 @@ async function transcribeWithWhisper(
   }
 
   const endpoint = translate ? 'translations' : 'transcriptions'
-  const response = await fetch(`https://api.openai.com/v1/audio/${endpoint}`, {
+  const response = await fetch(`${getOpenAIBaseUrl()}/audio/${endpoint}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: getOpenAIAuthHeaders(apiKey),
     body: formData,
     signal,
   })

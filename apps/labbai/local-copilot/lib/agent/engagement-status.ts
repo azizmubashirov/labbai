@@ -8,6 +8,11 @@ import { createOpenAiCompatibleProvider } from '@/local-copilot/lib/providers/op
 import { getLocalCopilotProvider } from '@/local-copilot/lib/providers/registry'
 import type { LocalCopilotProvider } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig, LocalCopilotProviderId } from '@/local-copilot/lib/types'
+import {
+  getOpenAIAuthHeaders,
+  getOpenAIBaseUrl,
+  isOpenAIGatewayMode,
+} from '@/providers/openai/client-config'
 
 const logger = createLogger('LocalCopilotEngagementStatus')
 
@@ -71,14 +76,19 @@ export function resolveEngagementProvider(
   config: LocalCopilotConfig = getLocalCopilotConfig()
 ): LocalCopilotProvider {
   if (isOpenAiFamilyModel(model)) {
-    const apiKey = resolveOpenAiApiKey()
-    if (apiKey) {
+    const gatewayAuth = isOpenAIGatewayMode()
+    const apiKey = gatewayAuth ? undefined : resolveOpenAiApiKey()
+    if (apiKey || gatewayAuth) {
+      const extraHeaders = getOpenAIAuthHeaders()
       return createOpenAiCompatibleProvider({
         enabled: true,
         provider: 'openai',
         model,
         specialistModel: model,
         apiKey,
+        baseUrl: getOpenAIBaseUrl(),
+        extraHeaders: Object.keys(extraHeaders).length > 0 ? extraHeaders : undefined,
+        gatewayAuth,
       })
     }
     logger.warn('Engagement model needs OpenAI key; falling back to Local Copilot provider', {

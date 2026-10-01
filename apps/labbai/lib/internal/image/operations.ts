@@ -20,6 +20,7 @@ import type { ImageGenerationInput, ImageProvider } from '@/lib/internal/image/s
 import { type FalAICostMetadata, getFalAICostMetadata } from '@/lib/tools/falai-pricing'
 import { uploadCopilotFile } from '@/lib/uploads/contexts/copilot'
 import { uploadExecutionFile } from '@/lib/uploads/contexts/execution'
+import { getOpenAIAuthHeaders, getOpenAIBaseUrl } from '@/providers/openai/client-config'
 
 const logger = createLogger('ImageOperations')
 const MAX_IMAGE_BYTES = MAX_REMOTE_IMAGE_BYTES
@@ -438,10 +439,10 @@ async function generateWithOpenAI(
     requestBody.moderation = pickAllowed(body.moderation, OPENAI_MODERATION_LEVELS, 'auto')
   }
 
-  const openaiResponse = await fetch('https://api.openai.com/v1/images/generations', {
+  const openaiResponse = await fetch(`${getOpenAIBaseUrl()}/images/generations`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      ...getOpenAIAuthHeaders(apiKey),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(requestBody),

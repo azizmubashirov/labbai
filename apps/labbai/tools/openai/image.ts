@@ -1,4 +1,5 @@
 import { createLogger } from '@labbai/logger'
+import { getOpenAIAuthHeaders, getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import type { BaseImageRequestBody } from '@/tools/openai/types'
 import type { ToolConfig } from '@/tools/types'
 
@@ -89,11 +90,11 @@ export const imageTool: ToolConfig = {
       mode: 'project',
       select: (params) => ({ prompt: params.prompt }),
     },
-    url: 'https://api.openai.com/v1/images/generations',
+    url: () => `${getOpenAIBaseUrl()}/images/generations`,
     method: 'POST',
     headers: (params) => ({
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${params.apiKey}`,
+      ...getOpenAIAuthHeaders(params.apiKey),
     }),
     body: (params) => {
       const requestedModel = String(params.model || 'dall-e-3')

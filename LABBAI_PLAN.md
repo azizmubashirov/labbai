@@ -15,10 +15,9 @@ ported in. We do not sync with upstream Sim; we develop it ourselves from here.
   stay off; the internal cost ledger (`usage_log`) keeps recording what runs cost.
 - Integrations: keep ~10% (list below), remove the rest with their tools, triggers,
   OAuth providers and knowledge connectors
-- LLM providers: keep only OpenAI for now (owner has OpenAI budget); remove all others.
-  Cloudflare AI Gateway (Unified Billing, one account) comes later, when the OpenAI budget
-  runs out — the OpenAI provider takes an optional base URL / extra header so the switch
-  is a config change.
+- LLM providers: keep only OpenAI for now; remove all others. OpenAI traffic runs through
+  the Cloudflare AI Gateway (Unified Billing, one account) — done 2026-10-01, transport only
+  (`CLOUDFLARE_AIG_TOKEN` + `OPENAI_BASE_URL`, see HANDOFF.md "Cloudflare AI Gateway").
 - Sim cloud copilot path (Go mothership client) and the Local/Cloud switch — local copilot only
 - Copilot providers other than the OpenAI-compatible one (Bedrock, Vertex, Gemini)
 - PII service (`apps/pii`), Pi / A2A / Mothership blocks, video generation,
@@ -67,7 +66,8 @@ Later: amoCRM, Bitrix24, Exely (not in Sim) — our own integrations.
 ## Models (OpenAI only for now)
 
 Strong: `gpt-5.5` · Fast (default for Agent blocks): `gpt-5-mini` ·
-Embeddings: `text-embedding-3-small`. Later via Cloudflare AI Gateway: add Claude /
+Embeddings: `text-embedding-3-small`. All served through the Cloudflare AI Gateway
+(Unified Billing) since 2026-10-01. Later through the same gateway: add Claude /
 Gemini / Workers AI.
 
 ## Build (new, after cleanup)
@@ -99,8 +99,10 @@ Gemini / Workers AI.
   messages and pause the AI in that chat for 15 minutes (a person's OFF stays off). Edited
   Business messages are not answered again. Telegram send tools and the Inbox reply through the
   Business connection.
-- **Cloudflare AI Gateway** (later, when the OpenAI budget runs out): point the OpenAI
-  provider at the gateway; needs Account ID, Gateway ID, API token in server `.env`.
+- **Cloudflare AI Gateway** — done (2026-10-01), transport only: every OpenAI call goes
+  through the gateway with Unified Billing when `CLOUDFLARE_AIG_TOKEN` is set
+  (`OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/openai`); same
+  OpenAI models. Rollback and details: HANDOFF.md "Cloudflare AI Gateway".
 - **Branding** — Labbai name, text logo, emails: done. Still to do (owner: last): real logo,
   UZ / RU interface.
 - Own integrations: amoCRM, Bitrix24, Exely.

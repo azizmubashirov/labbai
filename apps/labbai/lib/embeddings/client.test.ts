@@ -140,6 +140,7 @@ beforeEach(() => {
     OPENAI_API_KEY: undefined,
     OPENAI_BASE_URL: undefined,
     OPENAI_EXTRA_HEADERS: undefined,
+    CLOUDFLARE_AIG_TOKEN: undefined,
   })
 })
 
@@ -743,6 +744,39 @@ describe('knowledge embedding transport', () => {
       'x-gateway': 'yes',
       Authorization: 'Bearer openai-test',
     })
+  })
+
+  it('embeds through the Cloudflare AI Gateway with no OpenAI key and no Authorization', async () => {
+    setEnv({
+      OPENAI_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai',
+      CLOUDFLARE_AIG_TOKEN: 'cf-token',
+    })
+    mockGetBYOKKey.mockClear()
+    fetchMock.mockResolvedValue(jsonResponse(openAIBody([[1, 2]], 3)))
+
+    const result = await embedKnowledge(['hello'], { ...options, workspaceId: 'workspace-1' })
+
+    expect(mockGetBYOKKey).not.toHaveBeenCalled()
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://gateway.ai.cloudflare.com/v1/acct/gw/openai/embeddings')
+    const headers = (init as RequestInit).headers as Record<string, string>
+    expect(headers['cf-aig-authorization']).toBe('Bearer cf-token')
+    expect(Object.keys(headers).map((name) => name.toLowerCase())).not.toContain('authorization')
+    expect(result.isBYOK).toBe(false)
+  })
+
+  it('ignores a pasted key in gateway mode and bills the call', async () => {
+    setEnv({
+      OPENAI_BASE_URL: 'https://gateway.ai.cloudflare.com/v1/acct/gw/openai',
+      CLOUDFLARE_AIG_TOKEN: 'cf-token',
+    })
+    fetchMock.mockResolvedValue(jsonResponse(openAIBody([[1, 2]], 3)))
+
+    const result = await embed(['hello'], { ...options, apiKey: 'sk-pasted' })
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.stringify((init as RequestInit).headers)).not.toContain('sk-pasted')
+    expect(result.isBYOK).toBe(false)
   })
 
   it('fails with a clear error when no OpenAI key is configured', async () => {

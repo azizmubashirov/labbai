@@ -22,7 +22,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | 1 Docs, landing, desktop, CLI/SDK, helm, PII, sandboxes (JS-only Function), Pi/A2A/Mothership/video blocks, enrichments, Sim Mailer | done |
 | 2 Integrations trimmed to ~10% (list in LABBAI_PLAN.md) | done |
 | 3 Stripe and all payments removed; entitlements permissive; cost ledger kept | done |
-| 4 LLM: OpenAI only (gpt-5.5, gpt-5-mini default, gpt-4.1, gpt-4.1-mini, text-embedding-3-small); `OPENAI_BASE_URL` / `OPENAI_EXTRA_HEADERS` for a later Cloudflare switch | done |
+| 4 LLM: OpenAI only (gpt-5.5, gpt-5-mini default, gpt-4.1, gpt-4.1-mini, text-embedding-3-small); transport switchable to Cloudflare AI Gateway (see "Cloudflare AI Gateway") | done |
 | 6 Remove `apps/labbai/ee`; access control, audit logs, credential groups, access requests, SCIM re-implemented clean-room (`lib/labbai/**`), always on | done |
 | 7 Organization UI layer (`/o/**`), Sim Search, org Search MCP, org Assistant removed; kept org-backed features live in workspace settings; DB tables kept | done |
 | + Sim cloud copilot path (Go mothership client, BYOK/API-key routes) and Local/Cloud switch removed — local copilot only | done |
@@ -418,6 +418,46 @@ Behaviour:
   Telegram's Chatbots settings; Telegram Business needs Premium on the owner's account; the owner
   pause is 15 min fixed (not configurable yet); Business message deletions are not reflected in
   the Inbox.
+
+### Cloudflare AI Gateway (2026-10-01)
+
+Owner decision: all OpenAI usage goes through the **Cloudflare AI Gateway with Unified Billing**
+(Cloudflare credits pay; the OpenAI balance is no longer used). Transport only — the models are the
+same OpenAI models (gpt-5.5, gpt-5-mini, gpt-4.1, gpt-4.1-mini, text-embedding-3-small, gpt-image-1,
+vision / audio models), with plain OpenAI model names.
+
+Server `.env`:
+
+```
+OPENAI_BASE_URL=https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway_id>/openai
+CLOUDFLARE_AIG_TOKEN=<gateway token>
+# OPENAI_API_KEY may stay or be removed — it is not used in gateway mode
+```
+
+`CLOUDFLARE_AIG_TOKEN` set = gateway mode: every OpenAI request goes to `OPENAI_BASE_URL` with
+`cf-aig-authorization: Bearer <token>` and **no** `Authorization` header (a provider key would make
+the gateway treat the call as a BYO OpenAI key). `OPENAI_API_KEY` is then not required; every
+"OpenAI is not configured" check accepts the token. `OPENAI_EXTRA_HEADERS` still merges in (an
+`Authorization` inside it is dropped in gateway mode). Unset = exactly the old behaviour.
+
+One helper decides the transport: `apps/labbai/providers/openai/client-config.ts`
+(`getOpenAIBaseUrl`, `getOpenAIAuthHeaders(apiKey)`, `isOpenAIGatewayMode`, and
+`createOpenAIFetch` — a `fetch` for the `openai` SDK that deletes the `Authorization` header the SDK
+always builds from its `apiKey`; the SDK gets the placeholder key `OPENAI_GATEWAY_API_KEY`). Routed
+through it: Agent/Router/Evaluator provider (`/responses`) and its Files API uploads, local copilot
+(main + specialists + engagement status, `/chat/completions`), wand (SDK), notification evaluator,
+knowledge/tool embeddings, vision, copilot image generation, Image Generator block (v1 tool + v2
+OpenAI path), OpenAI TTS and Whisper STT. Not routed: a copilot pinned to
+`COPILOT_PROVIDER=azure-openai|openai-compatible` (its own `COPILOT_BASE_URL` / key).
+
+In gateway mode a key a user pasted into a block (Vision, Image Generator, TTS, STT, Embeddings) or
+a workspace BYOK key is **not sent** — those calls are paid from the platform's Cloudflare credits.
+Embeddings are then billed to the workspace (`isBYOK: false`); Vision / Image Generator / TTS / STT
+with a pasted key are **not** metered per workspace (any non-empty "key" works) — gate or meter
+those blocks before customers get them.
+
+Roll back: unset `CLOUDFLARE_AIG_TOKEN`, restore `OPENAI_BASE_URL` (remove it or set
+`https://api.openai.com/v1`) and make sure `OPENAI_API_KEY` is set; restart the app (and workers).
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

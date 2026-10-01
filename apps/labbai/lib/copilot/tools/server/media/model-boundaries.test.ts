@@ -32,8 +32,11 @@ vi.mock('@/lib/core/config/env', async (importOriginal) => {
   }
 })
 vi.mock('@/providers/openai/client-config', () => ({
+  OPENAI_GATEWAY_API_KEY: 'cloudflare-ai-gateway',
   getOpenAIBaseUrl: () => 'https://api.openai.com/v1',
-  getOpenAIExtraHeaders: () => ({}),
+  getOpenAIAuthHeaders: (apiKey?: string | null) =>
+    apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+  isOpenAIGatewayMode: () => false,
 }))
 vi.mock('@/lib/copilot/vfs/resource-writer', () => ({
   writeCopilotWorkspaceFileByPath: mockWriteWorkspaceFileByPath,
