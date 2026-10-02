@@ -17,7 +17,9 @@ import {
   isMothershipDelegatedTool,
   isWorkflowScopedDelegatedTool,
   MOTHERSHIP_DELEGATED_TOOL_NAMES,
+  DIRECT_HANDLER_TOOLS,
   type MothershipDelegatedToolName,
+  resolveDelegatedServerToolId,
   WORKFLOW_SCOPED_DELEGATED_TOOLS,
 } from '@/local-copilot/lib/tools/mothership-delegated-tool-defs'
 import type { LocalCopilotStructuredContext } from '@/local-copilot/lib/types'
@@ -46,7 +48,8 @@ async function ensureCopilotToolRuntime(): Promise<Set<string>> {
     const { ensureHandlersRegistered } = await import(
       '@/lib/copilot/tool-executor/register-handlers'
     )
-    ensureHandlersRegistered()
+    // Registration loads the handler map asynchronously — the first call must wait for it.
+    await ensureHandlersRegistered()
     handlersRegistered = true
     logger.info('Arena Copilot mothership tool handlers registered', {
       durationMs: Date.now() - loadStartedAt,
@@ -326,6 +329,15 @@ export async function executeMothershipDelegatedTool(
     enrichCreateFileArgs(enrichedArgs)
   }
 
+  // `rm` requires a toolTitle; the local delete tools never asked the model for one.
+  if (
+    (toolName === 'delete_file' || toolName === 'delete_file_folder') &&
+    (typeof enrichedArgs.toolTitle !== 'string' || !enrichedArgs.toolTitle.trim())
+  ) {
+    const paths = Array.isArray(enrichedArgs.paths) ? enrichedArgs.paths.map(String) : []
+    enrichedArgs.toolTitle = `Delete ${paths.join(', ') || 'files'}`
+  }
+
   if (toolName === 'workspace_file') {
     enrichWorkspaceFileArgs(enrichedArgs)
     const lookBefore = assertWorkspaceFileLookBeforeWrite({
@@ -350,8 +362,17 @@ export async function executeMothershipDelegatedTool(
   // Never send go-catalogued tools (e.g. search_online) through shared
   // executeTool — that path treats route:'go' as an app-tool lookup and
   // throws "Built-in tool not found".
-  if (serverToolNames.has(toolName)) {
-    const result = await executeCopilotServerTool(toolName, enrichedArgs, ctx, workflowId)
+  const serverToolId = resolveDelegatedServerToolId(toolName)
+  if (toolName === 'create_file') {
+    return withBillingFromResult(
+      await executeCreateFileWithContent(serverToolId, enrichedArgs, ctx, workflowId)
+    )
+  }
+  if (serverToolNames.has(serverToolId)) {
+    const result = {
+      ...(await executeCopilotServerTool(serverToolId, enrichedArgs, ctx, workflowId)),
+      toolName,
+    }
     if (!result.success) {
       logger.warn('Copilot server tool failed', { toolName, error: result.error })
     }
@@ -376,12 +397,19 @@ export async function executeMothershipDelegatedTool(
     billingEntityType: ctx.billingAttribution?.billingEntity.type ?? null,
     workspaceId: ctx.workspaceId,
   })
-  const { executeTool } = await import('@/lib/copilot/tool-executor/executor')
-  const result = await executeTool(
-    toolName,
-    enrichedArgs,
-    toCopilotServerToolContext(ctx, workflowId)
+  const { executeTool, getRegisteredHandler } = await import(
+    '@/lib/copilot/tool-executor/executor'
   )
+  const serverCtx = toCopilotServerToolContext(ctx, workflowId)
+  // Handlers outside catalog routing: `list_integration_tools` is `go`-routed (executeTool
+  // would look it up as an integration tool) and rename/move_workflow are registered under
+  // literal names that are not in the catalog.
+  const directHandler = DIRECT_HANDLER_TOOLS.has(toolName)
+    ? getRegisteredHandler(serverToolId)
+    : undefined
+  const result = directHandler
+    ? await directHandler(enrichedArgs, serverCtx)
+    : await executeTool(serverToolId, enrichedArgs, serverCtx)
 
   if (!result.success) {
     logger.warn('Delegated Mothership tool failed', {
@@ -419,4 +447,56 @@ function withBillingFromResult(result: ToolExecutionResult): ToolExecutionResult
   if (result.billing) return result
   const billing = extractLocalToolBillingMetadata(result.result)
   return billing ? { ...result, billing } : result
+}
+
+/**
+ * `create_file` is the server's `create_empty_file`, which only makes an empty shell. When the
+ * model passes `content` (text files), the body is written through the same prepare → apply
+ * edit pair `workspace_file` / `edit_content` use, so secret provenance is recorded the same way.
+ */
+async function executeCreateFileWithContent(
+  serverToolId: string,
+  args: Record<string, unknown>,
+  ctx: ToolExecutionContext,
+  workflowId?: string
+): Promise<ToolExecutionResult> {
+  const { content, ...createArgs } = args
+  const created = await executeCopilotServerTool(serverToolId, createArgs, ctx, workflowId)
+  const body = typeof content === 'string' ? content : ''
+  if (!created.success || !body) return { ...created, toolName: 'create_file' }
+
+  const data = (created.result as { data?: { vfsPath?: string; name?: string } })?.data
+  const path = data?.vfsPath
+  if (!path) return { ...created, toolName: 'create_file' }
+
+  const prepared = await executeCopilotServerTool(
+    resolveDelegatedServerToolId('workspace_file'),
+    { operation: 'update', target: { kind: 'path', path }, title: data?.name ?? path },
+    ctx,
+    workflowId
+  )
+  if (!prepared.success) {
+    return {
+      ...created,
+      toolName: 'create_file',
+      success: false,
+      error: `File created at ${path} but writing its content failed: ${prepared.error ?? 'prepare failed'}`,
+    }
+  }
+  const written = await executeCopilotServerTool(
+    resolveDelegatedServerToolId('edit_content'),
+    { content: body },
+    ctx,
+    workflowId
+  )
+  return {
+    ...written,
+    toolName: 'create_file',
+    ...(created.resources ? { resources: created.resources } : {}),
+    ...(written.success
+      ? {}
+      : {
+          error: `File created at ${path} but writing its content failed: ${written.error ?? 'apply failed'}`,
+        }),
+  }
 }

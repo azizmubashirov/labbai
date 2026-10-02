@@ -56,6 +56,7 @@ import { tableColumnsServerTool } from '@/lib/copilot/tools/server/table/table-c
 import { tableManageServerTool } from '@/lib/copilot/tools/server/table/table-manage'
 import { tableRowsServerTool } from '@/lib/copilot/tools/server/table/table-rows'
 import { tableViewsServerTool } from '@/lib/copilot/tools/server/table/table-views'
+import { userMemoryServerTool } from '@/lib/copilot/tools/server/other/user-memory'
 import { userTableServerTool } from '@/lib/copilot/tools/server/table/user-table'
 import { getCredentialsServerTool } from '@/lib/copilot/tools/server/user/get-credentials'
 import { setEnvironmentVariablesServerTool } from '@/lib/copilot/tools/server/user/set-environment-variables'
@@ -190,6 +191,7 @@ const baseServerToolRegistry: Record<string, BaseServerTool> = {
   [generateImageServerTool.name]: generateImageServerTool,
   [generateAudioServerTool.name]: generateAudioServerTool,
   [ffmpegServerTool.name]: ffmpegServerTool,
+  [userMemoryServerTool.name]: userMemoryServerTool,
 }
 
 function getServerToolRegistry(): Record<string, BaseServerTool> {

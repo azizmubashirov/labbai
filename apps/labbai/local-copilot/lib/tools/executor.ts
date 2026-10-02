@@ -128,7 +128,8 @@ async function ensureHandlersReady() {
     memory: getLocalCopilotMemorySnapshot(),
   })
   const { ensureHandlersRegistered } = await import('@/lib/copilot/tool-executor/register-handlers')
-  ensureHandlersRegistered()
+  // Registration loads the handler map asynchronously — the first call must wait for it.
+  await ensureHandlersRegistered()
   handlersRegistered = true
   logger.info('Arena Copilot handlers ready', {
     durationMs: Date.now() - loadStartedAt,

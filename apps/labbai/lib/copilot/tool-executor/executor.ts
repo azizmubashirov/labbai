@@ -26,6 +26,15 @@ export function registerHandlers(entries: Record<string, ToolHandler>): void {
   }
 }
 
+/**
+ * The registered handler for `toolId`, bypassing catalog routing. For callers that run a
+ * handler registered under a literal name outside the catalog (e.g. `rename_workflow`) or a
+ * `go`-routed tool whose handler is registered in-process (`list_integration_tools`).
+ */
+export function getRegisteredHandler(toolId: string): ToolHandler | undefined {
+  return handlerRegistry.get(toolId)
+}
+
 export function hasHandler(toolId: string): boolean {
   return handlerRegistry.has(toolId)
 }

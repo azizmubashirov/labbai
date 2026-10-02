@@ -30,16 +30,16 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
   user_table:
     'Creates, reads, and updates workspace tables — operations include create, get, get_schema, insert_row, batch_insert_rows, query_rows, update_row, add_column, import_file, create_from_file.',
   knowledge_base:
-    'Manages knowledge bases — operations include create, get, list, query (semantic search), add_file (ingest document), update, delete, add_connector, sync_connector.',
+    'Manages knowledge bases. Put the operation fields inside `args` — e.g. {"operation":"create","args":{"name":"Prices","description":"..."}}. Operations: create, get, query (semantic search), add_file (ingest a workspace file), update, delete_document, update_document, tags (list_tags, create_tag, update_tag, delete_tag, get_tag_usage) and connectors (add_connector, update_connector, delete_connector, sync_connector). Existing knowledge bases are listed in the workspace snapshot — there is no list operation.',
   open_resource: 'Opens a workspace resource (workflow, file, table, knowledge base) in the UI.',
   materialize_file:
-    'Saves chat uploads (`uploads/...`) into workspace `files/...` (or imports). Required before function_execute can open uploaded spreadsheets/docs — uploads/ paths are not sandbox-mounted.',
+    'Saves chat uploads (`uploads/...`) into workspace `files/...`. REQUIRED: fileNames (array of upload names). operation: save (default), import or extract. Required before function_execute can open uploaded spreadsheets/docs — uploads/ paths are not sandbox-mounted.',
   generate_image:
     'Generates an image from a text prompt (no workflow). Uses hosted/workspace keys automatically. Pass the user full request in `prompt`, including variation counts (e.g. "3 variations"). Optional outputs.files path to save under files/.',
   search_online:
     'Live web search via Exa (same keys as the Exa block: workspace EXA_API_KEY, BYOK, or hosted). Call this FIRST for real-world factual / current questions (who/what/when/where, news, prices, weather) — do not answer from memory. For citation-heavy Q&A you may use invoke_integration_tool with exa_answer instead. REQUIRED: query and toolTitle.',
   function_execute:
-    'Runs JavaScript in an isolated local VM. Return values appear in `result`; printed output appears in `stdout`. Tool results also include `capturedOutput` — use that for the user-facing answer. Mount workspace files/tables via `inputs`; save files with `outputs.files` or `outputPath`. Only built-in JavaScript is available — no npm imports, Python, or shell.',
+    'Runs code in an isolated sandbox. REQUIRED: code. language: javascript (default), python or shell. Mount workspace files/tables via `inputs`; save files with `outputs.files`. Return values appear in `result`, printed output in `stdout`.',
   edit_content:
     'Writes the body after a successful workspace_file in a prior round. REQUIRED: content (string). For pptx/docx/pdf put JavaScript using pre-initialized globals (pptx / docx / pdf) — never require/import. PPTX: SLIDE_W/MARGIN/CONTENT_W, title + bullets, one idea per slide. DOCX: __docxDocOptions + HeadingLevel + addSection (never docx.addSection). PDF: LETTER pages, margins, wrapped text. Markdown: finished GFM. Never a single unstyled dump. Never emit in the same batch as workspace_file.',
   deploy_chat:
@@ -98,7 +98,7 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
   ffmpeg:
     'Runs FFmpeg operations on workspace media files (trim, concat, convert, overlay_audio, mix_audio, scale_pad, extract_audio, thumbnail, probe, …). Mount inputs via inputs.files with exact VFS paths; save results with outputs.files.',
   delete_file:
-    'Deletes workspace files by canonical VFS paths. REQUIRED: paths (array). Destructive — only call when the user explicitly asked.',
+    'Deletes workspace files by canonical VFS paths. REQUIRED: paths (array), e.g. ["files/old.md"]. Destructive — only call when the user explicitly asked.',
   rename_file:
     'Renames a workspace file in place. REQUIRED: path and newName (including extension). Use move_file to change folders.',
   move_file:
@@ -166,8 +166,6 @@ export const MOTHERSHIP_DELEGATED_TOOL_NAMES = [
   'get_block_upstream_references',
   'rename_workflow',
   'move_workflow',
-  'delete_workflow',
-  'manage_folder',
   'deploy_api',
   'deploy_mcp',
   'redeploy',
@@ -179,10 +177,6 @@ export const MOTHERSHIP_DELEGATED_TOOL_NAMES = [
   'create_workspace_mcp_server',
   'update_workspace_mcp_server',
   'delete_workspace_mcp_server',
-  'manage_scheduled_task',
-  'complete_scheduled_task',
-  'update_scheduled_task_history',
-  'get_scheduled_task_logs',
   'manage_credential',
   'oauth_get_auth_link',
   'oauth_request_access',
@@ -198,7 +192,6 @@ export const MOTHERSHIP_DELEGATED_TOOL_NAMES = [
   'set_block_enabled',
   'set_global_workflow_variables',
   'get_deployed_workflow_state',
-  'list_user_workspaces',
   'manage_skill',
   'manage_custom_tool',
   'manage_mcp_tool',
@@ -250,9 +243,131 @@ export function isMothershipDelegatedTool(
  * Builds LLM tool definitions from generated schemas only — does not import
  * server tool handlers or register-handlers (those load on first execution).
  */
+/**
+ * Local tool names whose server-registry tool is registered under another id. Without the
+ * mapping the call misses the server registry ("Built-in tool not found") and the tool gets
+ * an empty parameter schema.
+ */
+const DELEGATED_SERVER_TOOL_IDS: Partial<Record<MothershipDelegatedToolName, string>> = {
+  knowledge_base: 'manage_knowledge_base',
+  search_online: 'web_search',
+  create_file: 'create_empty_file',
+  workspace_file: 'prepare_file_edit',
+  edit_content: 'apply_file_edit',
+  download_to_workspace_file: 'download_file',
+  materialize_file: 'save_upload',
+  function_execute: 'run_function',
+  deploy_chat: 'deploy_as_chat',
+  deploy_api: 'deploy_as_api',
+  deploy_mcp: 'deploy_as_mcp',
+  check_deployment_status: 'get_deployment_status',
+  get_deployment_log: 'list_deployment_versions',
+  manage_mcp_tool: 'manage_mcp_connection',
+  delete_file: 'rm',
+  delete_file_folder: 'rm',
+}
+
+/**
+ * Server tools registered without a generated runtime schema — the model would otherwise see
+ * an empty parameter list. Shapes mirror the server tools' argument interfaces
+ * (`lib/copilot/tools/server/files/{rename-file,file-folders}.ts`, `other/user-memory.ts`).
+ */
+const LOCAL_PARAMETER_SCHEMAS: Partial<Record<MothershipDelegatedToolName, Record<string, unknown>>> =
+  {
+    list_file_folders: { type: 'object', properties: {} },
+    create_file_folder: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Folder VFS path, e.g. "files/Reports".' },
+        name: { type: 'string', description: 'Folder name (when parentPath is given).' },
+        parentPath: { type: 'string', description: 'Parent folder VFS path.' },
+      },
+    },
+    rename_file: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'File VFS path, e.g. "files/notes.md".' },
+        fileId: { type: 'string' },
+        newName: { type: 'string', description: 'New file name.' },
+      },
+      required: ['newName'],
+    },
+    move_file: {
+      type: 'object',
+      properties: {
+        paths: { type: 'array', items: { type: 'string' }, description: 'File VFS paths.' },
+        destinationPath: { type: 'string', description: 'Destination folder VFS path.' },
+      },
+    },
+    rename_file_folder: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Folder VFS path.' },
+        folderId: { type: 'string' },
+        name: { type: 'string', description: 'New folder name.' },
+      },
+      required: ['name'],
+    },
+    move_file_folder: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Folder VFS path.' },
+        folderId: { type: 'string' },
+        destinationPath: { type: 'string', description: 'Destination parent folder VFS path.' },
+      },
+    },
+    rename_workflow: {
+      type: 'object',
+      properties: {
+        workflowId: { type: 'string' },
+        name: { type: 'string', description: 'New workflow name.' },
+      },
+      required: ['workflowId', 'name'],
+    },
+    move_workflow: {
+      type: 'object',
+      properties: {
+        workflowIds: { type: 'array', items: { type: 'string' } },
+        folderId: { type: 'string', description: 'Target folder id; omit for the workspace root.' },
+      },
+      required: ['workflowIds'],
+    },
+    user_memory: {
+      type: 'object',
+      properties: {
+        operation: { type: 'string', enum: ['add', 'search', 'delete', 'correct', 'list'] },
+        key: { type: 'string' },
+        value: { type: 'string' },
+        correct_value: { type: 'string' },
+        query: { type: 'string' },
+        memory_type: { type: 'string', enum: ['preference', 'entity', 'history', 'correction'] },
+        limit: { type: 'number' },
+      },
+      required: ['operation'],
+    },
+  }
+
+/**
+ * Delegated tools run through their registered handler directly: `list_integration_tools` is
+ * `go`-routed in the catalog (executeTool would treat it as an integration tool) and
+ * rename/move_workflow are registered under literal names that are not in the catalog.
+ */
+export const DIRECT_HANDLER_TOOLS: ReadonlySet<string> = new Set([
+  'list_integration_tools',
+  'rename_workflow',
+  'move_workflow',
+])
+
+/** The server-registry / runtime-schema id behind a local delegated tool name. */
+export function resolveDelegatedServerToolId(toolName: string): string {
+  return DELEGATED_SERVER_TOOL_IDS[toolName as MothershipDelegatedToolName] ?? toolName
+}
+
 export function buildMothershipDelegatedToolDefinitions(): LocalCopilotToolDefinition[] {
   return MOTHERSHIP_DELEGATED_TOOL_NAMES.map((name) => {
-    const schema = TOOL_RUNTIME_SCHEMAS[name]?.parameters
+    const schema =
+      LOCAL_PARAMETER_SCHEMAS[name] ??
+      TOOL_RUNTIME_SCHEMAS[resolveDelegatedServerToolId(name)]?.parameters
     const baseParameters = (schema ?? {
       type: 'object',
       properties: {},
