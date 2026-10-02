@@ -12,7 +12,7 @@ const SNAPSHOT_SKILLS_HEADING =
   /## Agent Block Skills[^\n]*NOT FOR YOU[^\n]*\((\d+)\)\r?\nThese are user-created skills[^\n]*\r?\n/g
 
 const SNAPSHOT_SKILLS_REPLACEMENT =
-  "## Workspace skills ($1)\nThese skills are available to Arena Copilot. If a listed skill matches the user request, follow it. Call load_user_skill unless that skill's instructions are already in the prompt. Do not skip a matching skill.\n"
+  "## Workspace skills ($1)\nThese skills are available to you. If a listed skill matches the user request, follow it. Call load_user_skill unless that skill's instructions are already in the prompt. Do not skip a matching skill.\n"
 
 /**
  * Rewrites the Cloud snapshot heading so Arena Copilot is allowed to use skills.

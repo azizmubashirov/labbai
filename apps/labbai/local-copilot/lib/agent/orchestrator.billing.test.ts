@@ -28,6 +28,7 @@ vi.mock('@/local-copilot/lib/config', () => {
     assertLocalCopilotEnabled: () => undefined,
     isLocalCopilotEngagementStatusEnabled: () => false,
     resolveLocalCopilotMaxRoundsPerTurn: () => roundCap.value,
+    resolveLocalCopilotMaxTurnCostUsd: () => Number.POSITIVE_INFINITY,
   }
 })
 

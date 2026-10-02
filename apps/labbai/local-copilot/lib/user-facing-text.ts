@@ -36,13 +36,12 @@ export type PostBuildToolMode = 'all' | 'oauth_only' | 'final_only' | 'done'
  * catalog and discard unwanted tool calls in the orchestrator instead.
  */
 export function resolvePostBuildRoundTools<T extends { name: string }>(
-  mode: PostBuildToolMode,
+  _mode: PostBuildToolMode,
   tools: T[]
 ): T[] {
-  if (mode === 'oauth_only') {
-    const oauthOnly = tools.filter((tool) => tool.name === 'oauth_get_auth_link')
-    return oauthOnly.length > 0 ? oauthOnly : tools
-  }
+  // `oauth_only` keeps the full list: narrowing it changed the cached prompt prefix and
+  // re-sent the whole ~60k-token context uncached. The orchestrator drops any call other
+  // than oauth_get_auth_link in that mode instead.
   return tools
 }
 

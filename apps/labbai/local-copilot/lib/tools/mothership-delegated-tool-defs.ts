@@ -15,7 +15,7 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
   query_logs:
     'Lists or inspects workflow execution logs and block outputs. Use executionId from run_workflow.',
   get_workflow_data:
-    'Loads workflow structure and metadata by workflowId (useful on home chat when no workflow is open).',
+    'Loads one kind of workflow data by workflowId — data_type: global_variables, custom_tools, mcp_tools or files. It does not return blocks or connections; use get_workflow_context for structure.',
   list_integration_tools:
     'Lists available operations for a connected integration service (e.g. gmail, google_sheets, hubspot). Then call invoke_integration_tool with the exact tool id — do not call load_integration_tool.',
   read: 'Reads a workspace file by canonical VFS path. For file bytes/text use files/<name>/content (e.g. files/page.html/content). Required before workspace_file operation=update on existing HTML/text so the edit starts from the current file.',
@@ -28,7 +28,7 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
     'Declares a content edit on an existing workspace file (append/update/patch). REQUIRED: operation, target={kind:"path", path:"files/..." }, title. For HTML/text, targeted changes (title, heading, one string) MUST use operation=patch with strategy=search_replace — update replaces the ENTIRE file. Always read files/<path>/content first before update. Never operation=create or target.kind=new_file. Example patch: {"operation":"patch","target":{"kind":"path","path":"files/page.html"},"title":"Title","edit":{"strategy":"search_replace","search":"<title>Old</title>"}}. Does not write the body — call edit_content in the NEXT tool round with content.',
   download_to_workspace_file: 'Downloads a URL into a workspace file.',
   user_table:
-    'Creates, reads, and updates workspace tables — operations include create, get, get_schema, insert_row, batch_insert_rows, query_rows, update_row, add_column, import_file, create_from_file.',
+    'Creates, reads, and updates workspace tables. Put the operation fields inside `args` — e.g. {"operation":"create","args":{"name":"Leads","schema":{"columns":[{"name":"phone","type":"string"}]}}}. Operations include create, get, get_schema, rename, insert_row, batch_insert_rows, get_row, query_rows, update_row, delete_row, add_column, rename_column, delete_column, import_file, create_from_file.',
   knowledge_base:
     'Manages knowledge bases. Put the operation fields inside `args` — e.g. {"operation":"create","args":{"name":"Prices","description":"..."}}. Operations: create, get, query (semantic search), add_file (ingest a workspace file), update, delete_document, update_document, tags (list_tags, create_tag, update_tag, delete_tag, get_tag_usage) and connectors (add_connector, update_connector, delete_connector, sync_connector). Existing knowledge bases are listed in the workspace snapshot — there is no list operation.',
   open_resource: 'Opens a workspace resource (workflow, file, table, knowledge base) in the UI.',
@@ -39,7 +39,7 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
   search_online:
     'Live web search via Exa (same keys as the Exa block: workspace EXA_API_KEY, BYOK, or hosted). Call this FIRST for real-world factual / current questions (who/what/when/where, news, prices, weather) — do not answer from memory. For citation-heavy Q&A you may use invoke_integration_tool with exa_answer instead. REQUIRED: query and toolTitle.',
   function_execute:
-    'Runs code in an isolated sandbox. REQUIRED: code. language: javascript (default), python or shell. Mount workspace files/tables via `inputs`; save files with `outputs.files`. Return values appear in `result`, printed output in `stdout`.',
+    'Runs JavaScript in an isolated VM (Python and shell are not available here). REQUIRED: code. Built-in JavaScript only — no imports. Mount workspace files/tables via `inputs`; save files with `outputs.files`. Return values appear in `result`, printed output in `stdout`.',
   edit_content:
     'Writes the body after a successful workspace_file in a prior round. REQUIRED: content (string). For pptx/docx/pdf put JavaScript using pre-initialized globals (pptx / docx / pdf) — never require/import. PPTX: SLIDE_W/MARGIN/CONTENT_W, title + bullets, one idea per slide. DOCX: __docxDocOptions + HeadingLevel + addSection (never docx.addSection). PDF: LETTER pages, margins, wrapped text. Markdown: finished GFM. Never a single unstyled dump. Never emit in the same batch as workspace_file.',
   deploy_chat:
@@ -127,7 +127,7 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
   restore_resource:
     'Restores an archived/deleted resource. REQUIRED: type (workflow|table|file|knowledgebase|folder|file_folder) and id.',
   share_file:
-    'Creates, updates, or deactivates a public share link for a workspace file. REQUIRED: operation (share | unshare) and the file path. Returns the public URL.',
+    'Creates, updates, or deactivates a public share link for a workspace file. REQUIRED: path. action: share (default) or unshare. Returns the public URL.',
   set_environment_variables:
     'Stores secrets (API keys, tokens) as workspace environment variables. REQUIRED: variables [{name, value}] (scope defaults to workspace). Use UPPER_SNAKE_CASE names (e.g. OPENAI_API_KEY). Afterwards reference the secret in block fields as {{NAME}} — never write the raw value into a block.',
   user_memory:
@@ -179,7 +179,6 @@ export const MOTHERSHIP_DELEGATED_TOOL_NAMES = [
   'delete_workspace_mcp_server',
   'manage_credential',
   'oauth_get_auth_link',
-  'oauth_request_access',
   'generate_audio',
   'ffmpeg',
   'delete_file',

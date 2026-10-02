@@ -40,8 +40,13 @@ export const LOCAL_COPILOT_CONTEXT_SAFETY_BUFFER_TOKENS = 4_000
 /** Assumed window when the model is missing from the pricing catalog. */
 export const LOCAL_COPILOT_DEFAULT_CONTEXT_WINDOW = 128_000
 
-/** Workflow JSON above this size is sent as block summaries instead of full state. */
-export const LOCAL_COPILOT_WORKFLOW_FULL_STATE_TOKEN_BUDGET = 24_000
+/**
+ * Workflow JSON above this size is sent as block summaries instead of full state. The open
+ * workflow is re-read on every model round; at 24k a built agent's prompts alone made each
+ * round ~20k tokens heavier. Summaries keep block ids/types/connections; the model loads full
+ * blocks with get_workflow_context when it edits them.
+ */
+export const LOCAL_COPILOT_WORKFLOW_FULL_STATE_TOKEN_BUDGET = 10_000
 
 export interface ResolveLocalCopilotPromptTokenBudgetOptions {
   model: string

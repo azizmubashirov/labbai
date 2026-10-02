@@ -47,6 +47,7 @@ export async function runCreateWorkflowTool(
       name: typeof args.name === 'string' ? args.name : '',
       folderId: typeof args.folderId === 'string' ? args.folderId : undefined,
       folderPath: typeof args.folderPath === 'string' ? args.folderPath : undefined,
+      description: typeof args.description === 'string' ? args.description : undefined,
       workspaceId: ctx.workspaceId,
     },
     execContext

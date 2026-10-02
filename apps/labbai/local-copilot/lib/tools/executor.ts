@@ -172,6 +172,8 @@ export interface ToolExecutionContext {
   loadedArtifactIds?: Set<string>
   /** CAS token from workflow.updatedAt for the active workflow. */
   workflowRevision?: string
+  /** The workflow `workflowRevision` was loaded for — the implicit CAS check applies only to it. */
+  workflowRevisionWorkflowId?: string
   /** Turn-scoped idempotency cache for create/deploy/invoke. */
   mutationIdempotency?: Map<string, ToolExecutionResult>
   /** Integration tool ids returned by list_integration_tools this turn. */
@@ -412,6 +414,17 @@ async function executeLocalCopilotToolInner(
   }
 
   args = pinToolArgsToWorkspace(args, ctx.workspaceId)
+
+  const repeatCap = checkPerTurnToolCallCap(toolName, ctx)
+  if (repeatCap) {
+    return {
+      toolName,
+      success: false,
+      error: repeatCap,
+      result: { success: false, error: repeatCap },
+    }
+  }
+
   ctx.mutationIdempotency ??= new Map()
   ctx.listedIntegrationToolIds ??= new Set()
   ctx.readVfsPaths ??= new Set()
@@ -614,10 +627,12 @@ async function executeLocalCopilotToolInner(
         }
       }
 
+      // The turn's revision guards only the workflow it was loaded for; editing another
+      // workflow compared against it and always failed as "stale".
       const expectedRevision =
         (typeof enrichedArgs.expectedRevision === 'string' &&
           enrichedArgs.expectedRevision.trim()) ||
-        ctx.workflowRevision
+        (ctx.workflowRevisionWorkflowId === targetWorkflowId ? ctx.workflowRevision : undefined)
       const revisionCheck = assertExpectedRevision({
         expectedRevision,
         currentRevision: access.revision || undefined,
@@ -652,6 +667,7 @@ async function executeLocalCopilotToolInner(
         })
         if (next.ok && next.revision) {
           ctx.workflowRevision = next.revision
+          ctx.workflowRevisionWorkflowId = targetWorkflowId
         }
       }
 
@@ -831,10 +847,7 @@ async function executeLocalCopilotToolInner(
         }
       }
 
-      const rawParams =
-        args.params && typeof args.params === 'object' && !Array.isArray(args.params)
-          ? (args.params as Record<string, unknown>)
-          : { ...args }
+      const rawParams = parseInvokeParams(args)
 
       // Model sometimes passes Arena/mothership tool ids here (e.g. search_online,
       // get_blocks_metadata, edit_workflow). Route those through the local executor
@@ -1250,10 +1263,12 @@ async function runDiscoveryTool(
       const calls = ((cache.get(SEARCH_DOCS_CALLS_KEY) as number | undefined) ?? 0) + 1
       cache.set(SEARCH_DOCS_CALLS_KEY, calls)
       if (calls > SEARCH_DOCS_MAX_CALLS_PER_TURN) {
+        const error = `search_docs limit reached for this turn (${SEARCH_DOCS_MAX_CALLS_PER_TURN}). It only matches block names and descriptions — use get_blocks_metadata for a block's fields and the rules for Agent tools entries, then build.`
         return {
           toolName,
           success: false,
-          error: `search_docs limit reached for this turn (${SEARCH_DOCS_MAX_CALLS_PER_TURN}). It only matches block names and descriptions — use get_blocks_metadata for a block's fields and the rules for Agent tools entries, then build.`,
+          error,
+          result: { success: false, error },
         }
       }
       return { toolName, success: true, result: await searchBlockDocs(args.query) }
@@ -1457,5 +1472,56 @@ export async function refreshToolContext(
     const loaded = await loadWorkflowRevision(params.workflowId, params.workspaceId)
     if (loaded) workflowRevision = loaded.revision
   }
-  return { ...params, structuredContext, workflowRevision }
+  return {
+    ...params,
+    structuredContext,
+    workflowRevision,
+    workflowRevisionWorkflowId: params.workflowId
+      ? params.workflowId
+      : params.workflowRevisionWorkflowId,
+  }
+}
+
+/** invoke_integration_tool params: an object, a JSON string of one, or the args themselves. */
+function parseInvokeParams(args: Record<string, unknown>): Record<string, unknown> {
+  let params = args.params
+  if (typeof params === 'string') {
+    try {
+      params = JSON.parse(params) as unknown
+    } catch {
+      // Not JSON — fall through to the args themselves.
+    }
+  }
+  return params && typeof params === 'object' && !Array.isArray(params)
+    ? (params as Record<string, unknown>)
+    : { ...args }
+}
+
+/**
+ * Read-only lookups allowed per user turn (main agent and specialists share the count). Each
+ * call costs a full model round; past these a lookup is not finding anything new. Stagnation
+ * detection only catches identical calls — these catch the same tool with new arguments.
+ */
+const PER_TURN_TOOL_CALL_CAPS: Readonly<Record<string, number>> = {
+  get_available_blocks: 3,
+  get_available_integrations: 2,
+  get_blocks_metadata: 4,
+  get_workflow_context: 4,
+  list_integration_tools: 4,
+  load_copilot_artifact: 6,
+  search_online: 4,
+  explain_error: 3,
+}
+
+/** An error message once `toolName` used its per-turn allowance, else undefined. */
+function checkPerTurnToolCallCap(toolName: string, ctx: ToolExecutionContext): string | undefined {
+  const cap = PER_TURN_TOOL_CALL_CAPS[toolName]
+  if (!cap) return undefined
+  const cache = ctx.discoveryCache ?? new Map<string, unknown>()
+  ctx.discoveryCache = cache
+  const key = `__calls:${toolName}`
+  const calls = ((cache.get(key) as number | undefined) ?? 0) + 1
+  cache.set(key, calls)
+  if (calls <= cap) return undefined
+  return `${toolName} limit reached for this turn (${cap} calls). Its earlier results are above — build with what you have (create_workflow / edit_workflow), or tell the user what is missing.`
 }

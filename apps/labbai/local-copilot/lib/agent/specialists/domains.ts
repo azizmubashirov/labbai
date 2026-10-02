@@ -63,7 +63,6 @@ export const ALWAYS_ON_TOOL_NAMES = new Set<string>([
   'open_resource',
   // Secrets pasted in chat must land in workspace env, not in block fields.
   'set_environment_variables',
-  'list_user_workspaces',
   'load_user_skill',
   'explain_error',
   'user_memory',
@@ -83,8 +82,6 @@ const WORKFLOW_TOOLS = [
   'get_block_outputs',
   'rename_workflow',
   'move_workflow',
-  'delete_workflow',
-  'manage_folder',
   'set_block_enabled',
   'set_global_workflow_variables',
   'get_deployed_workflow_state',
@@ -132,7 +129,6 @@ const AUTH_TOOLS = [
   'set_environment_variables',
   'manage_credential',
   'oauth_get_auth_link',
-  'oauth_request_access',
   'generate_api_key',
   'get_available_integrations',
   'list_integration_tools',
@@ -141,12 +137,8 @@ const AUTH_TOOLS = [
 const KNOWLEDGE_TOOLS = ['knowledge_base', 'materialize_file'] as const
 const TABLE_TOOLS = ['user_table', 'materialize_file'] as const
 
-const SCHEDULED_TASK_TOOLS = [
-  'manage_scheduled_task',
-  'complete_scheduled_task',
-  'update_scheduled_task_history',
-  'get_scheduled_task_logs',
-] as const
+/** No scheduled-task tools in this Sim version — recurring work is a Schedule-trigger workflow. */
+const SCHEDULED_TASK_TOOLS = [] as const
 
 const AGENT_TOOLS = [
   'list_integration_tools',
@@ -306,6 +298,32 @@ export interface HybridParentToolResolution {
 }
 
 /**
+ * The parent turn's tool list, identical on every turn: every domain's leaf tools plus the
+ * specialist entry tools. Intent no longer narrows it — a different tool set per intent
+ * changed the cached prefix, so a chat whose turns were classified differently re-wrote the
+ * 1-hour prefix (~20k tokens at 2x input) several times an hour, and a non-workflow intent
+ * hid create_workflow from the agent that builds. Reading the extra definitions from cache
+ * costs a fraction of one re-write.
+ */
+export function resolveFixedParentTools(params: {
+  allTools: LocalCopilotToolDefinition[]
+  specialistTools: LocalCopilotToolDefinition[]
+}): LocalCopilotToolDefinition[] {
+  const names = new Set<string>(ALWAYS_ON_TOOL_NAMES)
+  for (const domainTools of Object.values(DOMAIN_TOOL_NAMES)) {
+    for (const name of domainTools) names.add(name)
+  }
+  const tools = filterToolsByNames(params.allTools, names)
+  const seen = new Set(tools.map((tool) => tool.name))
+  for (const specialistTool of params.specialistTools) {
+    if (seen.has(specialistTool.name)) continue
+    tools.push(specialistTool)
+    seen.add(specialistTool.name)
+  }
+  return tools
+}
+
+/**
  * Resolves the parent-turn tool list: intent-filtered leaf tools ∪ specialist entry tools.
  * Falls back to the full catalog only when the hybrid set is empty — never solely because
  * `primary === 'general'` when always-on / specialist tools are present.
@@ -371,7 +389,7 @@ export function domainSystemHint(
 ): string {
   switch (domain) {
     case 'workflow':
-      return 'Build, edit, and run workflows. Use get_workflow_data / get_workflow_context or get_workflow_run_options when inspecting an existing workflow; create_workflow when the user wants a new one. When adding blocks, use current types from get_blocks_metadata (never sunset/legacy types like gmail or router). Integration triggers (Telegram, WhatsApp, Gmail, …) are the integration block added with triggerMode: true — there is no <service>_trigger type. For Agent/Router model, use a current recommended id or omit to keep the default (gpt-5) — never gpt-4o or other sunset/legacy models.'
+      return 'Build, edit, and run workflows. Use get_workflow_context (blocks and connections) or get_workflow_run_options when inspecting an existing workflow; get_workflow_data only returns its variables, custom tools, MCP tools or files; create_workflow when the user wants a new one. When adding blocks, use current types from get_blocks_metadata (never sunset/legacy types like gmail or router). Integration triggers (Telegram, WhatsApp, Gmail, …) are the integration block added with triggerMode: true — there is no <service>_trigger type. For Agent/Router model, use a current recommended id or omit to keep the default (gpt-5-mini) — never anthropic/claude-sonnet-4.5 (sunset).'
     case 'run':
       return 'Focus on running and debugging workflows (get_workflow_run_options, run_workflow, run_block, run_from_block, query_logs). Prefer existing workspaceWorkflows entries — never create a workflow just to run something.'
     case 'deploy':
@@ -379,17 +397,17 @@ export function domainSystemHint(
     case 'auth':
       return 'Focus on credentials, OAuth links, and API keys.'
     case 'knowledge':
-      return 'Query, create, and ingest knowledge bases (knowledge_base get / list / query / create / add_file).'
+      return 'Query, create, and ingest knowledge bases (knowledge_base create / get / query / add_file / update; existing ones are in the workspace snapshot).'
     case 'table':
       return 'Create and manage tables, rows, and schemas (user_table).'
     case 'scheduled_task':
-      return 'Focus on scheduled tasks (create/list/update/complete/logs).'
+      return 'Scheduled tasks are not available — recurring work is a workflow with a Schedule trigger.'
     case 'agent':
       return 'Focus on integration tools, MCP tools, skills, and function_execute.'
     case 'research':
       return 'Focus on research. For ANY real-world factual or current question, call a live search tool FIRST (exa_answer via invoke_integration_tool, or search_online) before answering — never answer from training memory alone. When the question is about a workspace file, glob/read/grep that exact VFS path — do not open a similarly named file. Use search_docs only for Labbai block/integration questions.'
     case 'media':
-      return 'Focus on image/audio/video generation and ffmpeg.'
+      return 'Focus on image and audio generation and ffmpeg.'
     case 'file':
       return `Read, create, and update workspace files. Create NEW html/md/txt/json/csv with create_file once (full body in content). Edit EXISTING text/html: MUST read files/<path>/content first; targeted changes (title, heading, one string) use workspace_file operation=patch with search_replace then edit_content with ONLY the replacement — never regenerate the file. Use operation=update only for empty shells or an explicit full rewrite, and then edit_content must start from the read result. After create_file, workspace_file target.kind=path (never kind=new_file / operation=create — that duplicates the file). There is no prepare_file_edit, edit_file, or run_function tool. Use function_execute only for sandbox data processing (mount via inputs, save with outputs.files), not office docs. Chat uploads/ need materialize_file into files/ before the sandbox can open them. CRITICAL: never dump HTML/CSS/JS in the user-facing reply or findings (no \`\`\`html fences). You MUST still read existing files via the read tool. Put write bodies only in create_file/edit_content. Findings: 1–2 sentences naming the file and outcome.${options.entryTool ? '' : `\n\n${DOCUMENT_FORMAT_GUIDANCE}`}`
     case 'superagent':

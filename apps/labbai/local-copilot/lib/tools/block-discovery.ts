@@ -170,6 +170,12 @@ export function resolveBlockTypeRequests(
 
   for (const requested of ids) {
     const key = requested.trim().toLowerCase()
+    // Subflow containers are not registry blocks, but the server metadata tool serves them
+    // (SPECIAL_BLOCKS_METADATA) and edit_workflow needs them looked up first.
+    if (SUBFLOW_BLOCK_TYPES.has(key)) {
+      resolved.push({ requested, blockType: key, triggerMode: false })
+      continue
+    }
     const exact = byType.get(key)
     if (exact) {
       resolved.push({ requested, blockType: exact.id, triggerMode: false })
@@ -193,6 +199,8 @@ export function resolveBlockTypeRequests(
 
   return { resolved, notFound }
 }
+
+const SUBFLOW_BLOCK_TYPES = new Set(['loop', 'parallel'])
 
 function resolveTriggerSuffixAlias(
   key: string,

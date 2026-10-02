@@ -433,6 +433,22 @@ function enrichInvokeIntegrationResultForLlm(
  * Shapes tool output for the LLM — omits heavy workflowState, keeps repair signals,
  * and compact-serializes. Oversized payloads are offloaded when an artifact store is provided.
  */
+/**
+ * The payload the model sees for a tool call. A failure whose message lives only in `error`
+ * (result `{}` or missing) used to reach the model as `{}` — it could not tell what went wrong
+ * and retried blindly.
+ */
+export function modelVisibleToolResult(toolResult: {
+  success: boolean
+  result?: unknown
+  error?: string
+}): unknown {
+  if (toolResult.success || !toolResult.error) return toolResult.result
+  const record = asRecord(toolResult.result)
+  if (typeof record.error === 'string' && record.error.trim()) return toolResult.result
+  return { ...record, success: false, error: toolResult.error }
+}
+
 export function formatToolResultForLlm(
   toolName: string,
   result: unknown,
@@ -539,14 +555,17 @@ export function formatToolResultForLlm(
       next.copilotSanitizedWorkflowState = undefined
       next.needsFollowUpPopulate = true
       next.followUpHint =
-        'New workflow created. Do NOT create_workflow or get_workflow_context again. Call get_blocks_metadata once with every type you will add (e.g. { blockIds: ["agent","human_in_the_loop"] }), then edit_workflow using startBlockId. Up to 5 sequential edit_workflow calls are OK. Human review uses type human_in_the_loop.'
+        'New workflow created. Do NOT create_workflow or get_workflow_context again. Call get_blocks_metadata once with every type you will add (e.g. { blockIds: ["agent","human_in_the_loop_v2"] }), then edit_workflow using startBlockId. Up to 5 sequential edit_workflow calls are OK. Human review uses type human_in_the_loop_v2.'
     }
 
     formatted = next
   } else if (toolName === 'get_blocks_metadata') {
     const record = asRecord(result)
     formatted = record
-    if (record.success !== false) {
+    const hasMetadata = Object.keys(record).some(
+      (key) => !['success', 'error', 'message'].includes(key)
+    )
+    if (record.success !== false && hasMetadata) {
       formatted = {
         ...record,
         followUpHint:

@@ -25,7 +25,7 @@ const CORE_LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   {
     name: 'edit_workflow',
     description:
-      'Applies block operations to a workflow (add, edit, delete). Requires workflowId from create_workflow or an open workflow. CONNECTIONS: never add edges as separate operations or type "edge". Wire on the SOURCE (upstream) block via params.connections — e.g. { source: "<target-block-id>" } on the Start block to connect Start → Agent. Never put connections on the downstream block and never point connections at Start/trigger. To reverse a wire, put connections on the new source only. Call get_blocks_metadata ONCE with every block type you need before the first edit. After create_workflow this turn, do not create again or call get_workflow_context — edit immediately. Up to 5 sequential edit_workflow calls are OK for multi-agent graphs. Human review uses type human_in_the_loop. App-owned verification may run after success — do not claim verified yourself. Always pass operations as a non-empty array.',
+      'Applies block operations to a workflow (add, edit, delete). Requires workflowId from create_workflow or an open workflow. CONNECTIONS: never add edges as separate operations or type "edge". Wire on the SOURCE (upstream) block via params.connections — e.g. { source: "<target-block-id>" } on the Start block to connect Start → Agent. Never put connections on the downstream block and never point connections at Start/trigger. To reverse a wire, put connections on the new source only. Call get_blocks_metadata ONCE with every block type you need before the first edit. After create_workflow this turn, do not create again or call get_workflow_context — edit immediately. Up to 5 sequential edit_workflow calls are OK for multi-agent graphs. Human review uses type human_in_the_loop_v2. App-owned verification may run after success — do not claim verified yourself. Always pass operations as a non-empty array.',
     parameters: {
       type: 'object',
       properties: {
@@ -122,7 +122,7 @@ const CORE_LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   {
     name: 'get_available_blocks',
     description:
-      'Lists all block types available in this Arena deployment (id, name, category, auth mode). Pass { "category": "triggers" } for every block that can start a workflow, including integration triggers (Telegram, WhatsApp, Gmail, …) that are added with triggerMode: true.',
+      'Lists all block types available in this workspace (id, name, category, auth mode). Pass { "category": "triggers" } for every block that can start a workflow, including integration triggers (Telegram, WhatsApp, Gmail, …) that are added with triggerMode: true.',
     parameters: {
       type: 'object',
       properties: {
@@ -143,7 +143,7 @@ const CORE_LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   {
     name: 'invoke_integration_tool',
     description:
-      'Runs a Arena integration tool directly (no workflow). Pass a registered toolId (e.g. exa_search, exa_answer, firecrawl_scrape, gmail_draft_v2) — listing first is not required for known ids. Call list_integration_tools only to discover operations for a service. For live/current web data prefer exa_answer (factual Q&A with citations) or exa_search (result lists) — same as the Exa block. Workspace env keys, BYOK, and hosted keys are applied automatically.',
+      'Runs an integration tool directly (no workflow). Pass a registered toolId (e.g. exa_search, exa_answer, firecrawl_scrape, gmail_draft_v2) — listing first is not required for known ids. Call list_integration_tools only to discover operations for a service. For live/current web data prefer exa_answer (factual Q&A with citations) or exa_search (result lists) — same as the Exa block. Workspace env keys, BYOK, and hosted keys are applied automatically.',
     parameters: {
       type: 'object',
       properties: {

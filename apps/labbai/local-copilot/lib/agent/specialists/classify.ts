@@ -89,7 +89,8 @@ const DOMAIN_PATTERNS: DomainPattern[] = [
     ],
   },
   {
-    domain: 'scheduled_task',
+    // Recurring work = a workflow with a Schedule trigger (no scheduled-task tools here).
+    domain: 'workflow',
     weight: 3,
     patterns: [/\b(schedule|cron|recurring|every\s+day|scheduled\s+task)\b/i],
   },
@@ -148,8 +149,22 @@ export function classifyLocalCopilotIntent(message: string): LocalCopilotIntent 
   return { primary: topDomain, secondary: secondaries, useFullCatalog: false }
 }
 
+/**
+ * Turns whose main job is building something. Their pre-pass "research" match is almost
+ * always a false positive (words like "docs", "web", "what is", "prefer") and the pre-pass
+ * spent the shared round budget before the parent built anything.
+ */
+const BUILD_PRIMARY_DOMAINS = new Set<LocalCopilotSpecialistDomain>([
+  'workflow',
+  'run',
+  'deploy',
+  'table',
+  'knowledge',
+])
+
 export function shouldRunSpecialistPass(intent: LocalCopilotIntent): boolean {
   if (intent.useFullCatalog) return false
+  if (BUILD_PRIMARY_DOMAINS.has(intent.primary)) return false
   if (intent.secondary.includes('research') || intent.secondary.includes('auth')) return true
   if (
     intent.primary === 'research' &&
@@ -232,6 +247,7 @@ export function selectParallelSubagentDomains(
   intent: LocalCopilotIntent
 ): LocalCopilotCloudSpecialistDomain[] {
   if (intent.useFullCatalog) return []
+  if (BUILD_PRIMARY_DOMAINS.has(intent.primary)) return []
 
   const candidates = new Set<LocalCopilotCloudSpecialistDomain>()
   if (intent.primary !== 'general') candidates.add(intent.primary)

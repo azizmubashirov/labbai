@@ -87,6 +87,25 @@ export function resolveLocalCopilotMaxRoundsPerTurn(
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : DEFAULT_MAX_MODEL_ROUNDS_PER_TURN
 }
 
+/** Per-turn spend cap (USD) when `COPILOT_MAX_TURN_COST_USD` is unset. */
+export const DEFAULT_MAX_TURN_COST_USD = 0.6
+
+/**
+ * Model spend allowed per user message, in USD (`COPILOT_MAX_TURN_COST_USD`, default
+ * {@link DEFAULT_MAX_TURN_COST_USD}). Once a turn's recorded cost reaches it no further model
+ * call is made and the turn pauses with Continue / Stop, like the round cap. `0` or a
+ * negative value disables the cap.
+ */
+export function resolveLocalCopilotMaxTurnCostUsd(
+  override = process.env.COPILOT_MAX_TURN_COST_USD
+): number {
+  const trimmed = override?.trim()
+  if (!trimmed) return DEFAULT_MAX_TURN_COST_USD
+  const parsed = Number.parseFloat(trimmed)
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_TURN_COST_USD
+  return parsed > 0 ? parsed : Number.POSITIVE_INFINITY
+}
+
 const ALLOWED_PROVIDERS: readonly LocalCopilotProviderId[] = [
   'openai',
   'cloudflare',

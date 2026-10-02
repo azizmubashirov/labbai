@@ -227,8 +227,20 @@ export async function executeCreateWorkflow(
     const result = await executeCopilotWorkflowUseCase(context, createWorkflow, {
       workspaceId,
       name,
+      ...(typeof params?.description === 'string' && params.description.trim()
+        ? { description: params.description.trim() }
+        : {}),
       ...(canonicalFolderPath !== undefined ? { folderPath: canonicalFolderPath } : { folderId }),
     })
+    // The seeded Start block (a new workflow holds only it) — the model wires its first
+    // connection from it.
+    const seededBlocks = Object.entries(result.normalizedState.blocks || {})
+    const startBlockId =
+      seededBlocks.length === 1
+        ? seededBlocks[0][0]
+        : seededBlocks.find(([, block]) =>
+            ['start_trigger', 'starter'].includes((block as { type?: string }).type ?? '')
+          )?.[0]
     const copilotSanitizedWorkflowState = sanitizeForCopilot({
       blocks: result.normalizedState.blocks || {},
       edges: result.normalizedState.edges || [],
@@ -243,6 +255,7 @@ export async function executeCreateWorkflow(
         workflowName: result.workflow.name,
         workspaceId: result.workflow.workspaceId,
         folderId: result.workflow.folderId,
+        ...(startBlockId ? { startBlockId } : {}),
         ...(copilotSanitizedWorkflowState ? { copilotSanitizedWorkflowState } : {}),
       },
     }

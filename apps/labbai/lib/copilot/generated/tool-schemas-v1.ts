@@ -1356,7 +1356,7 @@ export const TOOL_RUNTIME_SCHEMAS: Record<string, ToolRuntimeSchemaEntry> = {
       properties: {
         integration: {
           description:
-            'The integration service name — the folder under components/integrations/ (e.g. "slack", "gmail", "google_sheets"). Returns every operation\'s id, name, and description for that service.',
+            'The integration service name — the folder under components/integrations/ (e.g. "gmail", "google_sheets", "hubspot"). Returns every operation\'s id, name, and description for that service.',
           type: 'string',
         },
       },
@@ -1598,7 +1598,7 @@ export const TOOL_RUNTIME_SCHEMAS: Record<string, ToolRuntimeSchemaEntry> = {
             connectorType: {
               type: 'string',
               description:
-                "Connector type from registry, e.g. 'confluence', 'google_drive', 'notion' (required for add_connector). Read knowledgebases/connectors/{type}.json for the config schema.",
+                "Connector type from registry, e.g. 'google_drive', 'google_docs', 'notion' (required for add_connector). Read knowledgebases/connectors/{type}.json for the config schema.",
             },
             credentialId: {
               type: 'string',
@@ -1927,7 +1927,7 @@ export const TOOL_RUNTIME_SCHEMAS: Record<string, ToolRuntimeSchemaEntry> = {
         providerName: {
           type: 'string',
           description:
-            "The OAuth provider to connect. Pass the integration's provider value (e.g. `google-email`, `slack`); the service display name or providerId resolves case-insensitively/fuzzily, so avoid bare base providers like `google`.",
+            "The OAuth provider to connect. Pass the integration's provider value (e.g. `google-email`, `hubspot`); the service display name or providerId resolves case-insensitively/fuzzily, so avoid bare base providers like `google`.",
         },
       },
       required: ['providerName'],
@@ -1941,7 +1941,7 @@ export const TOOL_RUNTIME_SCHEMAS: Record<string, ToolRuntimeSchemaEntry> = {
         providerName: {
           type: 'string',
           description:
-            "The OAuth provider to connect. Pass the integration's provider value (e.g. `google-email`, `slack`).",
+            "The OAuth provider to connect. Pass the integration's provider value (e.g. `google-email`, `hubspot`).",
         },
       },
       required: ['providerName'],
@@ -3073,7 +3073,7 @@ export const TOOL_RUNTIME_SCHEMAS: Record<string, ToolRuntimeSchemaEntry> = {
         },
         service: {
           description:
-            'Optional canonical service name, such as "gmail", "slack", or "google_sheets".',
+            'Optional canonical service name, such as "gmail", "hubspot", or "google_sheets".',
           type: 'string',
         },
       },

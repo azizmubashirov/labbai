@@ -23,6 +23,12 @@ export const MAX_SPECIALIST_INVOCATIONS = 8
 export const SPECIALIST_TIMEOUT_MS = 90_000
 /** Model rounds per user message (main + specialists + subagents) when unconfigured. */
 export const DEFAULT_MAX_MODEL_ROUNDS_PER_TURN = 20
+/**
+ * Of those, specialists together may take at most this many — the rest stays with the main
+ * agent, which does the building. Specialists used to spend 13 of 20 rounds before the main
+ * agent created anything, so the turn paused with nothing built.
+ */
+export const DEFAULT_MAX_SPECIALIST_ROUNDS_PER_TURN = 8
 
 export interface SpecialistBudgetOptions {
   maxDepth?: number
@@ -30,6 +36,9 @@ export interface SpecialistBudgetOptions {
   maxInvocations?: number
   timeoutMs?: number
   maxModelRounds?: number
+  maxSpecialistRounds?: number
+  /** True once the turn's spend reached its cap — no further model call is made. */
+  isCostCapReached?: () => boolean
 }
 
 export interface SpecialistBudgetEnterOk {
@@ -55,13 +64,15 @@ export interface SpecialistBudget {
   readonly maxDepthReached: number
   readonly maxModelRounds: number
   readonly modelRoundCount: number
-  /** True once a model round was refused because the turn's round budget is spent. */
+  /** True once a model round was refused because the turn's round or cost budget is spent. */
   readonly modelRoundCapReached: boolean
+  /** True when that refusal came from the per-turn cost cap. */
+  readonly costCapReached: boolean
   /**
    * Takes one model round from the turn's shared budget. Returns false (and sends
    * nothing) once `maxModelRounds` rounds were taken this turn.
    */
-  tryConsumeModelRound: () => boolean
+  tryConsumeModelRound: (caller?: 'main' | 'specialist') => boolean
   /**
    * Reserves one specialist slot at `parentDepth + 1`.
    * Main agent uses `tryEnter(0)`; a specialist at depth N nests with `tryEnter(N)`.
@@ -92,8 +103,14 @@ export function createSpecialistBudget(options: SpecialistBudgetOptions = {}): S
   let invocationCount = 0
   let activeCount = 0
   let maxDepthReached = 0
+  const maxSpecialistRounds = Math.max(
+    1,
+    Math.floor(options.maxSpecialistRounds ?? DEFAULT_MAX_SPECIALIST_ROUNDS_PER_TURN)
+  )
   let modelRoundCount = 0
+  let specialistRoundCount = 0
   let modelRoundCapReached = false
+  let costCapReached = false
 
   const budget: SpecialistBudget = {
     maxDepth,
@@ -116,12 +133,23 @@ export function createSpecialistBudget(options: SpecialistBudgetOptions = {}): S
     get modelRoundCapReached() {
       return modelRoundCapReached
     },
-    tryConsumeModelRound() {
+    get costCapReached() {
+      return costCapReached
+    },
+    tryConsumeModelRound(caller = 'main') {
+      if (options.isCostCapReached?.()) {
+        costCapReached = true
+        modelRoundCapReached = true
+        return false
+      }
       if (modelRoundCount >= maxModelRounds) {
         modelRoundCapReached = true
         return false
       }
+      // A specialist out of its share stops; the main agent keeps its rounds.
+      if (caller === 'specialist' && specialistRoundCount >= maxSpecialistRounds) return false
       modelRoundCount += 1
+      if (caller === 'specialist') specialistRoundCount += 1
       return true
     },
     tryEnter(parentDepth = 0): SpecialistBudgetEnterResult {

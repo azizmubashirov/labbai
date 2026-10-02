@@ -44,6 +44,7 @@ import {
   detectMandatoryFollowUpFromExecution,
   formatToolResultForLlm,
   type MandatoryFollowUp,
+  modelVisibleToolResult,
   resolveMandatoryFollowUps,
   sortToolCallsForExecution,
 } from '@/local-copilot/lib/tools/format-tool-result'
@@ -64,11 +65,11 @@ const logger = createLogger('LocalCopilotSpecialistPass')
  * plus discovery. Two office files in one pass need more than a handful of rounds.
  */
 export const SPECIALIST_PASS_MAX_ROUNDS = 10
-const MAX_SPECIALIST_FORCED_FOLLOW_UP_ROUNDS = 4
+const MAX_SPECIALIST_FORCED_FOLLOW_UP_ROUNDS = 2
 export const SPECIALIST_FINDINGS_MAX_CHARS = 12_000
 /** Appended to a specialist's findings when the turn's model round budget ran out. */
 export const SPECIALIST_ROUND_CAP_NOTE =
-  '[Stopped: the per-turn step limit was reached before this specialist finished.]'
+  '[Stopped: the step limit for specialists was reached before this specialist finished — continue the remaining work yourself.]'
 
 export interface RunSpecialistPassParams {
   domain: LocalCopilotSpecialistDomain
@@ -290,7 +291,7 @@ export async function executeSpecialistLoop(
     for (let round = 0; round < maxRounds; round++) {
       if (signal.aborted) break
       /** Every specialist round draws on the turn's shared model round budget. */
-      if (!params.budget.tryConsumeModelRound()) {
+      if (!params.budget.tryConsumeModelRound('specialist')) {
         stoppedAtRoundCap = true
         break
       }
@@ -540,11 +541,12 @@ export async function executeSpecialistLoop(
           const refreshed = await refreshToolContext(params.toolCtx)
           params.toolCtx.structuredContext = refreshed.structuredContext
           params.toolCtx.workflowRevision = refreshed.workflowRevision
+          params.toolCtx.workflowRevisionWorkflowId = refreshed.workflowRevisionWorkflowId
         }
 
         const llmPayload = formatToolResultForLlm(
           call.name,
-          toolResult.result ?? toolResult.error,
+          modelVisibleToolResult(toolResult),
           {
             artifactStore: params.toolCtx.artifactStore,
           }

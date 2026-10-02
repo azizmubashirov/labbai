@@ -23,8 +23,7 @@ import {
 } from '@/local-copilot/lib/agent/specialists/classify'
 import {
   domainSystemHint,
-  PARENT_STABLE_TOOL_NAMES,
-  resolveHybridParentTools,
+  resolveFixedParentTools,
 } from '@/local-copilot/lib/agent/specialists/domains'
 import { runParallelSubagents } from '@/local-copilot/lib/agent/specialists/parallel-subagents'
 import { runParentSpecialistToolCalls } from '@/local-copilot/lib/agent/specialists/parent-calls'
@@ -54,6 +53,7 @@ import {
   getLocalCopilotConfig,
   isLocalCopilotEngagementStatusEnabled,
   resolveLocalCopilotMaxRoundsPerTurn,
+  resolveLocalCopilotMaxTurnCostUsd,
 } from '@/local-copilot/lib/config'
 import { createArtifactStore, persistArtifacts } from '@/local-copilot/lib/context/artifacts'
 import {
@@ -167,6 +167,7 @@ import {
   detectMandatoryFollowUpFromExecution,
   formatToolResultForLlm,
   type MandatoryFollowUp,
+  modelVisibleToolResult,
   resolveMandatoryFollowUps,
   sortToolCallsForExecution,
 } from '@/local-copilot/lib/tools/format-tool-result'
@@ -621,12 +622,8 @@ async function* runLocalCopilotAgentTurn(
     resumingAfterRoundCap && taskState?.objective ? taskState.objective : params.message
   )
   const specialistTools = getParentSpecialistToolDefinitions()
-  const hybridTools = resolveHybridParentTools({
-    allTools,
-    intent,
-    specialistTools,
-  })
-  const usedFullCatalog = hybridTools.usedFullCatalog
+  const parentTools = resolveFixedParentTools({ allTools, specialistTools })
+  const usedFullCatalog = false
   /**
    * Prompt-cache layout (`providers/prompt-cache.ts`): the rules are the full static prompt
    * for every intent (no dynamic text), and the tools come in a fixed order — the stable
@@ -634,7 +631,11 @@ async function* runLocalCopilotAgentTurn(
    * prefix is byte-identical across accounts, chats and days. Everything per turn follows as
    * separate system messages.
    */
-  const orderedTools = orderToolsForPromptCache(hybridTools.tools, PARENT_STABLE_TOOL_NAMES)
+  // Every parent tool is stable now: one cached prefix (tools + rules) for all turns.
+  const orderedTools = orderToolsForPromptCache(
+    parentTools,
+    new Set(parentTools.map((tool) => tool.name))
+  )
   const tools = orderedTools.tools
   const staticSystemPrompt = buildFullLocalCopilotSystemPrompt()
   const promptCache = buildPromptCacheLayout({
@@ -688,8 +689,11 @@ async function* runLocalCopilotAgentTurn(
   }
 
   /** Specialist slots plus the turn's shared model round budget (main + specialists). */
+  const maxTurnCostUsd = resolveLocalCopilotMaxTurnCostUsd()
   const specialistBudget = createSpecialistBudget({
     maxModelRounds: resolveLocalCopilotMaxRoundsPerTurn(),
+    // Spend cap: checked before every model call (main and specialists).
+    isCostCapReached: () => turnCost.summarize().total >= maxTurnCostUsd,
   })
   timing.mark('promptReady')
 
@@ -707,8 +711,7 @@ async function* runLocalCopilotAgentTurn(
     promptBudgetSoftCapped: promptBudget.softCapped,
     tokenCountModel,
     toolDefinitionCount: tools.length,
-    leafToolCount: hybridTools.leafToolCount,
-    specialistEntryCount: hybridTools.specialistEntryCount,
+    parentToolCount: parentTools.length,
     toolCatalogCount: allTools.length,
     microcompactClearedCount: historyMicrocompact.clearedCount,
     microcompactCharsFreed: historyMicrocompact.charsFreed,
@@ -855,7 +858,10 @@ async function* runLocalCopilotAgentTurn(
   if (resolvedWorkflowId) {
     const { loadWorkflowRevision } = await import('@/local-copilot/lib/writes/workflow-access')
     const loaded = await loadWorkflowRevision(resolvedWorkflowId, params.workspaceId)
-    if (loaded) toolCtx.workflowRevision = loaded.revision
+    if (loaded) {
+      toolCtx.workflowRevision = loaded.revision
+      toolCtx.workflowRevisionWorkflowId = resolvedWorkflowId
+    }
   }
 
   /** Loads the heavy tool executor graph on first tool call only. */
@@ -1007,6 +1013,10 @@ async function* runLocalCopilotAgentTurn(
   let stagnationStopMessage: string | null = null
   /** The turn's model round budget ran out before the model could answer. */
   let roundCapReached = false
+  /** Stagnation nudges given while follow-ups were pending (more than one stops the turn). */
+  let stagnationFollowUpNudges = 0
+  /** In-turn microcompact runs once the conversation reaches this size (see below). */
+  let nextMicrocompactAtTokens = LOCAL_COPILOT_IN_TURN_MICROCOMPACT_MIN_TOKENS
   /** Tool results were added that no model round has read yet. */
   let awaitingModelAfterTools = false
   let stoppedBySpendCap = false
@@ -1484,7 +1494,8 @@ async function* runLocalCopilotAgentTurn(
           outcome.output
         )
         if (stagnationHit) {
-          if (pendingFollowUps.length > 0) {
+          // Nudge toward the pending follow-up once per turn; a repeat stall stops the turn.
+          if (pendingFollowUps.length > 0 && stagnationFollowUpNudges++ < 1) {
             deferredSystemMessages.push({
               role: 'system',
               content:
@@ -1665,7 +1676,7 @@ async function* runLocalCopilotAgentTurn(
 
             const formattedToolResult = formatToolResultForLlm(
               parallelCall.name,
-              toolResult.result,
+              modelVisibleToolResult(toolResult),
               {
                 artifactStore: toolCtx.artifactStore,
               }
@@ -1701,7 +1712,8 @@ async function* runLocalCopilotAgentTurn(
               toolResult.result
             )
             if (stagnationHit) {
-              if (pendingFollowUps.length > 0) {
+              // Nudge toward the pending follow-up once per turn; a repeat stall stops the turn.
+              if (pendingFollowUps.length > 0 && stagnationFollowUpNudges++ < 1) {
                 deferredSystemMessages.push({
                   role: 'system',
                   content:
@@ -1890,6 +1902,16 @@ async function* runLocalCopilotAgentTurn(
           toolCtx.workflowId
         if (resolvedWorkflowId) {
           toolCtx.workflowId = resolvedWorkflowId
+          // Our own write (set_block_enabled, variables, deploy…) moved updatedAt; take the
+          // new revision so the next edit_workflow is not rejected as stale.
+          const { loadWorkflowRevision } = await import(
+            '@/local-copilot/lib/writes/workflow-access'
+          )
+          const loaded = await loadWorkflowRevision(resolvedWorkflowId, params.workspaceId)
+          if (loaded) {
+            toolCtx.workflowRevision = loaded.revision
+            toolCtx.workflowRevisionWorkflowId = resolvedWorkflowId
+          }
         }
       }
 
@@ -1905,6 +1927,7 @@ async function* runLocalCopilotAgentTurn(
         const refreshed = await refreshToolContext(toolCtx)
         toolCtx.structuredContext = refreshed.structuredContext
         toolCtx.workflowRevision = refreshed.workflowRevision
+        toolCtx.workflowRevisionWorkflowId = refreshed.workflowRevisionWorkflowId
       } else if (
         toolResult.success &&
         (isWorkflowScopedDelegatedTool(call.name) || call.name === 'validate_workflow')
@@ -2050,9 +2073,11 @@ async function* runLocalCopilotAgentTurn(
         }
       }
 
-      const formattedToolResult = formatToolResultForLlm(call.name, toolResult.result, {
-        artifactStore: toolCtx.artifactStore,
-      })
+      const formattedToolResult = formatToolResultForLlm(
+        call.name,
+        modelVisibleToolResult(toolResult),
+        { artifactStore: toolCtx.artifactStore }
+      )
       const mandatoryFollowUp = detectMandatoryFollowUpFromExecution(
         call.name,
         toolResult.success,
@@ -2188,8 +2213,9 @@ async function* runLocalCopilotAgentTurn(
         toolResult.result
       )
       if (stagnationHit) {
-        // Never abort while mandatory follow-ups (e.g. populate after create) remain.
-        if (pendingFollowUps.length > 0) {
+        // While mandatory follow-ups (e.g. populate after create) remain, nudge once per
+        // turn; a repeat stall stops the turn instead of running to the round cap.
+        if (pendingFollowUps.length > 0 && stagnationFollowUpNudges++ < 1) {
           deferredSystemMessages.push({
             role: 'system',
             content:
@@ -2240,13 +2266,20 @@ async function* runLocalCopilotAgentTurn(
     }
 
     // Compact only once the tail is large: every clear rewrites the cached prefix.
+    // Hysteresis: after a compaction wait for the conversation to grow again before the next
+    // one, so the cached tail is rewritten in rare batches rather than every round.
     const microcompactStats =
-      estimateChatMessagesTokens(messages, tokenCountModel) >=
-      LOCAL_COPILOT_IN_TURN_MICROCOMPACT_MIN_TOKENS
+      estimateChatMessagesTokens(messages, tokenCountModel) >= nextMicrocompactAtTokens
         ? applyMicrocompactInPlace(messages, {
             preserveLatestToolNames: MICROCOMPACT_PRESERVE_LATEST_TOOL_NAMES,
           })
         : { clearedCount: 0, charsFreed: 0 }
+    if (microcompactStats.clearedCount > 0) {
+      nextMicrocompactAtTokens = Math.max(
+        LOCAL_COPILOT_IN_TURN_MICROCOMPACT_MIN_TOKENS,
+        estimateChatMessagesTokens(messages, tokenCountModel) + MICROCOMPACT_REGROWTH_TOKENS
+      )
+    }
     if (microcompactStats.clearedCount > 0) {
       logger.info('Arena Copilot microcompact applied', {
         round,
@@ -2709,3 +2742,6 @@ function truncateForSpecialist(markdown: string): string {
   if (markdown.length <= SPECIALIST_WORKSPACE_CONTEXT_MAX_CHARS) return markdown
   return `${markdown.slice(0, SPECIALIST_WORKSPACE_CONTEXT_MAX_CHARS)}\n…(truncated)`
 }
+
+/** Growth required after an in-turn compaction before the next one. */
+const MICROCOMPACT_REGROWTH_TOKENS = 20_000

@@ -329,8 +329,14 @@ export async function executeMothershipDelegatedTool(
     enrichCreateFileArgs(enrichedArgs)
   }
 
-  if (toolName === 'knowledge_base') {
-    normalizeKnowledgeBaseArgs(enrichedArgs)
+  if (toolName === 'knowledge_base' || toolName === 'user_table') {
+    normalizeNestedOperationArgs(enrichedArgs)
+  }
+
+  // share_file reads `action`; models (and older descriptions) say `operation`.
+  if (toolName === 'share_file' && enrichedArgs.action === undefined && enrichedArgs.operation) {
+    enrichedArgs.action = enrichedArgs.operation
+    delete enrichedArgs.operation
   }
 
   // `rm` requires a toolTitle; the local delete tools never asked the model for one.
@@ -505,14 +511,14 @@ async function executeCreateFileWithContent(
   }
 }
 
-const KNOWLEDGE_BASE_TOP_LEVEL_KEYS = new Set(['operation', 'args', 'workflowId', 'toolTitle'])
+const NESTED_OPERATION_TOP_LEVEL_KEYS = new Set(['operation', 'args', 'workflowId', 'toolTitle'])
 
 /**
- * `manage_knowledge_base` takes `{ operation, args: {...} }`. Models often send `args` as a
- * JSON string or put the fields beside `operation`; both failed input validation
- * ("/args must be object").
+ * `manage_knowledge_base` and `user_table` take `{ operation, args: {...} }`. Models often send
+ * `args` as a JSON string or put the fields beside `operation`; both failed input validation
+ * ("/args must be object", "must have required property 'args'").
  */
-function normalizeKnowledgeBaseArgs(args: Record<string, unknown>): void {
+function normalizeNestedOperationArgs(args: Record<string, unknown>): void {
   if (typeof args.args === 'string') {
     try {
       const parsed = JSON.parse(args.args) as unknown
@@ -524,7 +530,7 @@ function normalizeKnowledgeBaseArgs(args: Record<string, unknown>): void {
   if (!args.args || typeof args.args !== 'object' || Array.isArray(args.args)) {
     const nested: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(args)) {
-      if (!KNOWLEDGE_BASE_TOP_LEVEL_KEYS.has(key)) nested[key] = value
+      if (!NESTED_OPERATION_TOP_LEVEL_KEYS.has(key)) nested[key] = value
     }
     for (const key of Object.keys(nested)) delete args[key]
     args.args = nested

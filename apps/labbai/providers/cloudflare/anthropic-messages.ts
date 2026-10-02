@@ -616,8 +616,15 @@ export async function sendChatCompletionRequest(
   if (!route) return send(url, init)
 
   let response = await send(route.messagesUrl, route.init)
+  let rejectionText: string | undefined
   if (FALLBACK_STATUSES.has(response.status) && route.shortTtlInit) {
-    const errorText = await response.text().catch(() => '')
+    rejectionText = await response.text().catch(() => '')
+  }
+  // Only a rejection that is about the cache TTL turns 1-hour caching off; any other 400
+  // (a bad field, a tool_result shape) used to disable it for 15 minutes too, silently
+  // doubling the cost of every later request.
+  if (rejectionText !== undefined && route.shortTtlInit && /ttl|cache/i.test(rejectionText)) {
+    const errorText = rejectionText
     oneHourTtlRejectedUntil.set(route.model, Date.now() + ONE_HOUR_TTL_COOLDOWN_MS)
     logger.warn('Cloudflare /messages rejected the 1-hour cache request; retrying with 5 minutes', {
       model: route.model,
@@ -625,9 +632,10 @@ export async function sendChatCompletionRequest(
       error: errorText.slice(0, 500),
     })
     response = await send(route.messagesUrl, route.shortTtlInit)
+    rejectionText = undefined
   }
   if (FALLBACK_STATUSES.has(response.status)) {
-    const errorText = await response.text().catch(() => '')
+    const errorText = rejectionText ?? (await response.text().catch(() => ''))
     messagesFallbackUntil.set(route.model, Date.now() + MESSAGES_FALLBACK_COOLDOWN_MS)
     logger.warn('Cloudflare /messages rejected the request; using chat completions', {
       model: route.model,

@@ -36,6 +36,7 @@ export interface CreateWorkflowParams {
   folderPath?: string
   /** Legacy executor input. New tool calls use folderPath and resolve the ID internally. */
   folderId?: string
+  description?: string
 }
 
 export interface CreateFolderParams {

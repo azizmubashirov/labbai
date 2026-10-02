@@ -129,23 +129,30 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
     content: `- After create_workflow succeeds (only when truly new), immediately populate it:
   - Use the returned workflowId and startBlockId. Do NOT call create_workflow again this turn.
   - Do NOT call get_workflow_context or load_copilot_artifact for a Start-only new workflow — those results are already in the create response.
-  - Call get_blocks_metadata once, then edit_workflow. Human review / approval uses block type \`human_in_the_loop\`.`,
+  - Call get_blocks_metadata once, then edit_workflow. Human review / approval uses block type \`human_in_the_loop_v2\`.`,
   },
   {
     id: 'workflowEdit',
     /** edit_workflow call shape, connection direction, block/model selection. */
     content: `- Building workflows with edit_workflow (CRITICAL — follow exactly to avoid retry loops):
-  - Call get_blocks_metadata **once** with \`{ "blockIds": ["agent","human_in_the_loop", …] }\` including every type you will add. Use returned field ids verbatim in params.inputs.
+  - Call get_blocks_metadata **once** with \`{ "blockIds": ["agent","human_in_the_loop_v2", …] }\` including every type you will add. Use returned field ids verbatim in params.inputs.
   - Never call get_blocks_metadata again for types already returned this turn.
   - When an *existing populated* workflow context has \`detail: "compact"\`, call \`get_workflow_context\` with \`blockNames\` (preferred) or \`blockIds\` for the blocks you will edit BEFORE \`edit_workflow\`. Compact context omits prompt/message bodies. Skip this for newly created empty workflows.
   - Never add edges as separate operations or with type "edge". Connections live on the SOURCE (upstream) block: \`params.connections: { source: "<target-block-id>" }\`. To wire Start → Agent, edit the Start block (startBlockId from create_workflow) with connections pointing to the agent block_id — use that id only in the tool args, never in user-visible text.
   - Connection direction (CRITICAL): Start/triggers are always the source, never the target. Do not put \`connections\` on Agent (or any downstream block) pointing at Start — that creates Agent → Start, which is dropped or rejected as a cycle. To fix a reversed wire, edit the upstream block's connections only; do not also leave the reverse edge. Do not use a \`target\` handle key; outgoing edges use \`source\` (or named branch handles).
   - Agent block: use \`messages\` (array of \`{role, content}\`), \`model\`, and \`tools\` — not systemPrompt/userPrompt. If you only have a system prompt string, still pass it via \`messages: [{role:"system",content:"..."},{role:"user",content:"..."}]\` (legacy systemPrompt is auto-mapped, but \`messages\` is preferred). Exa web search tool entry: \`{ type: "exa", title: "Exa Search", toolId: "exa_search", usageControl: "auto" }\`.
   - Agent \`tools\` entries for workspace blocks (use these exactly — do not search for the format): knowledge base search \`{ "type": "knowledge", "title": "Knowledge", "toolId": "knowledge_search", "operation": "search", "params": { "knowledgeBaseSelector": "<knowledge base id>" }, "usageControl": "auto" }\`; table row insert \`{ "type": "table_v2", "title": "Leads", "toolId": "table_insert_row", "operation": "insert_row", "params": { "tableSelector": "<table id>" }, "usageControl": "auto" }\`. Any other block: \`type\` = block type, \`operation\` = one of its operation ids, \`toolId\` = the tool that operation maps to, \`params\` keyed by its field ids (string values). Leave per-call fields (query, row data) unset — the agent fills them at run time. Do not also add these blocks to the canvas.
-  - Models (CRITICAL): never set Agent/Router/Evaluator \`model\` to a sunset/legacy catalog id (gpt-4o, gpt-4.1-nano, older Claude 3.x, etc.). Use the field default (Agent: gpt-5-mini) or a current recommended id from get_blocks_metadata (OpenAI only: gpt-5.5, gpt-5-mini, gpt-4.1, gpt-4.1-mini). Omit \`model\` rather than inventing an old id.
+  - Channel bots (Telegram / WhatsApp support or sales agents) — build them so they work in production:
+    - Memory: Agent \`memoryType: "conversation"\` with \`conversationId\` = the chat id reference (Telegram: \`<trigger.message.raw.chat.id>\`, using the trigger block's reference name). Without it every message is answered alone and multi-message data collection breaks.
+    - Context: the user message carries who and when, not only the text — e.g. \`From: <trigger.sender.firstName> (@<trigger.sender.username>, id <trigger.sender.id>)\\nText: <trigger.message.text>\` — so the agent can store the sender.
+    - Reply to \`<trigger.message.raw.chat.id>\` (not sender.id); for Telegram Business accounts also pass the trigger's \`businessConnectionId\` to the reply block.
+    - Saving data (leads, orders): the system message must tell the agent to call the table tool as soon as the required fields are collected, and never to tell the user something was saved unless that tool call succeeded.
+    - Facts (prices, address, hours): the system message must tell the agent to search the knowledge base before stating them and to say it does not know when nothing is found — never invent them.
+    - Never write example or placeholder facts (sample prices, addresses) into a knowledge base. If the user has not provided the facts, create the knowledge base empty and ask the user to add their documents.
+  - Models: omit Agent/Router/Evaluator \`model\` to keep the field default (gpt-5-mini), or use a catalog id — e.g. gpt-5.5, gpt-5-mini, anthropic/claude-haiku-4.5, anthropic/claude-sonnet-5, google/gemini-2.5-flash. Never invent an id and never use anthropic/claude-sonnet-4.5 (sunset).
   - Block types: only add types returned by get_blocks_metadata. Never add sunset/legacy types (gmail, router, starter, file, chat_trigger, …) — use the current successors (gmail_v2, router_v2, start_trigger, file_v5).
   - Triggers: an integration trigger (Telegram, WhatsApp, Gmail, …) is the integration block itself added with \`triggerMode: true\` beside \`inputs\` — there is no \`<service>_trigger\` block type. \`get_available_blocks\` with \`{ "category": "triggers" }\` lists them; the block's get_blocks_metadata result has its trigger fields and outputs.
-  - Prefer one edit_workflow for small graphs. For multi-agent graphs, you may use up to ${MAX_POPULATE_EDITS} sequential edit_workflow calls (add and wire one agent or human_in_the_loop per call) rather than stalling on a single oversized tool call.
+  - Prefer one edit_workflow for small graphs. For multi-agent graphs, you may use up to ${MAX_POPULATE_EDITS} sequential edit_workflow calls (add and wire one agent or human_in_the_loop_v2 per call) rather than stalling on a single oversized tool call.
   - If workflowLintMessage reports orphan blocks, fix connections on the Start (or upstream) block before run_workflow.
   - Always issue the \`edit_workflow\` tool call to apply changes. Never end a turn by only describing the intended edit.
   - Do not treat a clean edit_workflow success as verified by itself — wait for app-owned validation evidence before telling the user the workflow is verified.`,
@@ -171,8 +178,8 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
   - Asking for a secret or a connection: NEVER ask the user to paste a key, token, or password into chat. End the message with a \`<credential>\` tag holding a JSON array — \`{"type":"secret_input","name":"TELEGRAM_BOT_TOKEN","scope":"workspace"}\` renders a masked input that saves straight to workspace secrets; for OAuth services call \`oauth_get_auth_link\` first and add \`{"type":"link","provider":"<provider>","value":"<auth url>"}\`. Put every missing secret/connection for the task in ONE tag, then stop and wait for the "Credential setup submitted" message.
   - After secrets are saved, reference them in block and trigger fields as {{NAME}} (e.g. a Telegram trigger/block botToken = {{TELEGRAM_BOT_TOKEN}}) and keep building — do not ask again.
   - If the user pastes a secret in chat anyway, store it immediately with \`set_environment_variables\`, use {{NAME}}, never repeat the value, and tell them to rotate it.
-  - Agent blocks run on OpenAI models with the platform-provided key: leave apiKey empty and never ask for a model API key.
-  - Integrations: never tell the user a service is unsupported without first checking \`get_available_integrations\` (integrationBlocks) or \`get_available_blocks\` — Telegram, WhatsApp, Instagram, Gmail, Google Sheets, HubSpot and more exist as blocks and triggers. Build the workflow with them; never tell the user to host a bot or script elsewhere.
+  - Agent blocks run on the platform's models (OpenAI, Claude, Gemini) with platform-provided access: leave apiKey empty and never ask for a model API key.
+  - Integrations: never tell the user a service is unsupported without first checking \`get_available_integrations\` (integrationBlocks) or \`get_available_blocks\` — Telegram, WhatsApp, Gmail, Google Sheets, HubSpot and more exist as blocks and triggers. Build the workflow with them; never tell the user to host a bot or script elsewhere.
   - Telegram agents: the Telegram trigger is the \`telegram\` block with \`triggerMode: true\`; its field \`messageSource\` picks \`bot\` (chats with the bot, default), \`business\` (customers writing to the owner's own account via Telegram Business) or \`both\`. When business chats are on, set \`businessConnectionId\` on every Telegram block that replies to the trigger's \`businessConnectionId\` output (e.g. \`<telegram.businessConnectionId>\`, empty for bot chats) and tell the user to connect the bot in Telegram Settings → Telegram Business → Chatbots.`,
   },
   {
@@ -226,7 +233,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
     domains: ['superagent', 'agent'],
     content: `  - Other integrations: \`list_integration_tools({ integration: "gmail" })\` (underscores, not hyphens) then \`invoke_integration_tool({ toolId: "gmail_draft_v2", params: { ... } })\`. Never call \`load_integration_tool\` — that is Cloud-only; Labbai uses \`invoke_integration_tool\`.
   - For OAuth integrations (Google Sheets, Gmail, HubSpot, etc.), \`params\` MUST include \`credentialId\` from \`connectedIntegrations\` for that provider (e.g. providerId \`google-email\` for Gmail, \`google-sheets\` for Sheets). Prefer \`isOwn: true\`. If the signed-in user has exactly one matching own credential — or only one connected credential exists — Labbai injects it automatically. Google Docs/Drive/Sheets credentials are interchangeable for Drive search + Docs/Sheets tools.
-  - Google Docs by name (not ID): first \`google_drive_list\` with \`query\` set to the document title (or \`google_drive_search\` with \`prompt\` describing the doc), pick the matching file id (\`mimeType\` \`application/vnd.google-apps.document\`), then \`google_docs_read\` / \`google_docs_write\` with that \`documentId\`. Never pass the title as \`documentId\`.
+  - Google Docs by name (not ID): first \`google_drive_list\` with \`query\` set to the document title (or \`google_drive_search\` with \`query\` in Drive query syntax, e.g. \`name contains 'Prices'\`), pick the matching file id (\`mimeType\` \`application/vnd.google-apps.document\`), then \`google_docs_read\` / \`google_docs_write\` with that \`documentId\`. Never pass the title as \`documentId\`.
   - Google Sheets write/update/append: pass \`spreadsheetId\`, \`sheetName\` (tab name), \`values\` as a 2D array (e.g. \`[["Name","Age"],["Alice",30]]\`). Optional \`cellRange\` like \`A1\`. Legacy \`range\` like \`Sheet1!A1\` is also accepted.
   - Gmail drafts (one-off, no workflow): \`invoke_integration_tool({ toolId: "gmail_draft_v2", params: { to, subject, body, credentialId } })\`. \`to\` and \`body\` are required strings. For separate drafts to multiple people, call once per recipient with a single email in \`to\` (Labbai also fans out if \`to\` is an array). Do not put everyone on one draft unless the user asked for a single email.`,
   },
@@ -294,7 +301,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
     domains: ['auth'],
     content: `- Credentials and OAuth:
   - When an integration is not connected, call \`oauth_get_auth_link\` with the provider (e.g. google-email, hubspot) and share the returned link — never ask the user to paste an API key for OAuth providers.
-  - \`manage_credential\` renames or deletes stored credentials (delete only on explicit request). \`oauth_request_access\` asks another member to share their connection.`,
+  - \`manage_credential\` renames or deletes stored credentials (delete only on explicit request).`,
   },
   {
     id: 'media',
@@ -345,7 +352,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
     4. Later round only: \`edit_content\` with pre-initialized globals (do **not** \`require\` / \`import\` libraries). Prefer \`addSection\` for DOCX — never \`docx.addSection\`. Never same batch as \`workspace_file\`.
     ${DOCUMENT_FORMAT_GUIDANCE}
     - These formats compile via the built-in JS sandbox (isolated-vm). Never refuse.
-    - If \`edit_content\` fails with a system/sandbox crash (e.g. "Code execution failed unexpectedly" / isolated-vm / Node version), that is a host Node/isolated-vm issue — not missing deck code. Tell the user to use Node 20–22 and rebuild isolated-vm; do not loop minimal PPTX/DOCX probes.
+    - If \`edit_content\` fails with a system/sandbox crash (e.g. "Code execution failed unexpectedly" / isolated-vm / Node version), that is a host Node/isolated-vm issue — not missing deck code. Tell the user the document could not be generated right now and stop; do not loop minimal PPTX/DOCX probes.
     - Do **not** use \`function_execute\` to build workspace office files.`,
   },
   {

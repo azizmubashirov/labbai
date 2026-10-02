@@ -74,15 +74,8 @@ const SPECIALIST_SPECS: SpecialistToolSpec[] = [
     required: ['request'],
     briefKeys: ['request'],
   },
-  {
-    domain: 'scheduled_task',
-    description: 'Scheduled Task Agent — create/list/update/complete scheduled tasks.',
-    properties: {
-      request: { type: 'string', description: 'What scheduled task action is needed.' },
-    },
-    required: ['request'],
-    briefKeys: ['request'],
-  },
+  // No scheduled_task entry: this Sim version has no scheduled-task tools (recurring work is
+  // a workflow with a Schedule trigger, built by the workflow tools).
   {
     domain: 'agent',
     description: 'Tools Agent — skills, custom tools, MCP configs, integration listing/invoke.',
@@ -103,7 +96,7 @@ const SPECIALIST_SPECS: SpecialistToolSpec[] = [
   },
   {
     domain: 'media',
-    description: 'Media Agent — image/audio/video generation and ffmpeg.',
+    description: 'Media Agent — image and audio generation and ffmpeg.',
     properties: {
       prompt: {
         type: 'string',
