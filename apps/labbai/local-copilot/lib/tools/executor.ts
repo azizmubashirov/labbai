@@ -1242,13 +1242,30 @@ async function runDiscoveryTool(
         },
       }
 
-    case 'search_docs':
+    case 'search_docs': {
+      // It only matches block names/descriptions — repeated "how do I configure X" queries
+      // never get better, they just burn model rounds (20 in one turn).
+      const cache = ctx.discoveryCache ?? new Map<string, unknown>()
+      ctx.discoveryCache = cache
+      const calls = ((cache.get(SEARCH_DOCS_CALLS_KEY) as number | undefined) ?? 0) + 1
+      cache.set(SEARCH_DOCS_CALLS_KEY, calls)
+      if (calls > SEARCH_DOCS_MAX_CALLS_PER_TURN) {
+        return {
+          toolName,
+          success: false,
+          error: `search_docs limit reached for this turn (${SEARCH_DOCS_MAX_CALLS_PER_TURN}). It only matches block names and descriptions — use get_blocks_metadata for a block's fields and the rules for Agent tools entries, then build.`,
+        }
+      }
       return { toolName, success: true, result: await searchBlockDocs(args.query) }
+    }
 
     default:
       throw new Error(`Unhandled discovery tool: ${toolName}`)
   }
 }
+
+const SEARCH_DOCS_CALLS_KEY = '__search_docs_calls'
+const SEARCH_DOCS_MAX_CALLS_PER_TURN = 3
 
 const SEARCH_DOCS_STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'how', 'block', 'blocks'])
 
@@ -1290,6 +1307,7 @@ async function searchBlockDocs(rawQuery: unknown): Promise<Record<string, unknow
   return {
     query,
     matches,
+    note: 'Matches block names and descriptions only — there are no configuration guides. Use get_blocks_metadata for fields and the rules for Agent tools entries.',
     ...(mentionsTrigger ? { triggerHint: TRIGGER_MODE_ADD_HINT } : {}),
   }
 }

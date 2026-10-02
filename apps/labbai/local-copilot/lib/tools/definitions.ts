@@ -219,7 +219,7 @@ const CORE_LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   },
   {
     name: 'search_docs',
-    description: 'Searches Arena block and integration documentation for relevant guidance.',
+    description: 'Finds blocks by name or description (type, name, short description). It has no configuration guides — use get_blocks_metadata for fields. At most 3 calls per turn.',
     parameters: {
       type: 'object',
       properties: {

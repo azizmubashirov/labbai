@@ -329,6 +329,10 @@ export async function executeMothershipDelegatedTool(
     enrichCreateFileArgs(enrichedArgs)
   }
 
+  if (toolName === 'knowledge_base') {
+    normalizeKnowledgeBaseArgs(enrichedArgs)
+  }
+
   // `rm` requires a toolTitle; the local delete tools never asked the model for one.
   if (
     (toolName === 'delete_file' || toolName === 'delete_file_folder') &&
@@ -498,5 +502,31 @@ async function executeCreateFileWithContent(
       : {
           error: `File created at ${path} but writing its content failed: ${written.error ?? 'apply failed'}`,
         }),
+  }
+}
+
+const KNOWLEDGE_BASE_TOP_LEVEL_KEYS = new Set(['operation', 'args', 'workflowId', 'toolTitle'])
+
+/**
+ * `manage_knowledge_base` takes `{ operation, args: {...} }`. Models often send `args` as a
+ * JSON string or put the fields beside `operation`; both failed input validation
+ * ("/args must be object").
+ */
+function normalizeKnowledgeBaseArgs(args: Record<string, unknown>): void {
+  if (typeof args.args === 'string') {
+    try {
+      const parsed = JSON.parse(args.args) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) args.args = parsed
+    } catch {
+      // Left as is — validation reports it.
+    }
+  }
+  if (!args.args || typeof args.args !== 'object' || Array.isArray(args.args)) {
+    const nested: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(args)) {
+      if (!KNOWLEDGE_BASE_TOP_LEVEL_KEYS.has(key)) nested[key] = value
+    }
+    for (const key of Object.keys(nested)) delete args[key]
+    args.args = nested
   }
 }

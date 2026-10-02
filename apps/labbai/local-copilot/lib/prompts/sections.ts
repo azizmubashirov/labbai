@@ -141,6 +141,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
   - Never add edges as separate operations or with type "edge". Connections live on the SOURCE (upstream) block: \`params.connections: { source: "<target-block-id>" }\`. To wire Start → Agent, edit the Start block (startBlockId from create_workflow) with connections pointing to the agent block_id — use that id only in the tool args, never in user-visible text.
   - Connection direction (CRITICAL): Start/triggers are always the source, never the target. Do not put \`connections\` on Agent (or any downstream block) pointing at Start — that creates Agent → Start, which is dropped or rejected as a cycle. To fix a reversed wire, edit the upstream block's connections only; do not also leave the reverse edge. Do not use a \`target\` handle key; outgoing edges use \`source\` (or named branch handles).
   - Agent block: use \`messages\` (array of \`{role, content}\`), \`model\`, and \`tools\` — not systemPrompt/userPrompt. If you only have a system prompt string, still pass it via \`messages: [{role:"system",content:"..."},{role:"user",content:"..."}]\` (legacy systemPrompt is auto-mapped, but \`messages\` is preferred). Exa web search tool entry: \`{ type: "exa", title: "Exa Search", toolId: "exa_search", usageControl: "auto" }\`.
+  - Agent \`tools\` entries for workspace blocks (use these exactly — do not search for the format): knowledge base search \`{ "type": "knowledge", "title": "Knowledge", "toolId": "knowledge_search", "operation": "search", "params": { "knowledgeBaseSelector": "<knowledge base id>" }, "usageControl": "auto" }\`; table row insert \`{ "type": "table_v2", "title": "Leads", "toolId": "table_insert_row", "operation": "insert_row", "params": { "tableSelector": "<table id>" }, "usageControl": "auto" }\`. Any other block: \`type\` = block type, \`operation\` = one of its operation ids, \`toolId\` = the tool that operation maps to, \`params\` keyed by its field ids (string values). Leave per-call fields (query, row data) unset — the agent fills them at run time. Do not also add these blocks to the canvas.
   - Models (CRITICAL): never set Agent/Router/Evaluator \`model\` to a sunset/legacy catalog id (gpt-4o, gpt-4.1-nano, older Claude 3.x, etc.). Use the field default (Agent: gpt-5-mini) or a current recommended id from get_blocks_metadata (OpenAI only: gpt-5.5, gpt-5-mini, gpt-4.1, gpt-4.1-mini). Omit \`model\` rather than inventing an old id.
   - Block types: only add types returned by get_blocks_metadata. Never add sunset/legacy types (gmail, router, starter, file, chat_trigger, …) — use the current successors (gmail_v2, router_v2, start_trigger, file_v5).
   - Triggers: an integration trigger (Telegram, WhatsApp, Gmail, …) is the integration block itself added with \`triggerMode: true\` beside \`inputs\` — there is no \`<service>_trigger\` block type. \`get_available_blocks\` with \`{ "category": "triggers" }\` lists them; the block's get_blocks_metadata result has its trigger fields and outputs.
@@ -277,16 +278,15 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
     /** Rename / move / delete workflows and folders. */
     domains: ['workflow'],
     content: `- Workflow management:
-  - \`rename_workflow\` (workflowId + name), \`move_workflow\` / \`delete_workflow\` (workflowIds arrays), \`manage_folder\` for folder create/rename/move/delete.
-  - delete_workflow and delete_workspace_mcp_server are destructive — only call them when the user explicitly asked, and name what you are deleting in your reply.`,
+  - \`rename_workflow\` (workflowId + name), \`move_workflow\` (workflowIds array, optional folderId). Deleting workflows and managing folders is done by the user in the sidebar — say so.
+  - delete_workspace_mcp_server is destructive — only call it when the user explicitly asked, and name what you are deleting in your reply.`,
   },
   {
     id: 'scheduledTasks',
     /** manage_scheduled_task cron vs one-time arguments. */
     domains: ['scheduled_task'],
     content: `- Scheduled tasks:
-  - \`manage_scheduled_task\` creates/lists/updates/deletes scheduled agent prompts. Recurring -> args.cron; one-time -> args.time (ISO 8601); always set args.timezone when the user mentions one.
-  - \`get_scheduled_task_logs\` (jobId) inspects past runs. \`complete_scheduled_task\` stops an until_complete task; \`update_scheduled_task_history\` records what a run did.`,
+  - Scheduled agent prompts are not available here. For recurring work, build a workflow that starts with a Schedule trigger block instead.`,
   },
   {
     id: 'credentialsOauth',
