@@ -13,7 +13,11 @@
  * (`COPILOT_MAX_ROUNDS_PER_TURN`, default {@link DEFAULT_MAX_MODEL_ROUNDS_PER_TURN}).
  */
 
-export const MAX_SPECIALIST_DEPTH = 3
+/**
+ * Specialists are leaves: the main agent delegates, a specialist does not delegate again.
+ * Nested delegation re-discovered the workspace at each level and multiplied model rounds.
+ */
+export const MAX_SPECIALIST_DEPTH = 1
 export const MAX_SPECIALIST_CONCURRENT = 4
 export const MAX_SPECIALIST_INVOCATIONS = 8
 export const SPECIALIST_TIMEOUT_MS = 90_000

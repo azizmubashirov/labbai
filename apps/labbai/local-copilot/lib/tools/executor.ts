@@ -207,6 +207,11 @@ export interface ToolExecutionContext {
    * workspace-independent). Specialists inject it after `relevantSkillGuidance`.
    */
   skillCatalog?: string
+  /**
+   * Workspace inventory (workflows, tables, knowledge bases, files) as markdown, capped.
+   * Specialists inject it so they do not re-discover what the parent already sees.
+   */
+  specialistWorkspaceContext?: string
   /** First successful create_workflow this turn — later creates must reuse it. */
   createdWorkflowThisTurn?: {
     workflowId: string

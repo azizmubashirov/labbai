@@ -360,7 +360,15 @@ export function isSpecialistDomain(name: string): name is LocalCopilotCloudSpeci
   return SPECIALIST_ENTRY_TOOL_NAMES.has(name)
 }
 
-export function domainSystemHint(domain: LocalCopilotSpecialistDomain): string {
+/**
+ * Domain guidance. The specialist's own system prompt gets all of it; the parent's entry
+ * tool description passes `{ entryTool: true }` and drops what the parent's rules already
+ * carry (the file domain's document-format guide — ~5k chars sent every round).
+ */
+export function domainSystemHint(
+  domain: LocalCopilotSpecialistDomain,
+  options: { entryTool?: boolean } = {}
+): string {
   switch (domain) {
     case 'workflow':
       return 'Build, edit, and run workflows. Use get_workflow_data / get_workflow_context or get_workflow_run_options when inspecting an existing workflow; create_workflow when the user wants a new one. When adding blocks, use current types from get_blocks_metadata (never sunset/legacy types like gmail or router). Integration triggers (Telegram, WhatsApp, Gmail, …) are the integration block added with triggerMode: true — there is no <service>_trigger type. For Agent/Router model, use a current recommended id or omit to keep the default (gpt-5) — never gpt-4o or other sunset/legacy models.'
@@ -383,7 +391,7 @@ export function domainSystemHint(domain: LocalCopilotSpecialistDomain): string {
     case 'media':
       return 'Focus on image/audio/video generation and ffmpeg.'
     case 'file':
-      return `Read, create, and update workspace files. Create NEW html/md/txt/json/csv with create_file once (full body in content). Edit EXISTING text/html: MUST read files/<path>/content first; targeted changes (title, heading, one string) use workspace_file operation=patch with search_replace then edit_content with ONLY the replacement — never regenerate the file. Use operation=update only for empty shells or an explicit full rewrite, and then edit_content must start from the read result. After create_file, workspace_file target.kind=path (never kind=new_file / operation=create — that duplicates the file). There is no prepare_file_edit, edit_file, or run_function tool. Use function_execute only for sandbox data processing (mount via inputs, save with outputs.files), not office docs. Chat uploads/ need materialize_file into files/ before the sandbox can open them. CRITICAL: never dump HTML/CSS/JS in the user-facing reply or findings (no \`\`\`html fences). You MUST still read existing files via the read tool. Put write bodies only in create_file/edit_content. Findings: 1–2 sentences naming the file and outcome.\n\n${DOCUMENT_FORMAT_GUIDANCE}`
+      return `Read, create, and update workspace files. Create NEW html/md/txt/json/csv with create_file once (full body in content). Edit EXISTING text/html: MUST read files/<path>/content first; targeted changes (title, heading, one string) use workspace_file operation=patch with search_replace then edit_content with ONLY the replacement — never regenerate the file. Use operation=update only for empty shells or an explicit full rewrite, and then edit_content must start from the read result. After create_file, workspace_file target.kind=path (never kind=new_file / operation=create — that duplicates the file). There is no prepare_file_edit, edit_file, or run_function tool. Use function_execute only for sandbox data processing (mount via inputs, save with outputs.files), not office docs. Chat uploads/ need materialize_file into files/ before the sandbox can open them. CRITICAL: never dump HTML/CSS/JS in the user-facing reply or findings (no \`\`\`html fences). You MUST still read existing files via the read tool. Put write bodies only in create_file/edit_content. Findings: 1–2 sentences naming the file and outcome.${options.entryTool ? '' : `\n\n${DOCUMENT_FORMAT_GUIDANCE}`}`
     case 'superagent':
       return 'Focus on third-party integration actions. Authenticate if needed, then invoke the right integration tool.'
     default:

@@ -92,7 +92,7 @@ export function formatTaskStateSystemMessage(task: CopilotTaskState): ChatMessag
   }
   return {
     role: 'system',
-    content: `${TASK_STATE_SYSTEM_PREFIX}\n${JSON.stringify(payload, null, 2)}`,
+    content: `${TASK_STATE_SYSTEM_PREFIX}\n${JSON.stringify(payload)}`,
   }
 }
 

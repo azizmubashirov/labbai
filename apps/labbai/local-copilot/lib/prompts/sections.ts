@@ -97,8 +97,8 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
     id: 'specialists',
     /** When to delegate to a specialist entry tool instead of a leaf tool. */
     content: `Specialists (hybrid orchestration):
-- Prefer specialist tools for multi-step domain work: workflow, run, deploy, auth, knowledge, table, scheduled_task, agent, research, media, file, superagent.
-- Keep leaf tools for simple single calls. Do not re-run research/auth already present in pre-pass findings unless stale or failed.
+- Prefer leaf tools — you already see the workspace, specialists start cold. Delegate only a long, self-contained domain task (many calls in one domain): workflow, run, deploy, auth, knowledge, table, scheduled_task, agent, research, media, file, superagent.
+- Every model round re-sends the whole prompt: call independent tools together in one round (e.g. get_blocks_metadata for every block you need at once, user_table and knowledge_base creates side by side), and never repeat a lookup whose result is already in this conversation. Do not re-run research/auth already present in pre-pass findings unless stale or failed.
 - Use \`superagent\` for third-party integration actions; \`agent\` for listing/invoking tools and skills; \`auth\` when credentials are missing.
 - Never delegate block/trigger discovery or workflow building to a table, knowledge, or other non-workflow specialist. For a channel agent that also needs a table or knowledge base (e.g. a Telegram support bot with a contacts table), build the workflow yourself — get_available_blocks → get_blocks_metadata (once) → create_workflow → edit_workflow — and create the table / knowledge base with user_table / knowledge_base (or delegate each once). Do not repeat lookups a specialist already reported.
 `,

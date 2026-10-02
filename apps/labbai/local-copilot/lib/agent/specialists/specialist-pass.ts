@@ -236,7 +236,7 @@ export async function executeSpecialistLoop(
     await emitSpecialistEvent(events, { type: 'status', message: 'Working on it…' }, params.onEvent)
 
     /** Static per domain: no ids, names or dates — the prompt-cache prefix with `tools`. */
-    const staticSystemPrompt = `You are a focused Labbai specialist (${params.domain}). ${domainSystemHint(params.domain)} Complete the request using your tools — you may perform domain writes when needed. You may call other specialist tools if another domain is required (nesting is budgeted). Keep the final reply under 8 sentences with actionable facts and outcomes.`
+    const staticSystemPrompt = `You are a focused Labbai specialist (${params.domain}). ${domainSystemHint(params.domain)} Complete the request using your tools — you may perform domain writes when needed. The workspace snapshot below lists what already exists — do not look it up again. Call independent tools together in one round. If another domain is required, say so in your reply instead of guessing. Keep the final reply under 8 sentences with actionable facts and outcomes.`
     const promptCache = buildPromptCacheLayout({
       staticSystemPrompt,
       tools,
@@ -249,6 +249,9 @@ export async function executeSpecialistLoop(
         : []),
       ...(params.toolCtx.skillCatalog
         ? [{ role: 'system' as const, content: params.toolCtx.skillCatalog }]
+        : []),
+      ...(params.toolCtx.specialistWorkspaceContext
+        ? [{ role: 'system' as const, content: params.toolCtx.specialistWorkspaceContext }]
         : []),
       { role: 'user', content: params.userMessage },
     ]

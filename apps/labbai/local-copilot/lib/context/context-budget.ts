@@ -290,16 +290,15 @@ export function resolveWorkflowContextDetail(
   if (!context.workflow) return 'full'
 
   const fullWorkflowJson = JSON.stringify(
-    buildWorkflowPromptPayload(context.workflow, 'full', context.selectedBlockId),
-    null,
-    2
+    buildWorkflowPromptPayload(context.workflow, 'full', context.selectedBlockId)
   )
   if (getAccurateTokenCount(fullWorkflowJson, model) <= workflowFullStateTokenBudget) return 'full'
   return 'compact'
 }
 
 /**
- * Builds the JSON string embedded in the system context message.
+ * Builds the JSON string embedded in the system context message. Compact (no indentation):
+ * the model reads it just as well and pretty-printing cost ~25% more tokens every round.
  */
 export function buildContextPromptPayload(
   context: LocalCopilotStructuredContext,
@@ -341,9 +340,7 @@ export function buildContextPromptPayload(
             ...(options.snapshotRevision ? { snapshotRevision: options.snapshotRevision } : {}),
           }
         : {}),
-    }),
-    null,
-    2
+    })
   )
 }
 

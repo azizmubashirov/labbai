@@ -3,6 +3,15 @@ import type { ChatMessage } from '@/local-copilot/lib/providers/types'
 /** Keep this many most-recent tool rounds verbatim; older tool bodies are fingerprinted. */
 export const LOCAL_COPILOT_MICROCOMPACT_KEEP_RECENT_ROUNDS = 2
 
+/**
+ * In-turn compaction waits until the conversation is at least this big (estimated
+ * tokens). Clearing an old tool result rewrites the message prefix, which voids the
+ * provider's prompt cache for everything after it: on Anthropic the whole tail is
+ * written again (1.25x input) instead of read (0.1x). Keeping a result costs a cache read
+ * per round; one clear costs a full tail rewrite — so clear rarely, and in one batch.
+ */
+export const LOCAL_COPILOT_IN_TURN_MICROCOMPACT_MIN_TOKENS = 60_000
+
 const CLEARED_PREFIX = '[Old tool result cleared'
 
 export interface MicrocompactResult {

@@ -182,8 +182,16 @@ describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () =>
     const config = getLocalCopilotConfig()
     expect(config.provider).toBe('cloudflare')
     expect(config.model).toBe('anthropic/claude-sonnet-5')
-    expect(config.specialistModel).toBe('anthropic/claude-sonnet-5')
+    expect(config.specialistModel).toBe('anthropic/claude-haiku-4.5')
     expect(config.extraHeaders).toEqual({ 'cf-aig-gateway-id': 'gw' })
+  })
+
+  it('keeps Claude specialists on COPILOT_SPECIALIST_MODEL when it is set', () => {
+    process.env.COPILOT_PROVIDER = 'cloudflare'
+    process.env.COPILOT_MODEL = 'anthropic/claude-sonnet-5'
+    process.env.COPILOT_SPECIALIST_MODEL = 'anthropic/claude-sonnet-5'
+
+    expect(getLocalCopilotConfig().specialistModel).toBe('anthropic/claude-sonnet-5')
   })
 
   it('keeps COPILOT_PROVIDER=openai on the OpenAI transport', () => {

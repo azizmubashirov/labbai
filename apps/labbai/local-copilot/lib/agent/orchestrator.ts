@@ -78,6 +78,7 @@ import {
 } from '@/local-copilot/lib/context/follow-up-directives'
 import {
   applyMicrocompactInPlace,
+  LOCAL_COPILOT_IN_TURN_MICROCOMPACT_MIN_TOKENS,
   MICROCOMPACT_PRESERVE_LATEST_TOOL_NAMES,
   microcompactMessages,
 } from '@/local-copilot/lib/context/microcompact'
@@ -843,6 +844,11 @@ async function* runLocalCopilotAgentTurn(
     ...(relevantSkills.message ? { relevantSkillGuidance: relevantSkills.message.content } : {}),
     ...(skillCatalogMessage
       ? { skillCatalog: getMessageContentText(skillCatalogMessage.content) }
+      : {}),
+    ...(inventoryMarkdown
+      ? {
+          specialistWorkspaceContext: `Workspace snapshot:\n${truncateForSpecialist(inventoryMarkdown)}`,
+        }
       : {}),
   }
 
@@ -2233,9 +2239,14 @@ async function* runLocalCopilotAgentTurn(
       yield { type: 'status', message: 'Reviewing results…' }
     }
 
-    const microcompactStats = applyMicrocompactInPlace(messages, {
-      preserveLatestToolNames: MICROCOMPACT_PRESERVE_LATEST_TOOL_NAMES,
-    })
+    // Compact only once the tail is large: every clear rewrites the cached prefix.
+    const microcompactStats =
+      estimateChatMessagesTokens(messages, tokenCountModel) >=
+      LOCAL_COPILOT_IN_TURN_MICROCOMPACT_MIN_TOKENS
+        ? applyMicrocompactInPlace(messages, {
+            preserveLatestToolNames: MICROCOMPACT_PRESERVE_LATEST_TOOL_NAMES,
+          })
+        : { clearedCount: 0, charsFreed: 0 }
     if (microcompactStats.clearedCount > 0) {
       logger.info('Arena Copilot microcompact applied', {
         round,
@@ -2689,4 +2700,12 @@ async function* runLocalCopilotAgentTurn(
 
 export function formatSSE(event: LocalCopilotStreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`
+}
+
+/** Workspace inventory handed to specialists — enough to skip re-discovery, never the whole prompt. */
+const SPECIALIST_WORKSPACE_CONTEXT_MAX_CHARS = 12_000
+
+function truncateForSpecialist(markdown: string): string {
+  if (markdown.length <= SPECIALIST_WORKSPACE_CONTEXT_MAX_CHARS) return markdown
+  return `${markdown.slice(0, SPECIALIST_WORKSPACE_CONTEXT_MAX_CHARS)}\n…(truncated)`
 }

@@ -11,7 +11,10 @@ import {
   getCloudflareAIConfig,
   getCloudflareUnifiedBaseUrl,
 } from '@/providers/cloudflare/config'
-import { toCloudflareUnifiedModelId } from '@/providers/cloudflare/model-ids'
+import {
+  CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
+  toCloudflareUnifiedModelId,
+} from '@/providers/cloudflare/model-ids'
 import {
   getOpenAIAuthHeaders,
   getOpenAIBaseUrl,
@@ -30,6 +33,12 @@ const DEFAULT_MODEL: string = DEFAULT_LOCAL_COPILOT_MODEL
  * `COPILOT_SPECIALIST_MODEL` is unset. Cheaper and faster for leaf tool work.
  */
 const DEFAULT_OPENAI_SPECIALIST_MODEL: string = OPENAI_MODEL_GPT_5_MINI
+/**
+ * Default specialist model on Cloudflare when the main model is Claude: Haiku 4.5
+ * (about a third of Sonnet's price). Specialists do leaf work — tables, documents,
+ * lookups — while the main model keeps planning and building.
+ */
+const DEFAULT_ANTHROPIC_SPECIALIST_MODEL: string = CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5
 
 /** `reasoning_effort` values accepted by OpenAI reasoning models. */
 const REASONING_EFFORT_LEVELS = new Set(['minimal', 'low', 'medium', 'high'])
@@ -106,10 +115,17 @@ function isOpenAIModel(model: string): boolean {
   return toCloudflareUnifiedModelId(model).toLowerCase().startsWith('openai/')
 }
 
+/** True for an Anthropic model id (`anthropic/claude-...`). */
+function isAnthropicModel(model: string): boolean {
+  return toCloudflareUnifiedModelId(model).toLowerCase().startsWith('anthropic/')
+}
+
 /**
  * Resolves the specialist model: explicit override (`COPILOT_SPECIALIST_MODEL`),
  * else GPT-5 mini on OpenAI (and on Cloudflare when the main model is an OpenAI model),
- * else the main agent model.
+ * else Claude Haiku 4.5 on Cloudflare when the main model is Claude,
+ * else the main agent model. Set `COPILOT_SPECIALIST_MODEL` to the main model id to
+ * run specialists on it again.
  */
 export function resolveSpecialistModel(
   provider: LocalCopilotProviderId,
@@ -120,6 +136,7 @@ export function resolveSpecialistModel(
   if (override) return override
   if (provider === 'openai') return DEFAULT_OPENAI_SPECIALIST_MODEL
   if (provider === 'cloudflare' && isOpenAIModel(mainModel)) return DEFAULT_OPENAI_SPECIALIST_MODEL
+  if (provider === 'cloudflare' && isAnthropicModel(mainModel)) return DEFAULT_ANTHROPIC_SPECIALIST_MODEL
   return mainModel
 }
 

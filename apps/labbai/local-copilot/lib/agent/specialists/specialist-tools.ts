@@ -140,7 +140,7 @@ const SPEC_BY_DOMAIN = new Map(SPECIALIST_SPECS.map((spec) => [spec.domain, spec
 export function getParentSpecialistToolDefinitions(): LocalCopilotToolDefinition[] {
   return SPECIALIST_SPECS.map((spec) => ({
     name: spec.domain,
-    description: `${spec.description} ${domainSystemHint(spec.domain)}`,
+    description: `${spec.description} ${domainSystemHint(spec.domain, { entryTool: true })}`,
     parameters: {
       type: 'object',
       properties: spec.properties,
