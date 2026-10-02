@@ -116,8 +116,6 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
   get_deployed_workflow_state:
     'Returns the live/deployed workflow state (blocks, edges) for comparison with the draft.',
   list_user_workspaces: 'Lists workspaces the current user can access (id, name, permission).',
-  search_documentation:
-    'Searches platform documentation (blocks, integrations, product). Prefer this over the local search_docs heuristic when you need deeper docs. REQUIRED: query.',
   manage_skill:
     'Adds, edits, lists, or deletes workspace agent skills (operation: add|edit|list|delete). After add/edit, users load them via load_user_skill.',
   manage_custom_tool:
@@ -132,8 +130,6 @@ const DELEGATED_TOOL_DESCRIPTIONS: Record<string, string> = {
     'Creates, updates, or deactivates a public share link for a workspace file. REQUIRED: operation (share | unshare) and the file path. Returns the public URL.',
   set_environment_variables:
     'Stores secrets (API keys, tokens) as workspace environment variables. REQUIRED: variables [{name, value}] (scope defaults to workspace). Use UPPER_SNAKE_CASE names (e.g. OPENAI_API_KEY). Afterwards reference the secret in block fields as {{NAME}} — never write the raw value into a block.',
-  get_platform_actions:
-    'Lists available platform UI actions the agent can suggest or trigger (navigation and settings helpers).',
   user_memory:
     'Long-lived user preferences and facts across chats. Operations: add, search, delete, correct, list. Use add when the user says remember/prefer/always; search before assuming preferences; correct when they fix a remembered value. REQUIRED: operation. For add: key + value. For search: query. For delete/correct: key (correct also needs correct_value).',
 }
@@ -203,7 +199,6 @@ export const MOTHERSHIP_DELEGATED_TOOL_NAMES = [
   'set_global_workflow_variables',
   'get_deployed_workflow_state',
   'list_user_workspaces',
-  'search_documentation',
   'manage_skill',
   'manage_custom_tool',
   'manage_mcp_tool',
@@ -211,7 +206,6 @@ export const MOTHERSHIP_DELEGATED_TOOL_NAMES = [
   'restore_resource',
   'set_environment_variables',
   'share_file',
-  'get_platform_actions',
   'user_memory',
 ] as const
 

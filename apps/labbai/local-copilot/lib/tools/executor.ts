@@ -1,5 +1,6 @@
 import { createLogger } from '@labbai/logger'
 import { getErrorMessage } from '@labbai/utils/errors'
+import { truncate } from '@labbai/utils/string'
 import type { WorkflowState } from '@labbai/workflow-types/workflow'
 import type { BillingAttributionSnapshot } from '@/lib/billing/core/billing-attribution'
 import type { MothershipResource } from '@/lib/copilot/resources/types'
@@ -8,17 +9,32 @@ import type { ResolvedSecretTraceRegistry } from '@/executor/utils/resolved-secr
 import type { LocalToolBillingMetadata } from '@/local-copilot/lib/billing/turn-cost-accumulator'
 import { extractLocalToolBillingMetadata } from '@/local-copilot/lib/billing/turn-cost-accumulator'
 import {
+  buildRepeatedArtifactLoadResult,
   LOAD_COPILOT_ARTIFACT_TOOL_NAME,
   loadArtifactFromRecord,
   loadArtifacts,
+  rememberArtifactLoad,
 } from '@/local-copilot/lib/context/artifacts'
 import { buildGetWorkflowContextResult } from '@/local-copilot/lib/context/context-budget'
 import { reloadLocalCopilotWorkflowContext } from '@/local-copilot/lib/context/reload-workflow-context'
 import { getLocalCopilotMemorySnapshot } from '@/local-copilot/lib/diagnostics'
 import { generateWorkflowPatchFromRequest } from '@/local-copilot/lib/patches/generate'
 import { validateWorkflowPatch, validateWorkflowState } from '@/local-copilot/lib/patches/validate'
+import {
+  buildAvailableBlocksResult,
+  type FetchBlocksMetadataResult,
+  isIntegrationTriggerBlock,
+  normalizeTriggerAliasOperations,
+  runGetBlocksMetadata,
+  TRIGGER_MODE_ADD_HINT,
+} from '@/local-copilot/lib/tools/block-discovery'
 import { toCopilotServerToolContext } from '@/local-copilot/lib/tools/copilot-server-tool-context'
 import { getToolDefinition } from '@/local-copilot/lib/tools/definitions'
+import {
+  discoveryCacheKey,
+  isDiscoveryCacheTool,
+  withDiscoveryCache,
+} from '@/local-copilot/lib/tools/discovery-cache'
 import { canonicalCreateFilePath } from '@/local-copilot/lib/tools/enrich-file-tool-args'
 import {
   enrichLocalIntegrationToolParams,
@@ -145,6 +161,14 @@ export interface ToolExecutionContext {
    * Avoids repeated identical/overlapping metadata fetches in one agent turn.
    */
   blocksMetadataByType?: Map<string, unknown>
+  /**
+   * Per-turn cache of read-only discovery results (get_available_blocks,
+   * get_available_integrations, search_docs). Repeats are answered from it with
+   * a nudge to start building. See `tools/discovery-cache.ts`.
+   */
+  discoveryCache?: Map<string, unknown>
+  /** Artifact ids already loaded this turn — a repeat load says so instead of re-fetching. */
+  loadedArtifactIds?: Set<string>
   /** CAS token from workflow.updatedAt for the active workflow. */
   workflowRevision?: string
   /** Turn-scoped idempotency cache for create/deploy/invoke. */
@@ -377,6 +401,9 @@ async function executeLocalCopilotToolInner(
     }
   }
   const toolName = resolvedName.name
+  if (resolvedName.defaultArgs) {
+    args = { ...resolvedName.defaultArgs, ...args }
+  }
 
   args = pinToolArgsToWorkspace(args, ctx.workspaceId)
   ctx.mutationIdempotency ??= new Map()
@@ -420,6 +447,15 @@ async function executeLocalCopilotToolInner(
   }
 
   logger.info('Executing Arena Copilot tool', { toolName, workflowId: ctx.workflowId })
+
+  if (isDiscoveryCacheTool(toolName)) {
+    const cache = ctx.discoveryCache ?? new Map<string, unknown>()
+    ctx.discoveryCache = cache
+    const key = discoveryCacheKey(toolName, args)
+    const run = () => runDiscoveryTool(toolName, args, ctx)
+    const outcome = await withDiscoveryCache(cache, key, run)
+    return { ...outcome, toolName }
+  }
 
   if (isMothershipDelegatedTool(toolName)) {
     if (toolName === 'create_file') {
@@ -510,7 +546,11 @@ async function executeLocalCopilotToolInner(
         }
       }
 
-      enrichedArgs.operations = normalizeLocalEditConnections(operations, {
+      const aliasedOperations = normalizeTriggerAliasOperations(
+        operations,
+        ctx.structuredContext.availableBlocks ?? []
+      )
+      enrichedArgs.operations = normalizeLocalEditConnections(aliasedOperations, {
         blocks: ctx.structuredContext.workflow?.blocks,
         edges: ctx.structuredContext.workflow?.edges,
         availableBlocks: ctx.structuredContext.availableBlocks,
@@ -665,9 +705,19 @@ async function executeLocalCopilotToolInner(
         }
       }
 
+      const loadedArtifactIds = ctx.loadedArtifactIds ?? new Set<string>()
+      ctx.loadedArtifactIds = loadedArtifactIds
+      const loadedResult = (body: unknown): ToolExecutionResult => ({
+        toolName,
+        success: true,
+        result: rememberArtifactLoad(loadedArtifactIds, artifactId)
+          ? buildRepeatedArtifactLoadResult(artifactId, body)
+          : body,
+      })
+
       const fromTurn = ctx.artifactStore?.artifacts.get(artifactId)
       if (fromTurn) {
-        return { toolName, success: true, result: fromTurn.body }
+        return loadedResult(fromTurn.body)
       }
 
       if (!ctx.chatId) {
@@ -691,18 +741,9 @@ async function executeLocalCopilotToolInner(
             result: { error: `Unknown artifactId: ${artifactId}` },
           }
         }
-        return { toolName, success: true, result: legacy.body }
+        return loadedResult(legacy.body)
       }
-      return { toolName, success: true, result: artifact.body }
-    }
-
-    case 'get_available_blocks': {
-      const category =
-        typeof args.category === 'string' && args.category.trim() ? args.category.trim() : undefined
-      const blocks = ctx.structuredContext.availableBlocks.filter(
-        (block) => !category || block.category === category
-      )
-      return { toolName, success: true, result: { blocks } }
+      return loadedResult(artifact.body)
     }
 
     case 'get_blocks_metadata': {
@@ -719,93 +760,14 @@ async function executeLocalCopilotToolInner(
 
       const cache = ctx.blocksMetadataByType ?? new Map<string, unknown>()
       ctx.blocksMetadataByType = cache
-      const normalizedIds = [
-        ...new Set(blockIds.map((id) => id.trim()).filter((id) => id.length > 0)),
-      ]
-      const missingIds = normalizedIds.filter((id) => !cache.has(id.toLowerCase()))
-
-      if (missingIds.length === 0) {
-        const metadata: Record<string, unknown> = {}
-        for (const id of normalizedIds) {
-          metadata[id] = cache.get(id.toLowerCase())
-        }
-        return {
-          toolName,
-          success: true,
-          result: {
-            metadata,
-            cached: true,
-            hint: 'Reused block metadata from earlier this turn. Do not call get_blocks_metadata again for these types.',
-          },
-        }
-      }
-
-      await ensureHandlersReady()
-      const { createServerToolHandler } = await import(
-        '@/lib/copilot/tools/registry/server-tool-adapter'
-      )
-      const handler = createServerToolHandler('get_blocks_metadata')
-      const metadataResult = await handler(
-        { blockIds: missingIds },
-        toCopilotServerToolContext(ctx)
-      )
-
-      if (
-        metadataResult.success &&
-        metadataResult.output &&
-        typeof metadataResult.output === 'object'
-      ) {
-        const output = metadataResult.output as Record<string, unknown>
-        const fetched =
-          output.metadata && typeof output.metadata === 'object'
-            ? (output.metadata as Record<string, unknown>)
-            : output
-        for (const [key, value] of Object.entries(fetched)) {
-          cache.set(key.toLowerCase(), value)
-        }
-      }
-
-      const metadata: Record<string, unknown> = {}
-      for (const id of normalizedIds) {
-        const cached = cache.get(id.toLowerCase())
-        if (cached !== undefined) metadata[id] = cached
-      }
-
-      return {
-        toolName,
-        success: metadataResult.success,
-        result: metadataResult.success
-          ? {
-              metadata,
-              ...(missingIds.length < normalizedIds.length ? { partiallyCached: true } : {}),
-              hint: 'Call get_blocks_metadata only once with every block type you need. Do not re-fetch these types.',
-            }
-          : (metadataResult.output ??
-            (metadataResult.error ? { error: metadataResult.error } : {})),
-        error: metadataResult.error,
-      }
+      const run = await runGetBlocksMetadata({
+        requestedIds: blockIds,
+        catalog: ctx.structuredContext.availableBlocks ?? [],
+        cache,
+        fetchMetadata: (blockTypes) => fetchServerBlocksMetadata(blockTypes, ctx),
+      })
+      return { toolName, success: run.success, result: run.result, error: run.error }
     }
-
-    case 'get_available_integrations':
-      return {
-        toolName,
-        success: true,
-        result: {
-          integrations: ctx.structuredContext.availableIntegrations,
-          // Every integration block (e.g. telegram, whatsapp, gmail) with its auth mode, so the
-          // model never concludes a service is unsupported from the category list alone.
-          integrationBlocks: (ctx.structuredContext.availableBlocks ?? [])
-            .filter((block) => block.category === 'tools' || block.category === 'triggers')
-            .map((block) => ({
-              type: block.id,
-              name: block.name,
-              ...(block.authMode ? { authMode: block.authMode } : {}),
-            })),
-          connectedIntegrations: ctx.structuredContext.connectedIntegrations,
-          envVariables: ctx.structuredContext.envVariables,
-          hostedKeysAvailable: ctx.structuredContext.hostedKeysAvailable,
-        },
-      }
 
     case 'invoke_integration_tool': {
       const finishInvoke = (result: ToolExecutionResult): ToolExecutionResult => {
@@ -1164,27 +1126,6 @@ async function executeLocalCopilotToolInner(
       }
     }
 
-    case 'search_docs': {
-      const query = String(args.query ?? '').toLowerCase()
-      const { getAllBlocks } = await import('@/blocks/registry')
-      const matches = getAllBlocks()
-        .filter(
-          (block) =>
-            block.name.toLowerCase().includes(query) ||
-            block.description.toLowerCase().includes(query) ||
-            block.type.toLowerCase().includes(query)
-        )
-        .slice(0, 10)
-        .map((block) => ({
-          type: block.type,
-          name: block.name,
-          description: block.description,
-          docsLink: block.docsLink,
-          category: block.category,
-        }))
-      return { toolName, success: true, result: { query: args.query, matches } }
-    }
-
     case 'propose_workflow_patch': {
       const resolved = await resolveWorkflowStateForLocalTool(ctx, args)
       if (!resolved.ok) {
@@ -1220,6 +1161,130 @@ async function executeLocalCopilotToolInner(
 
     default:
       throw new Error(`Unhandled tool: ${toolName}`)
+  }
+}
+
+/**
+ * Raw `get_blocks_metadata` server output for block types this turn has not
+ * fetched yet. Types the server skips (unknown, hidden, not permitted) are
+ * simply absent from `metadata`.
+ */
+async function fetchServerBlocksMetadata(
+  blockTypes: string[],
+  ctx: ToolExecutionContext
+): Promise<FetchBlocksMetadataResult> {
+  await ensureHandlersReady()
+  const { createServerToolHandler } = await import(
+    '@/lib/copilot/tools/registry/server-tool-adapter'
+  )
+  const handler = createServerToolHandler('get_blocks_metadata')
+  const response = await handler({ blockIds: blockTypes }, toCopilotServerToolContext(ctx))
+  if (!response.success || !response.output || typeof response.output !== 'object') {
+    return {
+      success: false,
+      metadata: {},
+      error: response.error ?? 'get_blocks_metadata failed',
+    }
+  }
+  const output = response.output as Record<string, unknown>
+  const metadata =
+    output.metadata && typeof output.metadata === 'object'
+      ? (output.metadata as Record<string, unknown>)
+      : output
+  return { success: true, metadata }
+}
+
+/** Read-only discovery tools answered from the turn's structured context. */
+async function runDiscoveryTool(
+  toolName: string,
+  args: Record<string, unknown>,
+  ctx: ToolExecutionContext
+): Promise<ToolExecutionResult> {
+  const availableBlocks = ctx.structuredContext.availableBlocks ?? []
+  switch (toolName) {
+    case 'get_available_blocks': {
+      const category =
+        typeof args.category === 'string' && args.category.trim() ? args.category.trim() : undefined
+      return {
+        toolName,
+        success: true,
+        result: buildAvailableBlocksResult(availableBlocks, category),
+      }
+    }
+
+    case 'get_available_integrations':
+      return {
+        toolName,
+        success: true,
+        result: {
+          integrations: ctx.structuredContext.availableIntegrations,
+          // Every integration block (e.g. telegram, whatsapp, gmail) with its auth mode, so the
+          // model never concludes a service is unsupported from the category list alone.
+          integrationBlocks: availableBlocks
+            .filter((block) => block.category === 'tools' || block.category === 'triggers')
+            .map((block) => ({
+              type: block.id,
+              name: block.name,
+              ...(block.authMode ? { authMode: block.authMode } : {}),
+              ...(isIntegrationTriggerBlock(block) ? { trigger: true } : {}),
+            })),
+          triggerHint:
+            'trigger: true = the block can also start the workflow (add it with triggerMode: true).',
+          connectedIntegrations: ctx.structuredContext.connectedIntegrations,
+          envVariables: ctx.structuredContext.envVariables,
+          hostedKeysAvailable: ctx.structuredContext.hostedKeysAvailable,
+        },
+      }
+
+    case 'search_docs':
+      return { toolName, success: true, result: await searchBlockDocs(args.query) }
+
+    default:
+      throw new Error(`Unhandled discovery tool: ${toolName}`)
+  }
+}
+
+const SEARCH_DOCS_STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'how', 'block', 'blocks'])
+
+/**
+ * Lightweight block/registry search: every query term (not the whole phrase)
+ * is matched against block type, name and description.
+ */
+async function searchBlockDocs(rawQuery: unknown): Promise<Record<string, unknown>> {
+  const query = typeof rawQuery === 'string' ? rawQuery.trim() : ''
+  const terms = new Set<string>()
+  for (const term of query.toLowerCase().split(/[^a-z0-9_]+/)) {
+    if (term.length >= 3 && !SEARCH_DOCS_STOP_WORDS.has(term)) terms.add(term)
+  }
+  const { getAllBlocks } = await import('@/blocks/registry')
+  const matches = getAllBlocks()
+    .filter((block) => !block.hideFromToolbar)
+    .map((block) => {
+      const head = `${block.type} ${block.name}`.toLowerCase()
+      const description = block.description.toLowerCase()
+      let score = 0
+      for (const term of terms) {
+        if (head.includes(term)) score += 2
+        else if (description.includes(term)) score += 1
+      }
+      return { block, score }
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map(({ block }) => ({
+      type: block.type,
+      name: block.name,
+      description: truncate(block.description, 160, '…'),
+      ...(block.docsLink ? { docsLink: block.docsLink } : {}),
+      category: block.category,
+      ...(block.triggers?.enabled && block.triggers.available.length > 0 ? { trigger: true } : {}),
+    }))
+  const mentionsTrigger = /trigger|webhook/i.test(query)
+  return {
+    query,
+    matches,
+    ...(mentionsTrigger ? { triggerHint: TRIGGER_MODE_ADD_HINT } : {}),
   }
 }
 

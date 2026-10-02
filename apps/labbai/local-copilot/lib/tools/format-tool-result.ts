@@ -6,10 +6,13 @@ import { sanitizeForCopilot } from '@/lib/workflows/sanitization/json-sanitizer'
 import { getBlock } from '@/blocks/registry'
 import type { ArtifactStore } from '@/local-copilot/lib/context/artifacts'
 import {
+  ARTIFACT_INLINE_MAX_CHARS,
+  ARTIFACT_LOAD_MAX_CHARS,
   LOAD_COPILOT_ARTIFACT_TOOL_NAME,
   maybeOffloadToolResult,
 } from '@/local-copilot/lib/context/artifacts'
 import { sanitizeForLlm } from '@/local-copilot/lib/security/sanitize'
+import { DISCOVERY_TOOL_RESULT_MAX_CHARS } from '@/local-copilot/lib/tools/block-discovery'
 
 const FUNCTION_EXECUTE_STDOUT_MAX = 12_000
 
@@ -25,6 +28,21 @@ export const LOCAL_COPILOT_TOOL_RESULT_MAX_CHARS_FUNCTION_EXECUTE = 13_000
 const TOOL_RESULT_TRUNCATION_MARKER =
   '\n…[truncated: tool result exceeded char budget; re-query with a narrower call or load_copilot_artifact if an artifactId is present]'
 
+/** A loaded artifact that is still too large: reloading it would return the same cut. */
+const ARTIFACT_LOAD_TRUNCATION_MARKER =
+  '\n…[truncated: artifact exceeds the load budget; do not load it again — use what is shown or make a narrower tool call]'
+
+/**
+ * Discovery results the model builds from. They are compacted at the source and
+ * get a larger inline budget so they are not offloaded to an artifact.
+ */
+const DISCOVERY_INLINE_TOOL_NAMES = new Set([
+  'get_blocks_metadata',
+  'get_available_blocks',
+  'get_available_integrations',
+  'search_docs',
+])
+
 /**
  * Compact JSON for LLM tool results. Falls back to a tiny error payload on failure.
  * Applies a hard char cap so history reload (no artifact store) cannot rehydrate
@@ -32,13 +50,14 @@ const TOOL_RESULT_TRUNCATION_MARKER =
  */
 export function compactStringifyForLlm(
   value: unknown,
-  maxChars: number = LOCAL_COPILOT_TOOL_RESULT_MAX_CHARS
+  maxChars: number = LOCAL_COPILOT_TOOL_RESULT_MAX_CHARS,
+  truncationMarker: string = TOOL_RESULT_TRUNCATION_MARKER
 ): string {
   try {
     const serialized = JSON.stringify(value)
     if (serialized.length <= maxChars) return serialized
-    const budget = Math.max(0, maxChars - TOOL_RESULT_TRUNCATION_MARKER.length)
-    return `${serialized.slice(0, budget)}${TOOL_RESULT_TRUNCATION_MARKER}`
+    const budget = Math.max(0, maxChars - truncationMarker.length)
+    return `${serialized.slice(0, budget)}${truncationMarker}`
   } catch {
     return JSON.stringify({ success: false, error: 'tool result omitted' })
   }
@@ -526,10 +545,13 @@ export function formatToolResultForLlm(
     formatted = next
   } else if (toolName === 'get_blocks_metadata') {
     const record = asRecord(result)
-    formatted = {
-      ...record,
-      followUpHint:
-        'If you just created a workflow, call edit_workflow now to add blocks. Do not load_copilot_artifact unless a specific field id is missing from this result.',
+    formatted = record
+    if (record.success !== false) {
+      formatted = {
+        ...record,
+        followUpHint:
+          'This metadata is complete for building: next call create_workflow (new workflow) or edit_workflow (existing or just-created workflow). Do not re-fetch these types.',
+      }
     }
   }
 
@@ -545,15 +567,30 @@ export function formatToolResultForLlm(
   }
 
   const sanitized = sanitizeForLlm(formatted)
-  if (options?.artifactStore && toolName !== LOAD_COPILOT_ARTIFACT_TOOL_NAME) {
-    const offload = maybeOffloadToolResult(toolName, sanitized, options.artifactStore)
+  if (toolName === LOAD_COPILOT_ARTIFACT_TOOL_NAME) {
+    return compactStringifyForLlm(
+      sanitized,
+      ARTIFACT_LOAD_MAX_CHARS,
+      ARTIFACT_LOAD_TRUNCATION_MARKER
+    )
+  }
+
+  const isDiscovery = DISCOVERY_INLINE_TOOL_NAMES.has(toolName)
+  if (options?.artifactStore) {
+    const offload = maybeOffloadToolResult(
+      toolName,
+      sanitized,
+      options.artifactStore,
+      isDiscovery ? DISCOVERY_TOOL_RESULT_MAX_CHARS : ARTIFACT_INLINE_MAX_CHARS
+    )
     if (offload.offloaded) {
       return compactStringifyForLlm(copyFollowUpFields(sanitized, { ...offload.stub }))
     }
   }
 
-  const maxChars =
-    toolName === 'function_execute'
+  const maxChars = isDiscovery
+    ? DISCOVERY_TOOL_RESULT_MAX_CHARS
+    : toolName === 'function_execute'
       ? LOCAL_COPILOT_TOOL_RESULT_MAX_CHARS_FUNCTION_EXECUTE
       : LOCAL_COPILOT_TOOL_RESULT_MAX_CHARS
   return compactStringifyForLlm(sanitized, maxChars)

@@ -15,7 +15,7 @@ import {
   filterToolsByNames,
   type LocalCopilotCloudSpecialistDomain,
   type LocalCopilotSpecialistDomain,
-  toolNamesForDomain,
+  specialistToolNamesForDomain,
 } from '@/local-copilot/lib/agent/specialists/domains'
 import {
   buildSpecialistUserMessage,
@@ -168,7 +168,7 @@ function buildSpecialistTools(
   depth: number,
   maxDepth: number
 ): LocalCopilotToolDefinition[] {
-  const allowed = toolNamesForDomain(domain)
+  const allowed = specialistToolNamesForDomain(domain)
   // Never widen an empty domain filter to the full catalog — fall back to always-on leaves.
   const leafTools = filterToolsByNames(
     allTools,

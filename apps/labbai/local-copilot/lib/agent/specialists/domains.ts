@@ -46,7 +46,6 @@ export const MAX_PARALLEL_SUBAGENTS = 2
 
 export const ALWAYS_ON_TOOL_NAMES = new Set<string>([
   'search_docs',
-  'search_documentation',
   // Live web — always available so factual questions do not depend on research
   // intent classification (e.g. "Who is the CM of Karnataka?").
   'search_online',
@@ -62,7 +61,6 @@ export const ALWAYS_ON_TOOL_NAMES = new Set<string>([
   'list_integration_tools',
   'invoke_integration_tool',
   'open_resource',
-  'get_platform_actions',
   // Secrets pasted in chat must land in workspace env, not in block fields.
   'set_environment_variables',
   'list_user_workspaces',
@@ -159,7 +157,6 @@ const AGENT_TOOLS = [
   'load_user_skill',
   'function_execute',
   'get_available_integrations',
-  'get_platform_actions',
   'list_workspace_mcp_servers',
   'create_workspace_mcp_server',
   'update_workspace_mcp_server',
@@ -171,7 +168,6 @@ const RESEARCH_TOOLS = [
   'list_integration_tools',
   'invoke_integration_tool',
   'search_docs',
-  'search_documentation',
   'function_execute',
   'user_memory',
   'read',
@@ -247,6 +243,36 @@ export function toolNamesForDomain(domain: LocalCopilotSpecialistDomain): Set<st
   // specialists seeing the same user prompt would otherwise create a second workflow.
   if (domain !== 'workflow') {
     names.delete('create_workflow')
+  }
+  return names
+}
+
+/**
+ * Workflow-building leaves: block discovery plus edit. Only the workflow, run and
+ * agent (tools) specialists build or repair graphs. A table / knowledge / …
+ * specialist spawned for one part of a channel-agent request otherwise spent its
+ * rounds on block discovery that the parent then repeated before building.
+ */
+export const WORKFLOW_BUILD_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'get_available_blocks',
+  'get_blocks_metadata',
+  'edit_workflow',
+])
+
+const WORKFLOW_BUILD_SPECIALIST_DOMAINS = new Set<LocalCopilotSpecialistDomain>([
+  'workflow',
+  'run',
+  'agent',
+])
+
+/**
+ * A specialist's own leaf tools: its domain tools without the workflow-building
+ * leaves unless the domain builds workflows. The parent keeps them on every intent.
+ */
+export function specialistToolNamesForDomain(domain: LocalCopilotSpecialistDomain): Set<string> {
+  const names = toolNamesForDomain(domain)
+  if (!WORKFLOW_BUILD_SPECIALIST_DOMAINS.has(domain)) {
+    for (const name of WORKFLOW_BUILD_TOOL_NAMES) names.delete(name)
   }
   return names
 }
@@ -337,7 +363,7 @@ export function isSpecialistDomain(name: string): name is LocalCopilotCloudSpeci
 export function domainSystemHint(domain: LocalCopilotSpecialistDomain): string {
   switch (domain) {
     case 'workflow':
-      return 'Build, edit, and run workflows. Use get_workflow_data / get_workflow_context or get_workflow_run_options when inspecting an existing workflow; create_workflow when the user wants a new one. When adding blocks, use current types from get_blocks_metadata (never sunset/legacy types like gmail or router). For Agent/Router model, use a current recommended id or omit to keep the default (gpt-5) — never gpt-4o or other sunset/legacy models.'
+      return 'Build, edit, and run workflows. Use get_workflow_data / get_workflow_context or get_workflow_run_options when inspecting an existing workflow; create_workflow when the user wants a new one. When adding blocks, use current types from get_blocks_metadata (never sunset/legacy types like gmail or router). Integration triggers (Telegram, WhatsApp, Gmail, …) are the integration block added with triggerMode: true — there is no <service>_trigger type. For Agent/Router model, use a current recommended id or omit to keep the default (gpt-5) — never gpt-4o or other sunset/legacy models.'
     case 'run':
       return 'Focus on running and debugging workflows (get_workflow_run_options, run_workflow, run_block, run_from_block, query_logs). Prefer existing workspaceWorkflows entries — never create a workflow just to run something.'
     case 'deploy':
@@ -353,7 +379,7 @@ export function domainSystemHint(domain: LocalCopilotSpecialistDomain): string {
     case 'agent':
       return 'Focus on integration tools, MCP tools, skills, and function_execute.'
     case 'research':
-      return 'Focus on research. For ANY real-world factual or current question, call a live search tool FIRST (exa_answer via invoke_integration_tool, or search_online) before answering — never answer from training memory alone. When the question is about a workspace file, glob/read/grep that exact VFS path — do not open a similarly named file. Use search_documentation only for Labbai product questions.'
+      return 'Focus on research. For ANY real-world factual or current question, call a live search tool FIRST (exa_answer via invoke_integration_tool, or search_online) before answering — never answer from training memory alone. When the question is about a workspace file, glob/read/grep that exact VFS path — do not open a similarly named file. Use search_docs only for Labbai block/integration questions.'
     case 'media':
       return 'Focus on image/audio/video generation and ffmpeg.'
     case 'file':

@@ -722,6 +722,38 @@ Verify live: `/ai/v1/messages` accepting tools, `output_config.format` and image
 `usage.cache_read_input_tokens` > 0 from the second round of a copilot turn (Cloudflare logs /
 `usage_log.metadata.cacheReadTokens`); watch for the fallback warning.
 
+#### Copilot discovery thrash fix (2026-10-02)
+
+Live evidence: "support agent for a gynecologist on Telegram Business, with a contacts table and
+knowledge" — two turns (20-round cap, then Continue) of only discovery, never a build. Causes and
+fixes (`local-copilot/lib/**`):
+- **No create_workflow.** The intent classifier scored it `table` only, and non-workflow intents
+  withhold `create_workflow`. Agent/bot/channel requests (EN/RU/UZ) now score `workflow`
+  (`specialists/classify.ts`); "knowledge" alone scores `knowledge`.
+- **Trigger not discoverable.** `get_available_blocks {"category":"triggers"}` filtered on
+  `category === 'triggers'`, so the `telegram` block (category `tools`, trigger mode) never
+  showed. It now lists core triggers plus every integration trigger with `addAs: {type,
+  triggerMode: true}`; block summaries carry `triggerCapable` / `triggerIds`.
+- **Unknown ids "succeeded".** The server tool silently skips unknown types, so
+  `get_blocks_metadata ["telegram_trigger"]` returned an empty success (and refetched every
+  time). `tools/block-discovery.ts` resolves trigger aliases / trigger ids to the owning block in
+  trigger mode, answers unknown ids with "did you mean …", and fails when nothing matched.
+  edit_workflow `add` of an alias type is rewritten to the block + `triggerMode: true`.
+- **Artifact thrash.** Metadata (YAML docs, examples) and the full block list exceeded the 8k
+  inline cap → artifact → `load_copilot_artifact`, whose result was cut back to 8k → reload.
+  Discovery results are now compact (field ids/types/required/options, operations, outputs,
+  trigger fields; per-block budget) with a 16k inline cap; artifact loads get 24k and a repeat
+  load in a turn says "already loaded". In-turn microcompact keeps the latest
+  `get_blocks_metadata` result verbatim.
+- **Repeats cost rounds.** `get_available_blocks` / `get_available_integrations` /
+  `search_docs` repeats come from a per-turn cache with a "stop discovery, build" nudge; block
+  metadata has its per-type cache. The 3-attempt stagnation stop is unchanged.
+- **`search_documentation` / `get_platform_actions`** were offered but removed server-side
+  ("Tool not found"); dropped from the tool lists and prompt, `search_documentation` aliases to
+  `search_docs`.
+- Specialists other than workflow / run / agent no longer get block discovery or
+  `edit_workflow`. The static prefix changed once (rules + tools); still byte-stable.
+
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 
 CI on every push to `main` (`.github/workflows/ci.yml`), all jobs in parallel:

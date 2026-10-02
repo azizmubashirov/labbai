@@ -100,6 +100,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
 - Prefer specialist tools for multi-step domain work: workflow, run, deploy, auth, knowledge, table, scheduled_task, agent, research, media, file, superagent.
 - Keep leaf tools for simple single calls. Do not re-run research/auth already present in pre-pass findings unless stale or failed.
 - Use \`superagent\` for third-party integration actions; \`agent\` for listing/invoking tools and skills; \`auth\` when credentials are missing.
+- Never delegate block/trigger discovery or workflow building to a table, knowledge, or other non-workflow specialist. For a channel agent that also needs a table or knowledge base (e.g. a Telegram support bot with a contacts table), build the workflow yourself — get_available_blocks → get_blocks_metadata (once) → create_workflow → edit_workflow — and create the table / knowledge base with user_table / knowledge_base (or delegate each once). Do not repeat lookups a specialist already reported.
 `,
   },
   {
@@ -142,6 +143,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
   - Agent block: use \`messages\` (array of \`{role, content}\`), \`model\`, and \`tools\` — not systemPrompt/userPrompt. If you only have a system prompt string, still pass it via \`messages: [{role:"system",content:"..."},{role:"user",content:"..."}]\` (legacy systemPrompt is auto-mapped, but \`messages\` is preferred). Exa web search tool entry: \`{ type: "exa", title: "Exa Search", toolId: "exa_search", usageControl: "auto" }\`.
   - Models (CRITICAL): never set Agent/Router/Evaluator \`model\` to a sunset/legacy catalog id (gpt-4o, gpt-4.1-nano, older Claude 3.x, etc.). Use the field default (Agent: gpt-5-mini) or a current recommended id from get_blocks_metadata (OpenAI only: gpt-5.5, gpt-5-mini, gpt-4.1, gpt-4.1-mini). Omit \`model\` rather than inventing an old id.
   - Block types: only add types returned by get_blocks_metadata. Never add sunset/legacy types (gmail, router, starter, file, chat_trigger, …) — use the current successors (gmail_v2, router_v2, start_trigger, file_v5).
+  - Triggers: an integration trigger (Telegram, WhatsApp, Gmail, …) is the integration block itself added with \`triggerMode: true\` beside \`inputs\` — there is no \`<service>_trigger\` block type. \`get_available_blocks\` with \`{ "category": "triggers" }\` lists them; the block's get_blocks_metadata result has its trigger fields and outputs.
   - Prefer one edit_workflow for small graphs. For multi-agent graphs, you may use up to ${MAX_POPULATE_EDITS} sequential edit_workflow calls (add and wire one agent or human_in_the_loop per call) rather than stalling on a single oversized tool call.
   - If workflowLintMessage reports orphan blocks, fix connections on the Start (or upstream) block before run_workflow.
   - Always issue the \`edit_workflow\` tool call to apply changes. Never end a turn by only describing the intended edit.
@@ -170,7 +172,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
   - If the user pastes a secret in chat anyway, store it immediately with \`set_environment_variables\`, use {{NAME}}, never repeat the value, and tell them to rotate it.
   - Agent blocks run on OpenAI models with the platform-provided key: leave apiKey empty and never ask for a model API key.
   - Integrations: never tell the user a service is unsupported without first checking \`get_available_integrations\` (integrationBlocks) or \`get_available_blocks\` — Telegram, WhatsApp, Instagram, Gmail, Google Sheets, HubSpot and more exist as blocks and triggers. Build the workflow with them; never tell the user to host a bot or script elsewhere.
-  - Telegram agents: the Telegram trigger field \`messageSource\` picks \`bot\` (chats with the bot, default), \`business\` (customers writing to the owner's own account via Telegram Business) or \`both\`. When business chats are on, set \`businessConnectionId\` on every Telegram block that replies to the trigger's \`businessConnectionId\` output (e.g. \`<telegram.businessConnectionId>\`, empty for bot chats) and tell the user to connect the bot in Telegram Settings → Telegram Business → Chatbots.`,
+  - Telegram agents: the Telegram trigger is the \`telegram\` block with \`triggerMode: true\`; its field \`messageSource\` picks \`bot\` (chats with the bot, default), \`business\` (customers writing to the owner's own account via Telegram Business) or \`both\`. When business chats are on, set \`businessConnectionId\` on every Telegram block that replies to the trigger's \`businessConnectionId\` output (e.g. \`<telegram.businessConnectionId>\`, empty for bot chats) and tell the user to connect the bot in Telegram Settings → Telegram Business → Chatbots.`,
   },
   {
     id: 'userMemory',
@@ -190,7 +192,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
   - For resource facts (workflow/file/table/KB IDs, names, deploy status, inventory membership), the Workspace snapshot / structured Current context inventory ALWAYS beats session memory entities when they disagree.
   - \`constraints\` and the separate "Active user directive" / "Session constraints" system messages are authoritative for corrections ("use X not Y", "don't create a new workflow"). Do not re-ask or undo them unless the user explicitly changes course.
   - Never burn tool rounds re-doing work that constraints already forbade. If stuck after a failed retry, stop and ask — do not loop the same tool with the same args.
-  - When a tool result includes \`artifactId\` + \`truncated: true\`, call \`load_copilot_artifact\` only if you need the full body.`,
+  - When a tool result includes \`artifactId\` + \`truncated: true\`, call \`load_copilot_artifact\` only if you need the full body, and at most once per artifact per turn. Repeating a discovery call (blocks, metadata, integrations, docs) returns the same cached result — build instead of asking again.`,
   },
   {
     id: 'credentialsContext',
@@ -325,7 +327,7 @@ export const LOCAL_COPILOT_PROMPT_SECTIONS: readonly LocalCopilotPromptSection[]
   - Context may list workspace skills (name + description, and sometimes a "Relevant workspace skills" block with full instructions). If a listed skill matches the user request, follow it over generic defaults. Do not skip a matching skill.
   - If a skill's full instructions are already in the prompt, follow them and do not call \`load_user_skill\` again for that name. Otherwise call \`load_user_skill\` with the exact \`skill_name\`, then follow the returned content. Never act on the name or description alone.
   - Create/edit/list skills with \`manage_skill\`; custom code tools with \`manage_custom_tool\`; agent MCP server configs with \`manage_mcp_tool\` (distinct from \`*_workspace_mcp_server\` deploy tools).
-  - Docs: prefer \`search_documentation\` for platform docs; \`search_docs\` remains a lightweight block/registry search.`,
+  - Docs: \`search_docs\` searches blocks and integrations by keyword.`,
   },
   {
     id: 'codeExecution',

@@ -13,6 +13,39 @@ export const ARTIFACT_MAX_TOTAL_BYTES = 500_000
 
 export const LOAD_COPILOT_ARTIFACT_TOOL_NAME = 'load_copilot_artifact'
 
+/**
+ * Hard cap for a loaded artifact body. Loading exists to see what did not fit
+ * inline, so it must not be cut back to the inline cap (that made the model
+ * reload the same artifact forever).
+ */
+export const ARTIFACT_LOAD_MAX_CHARS = 24_000
+
+export const ARTIFACT_ALREADY_LOADED_HINT =
+  'This artifact was already loaded earlier in this turn; its content is unchanged (repeated here). Do not load it again — use it and proceed with the next build step (create_workflow / edit_workflow).'
+
+/**
+ * Records a load of `artifactId` for this turn. Returns true when it was
+ * already loaded before (a repeat).
+ */
+export function rememberArtifactLoad(loaded: Set<string>, artifactId: string): boolean {
+  if (loaded.has(artifactId)) return true
+  loaded.add(artifactId)
+  return false
+}
+
+/** Result for a repeated load: the same body plus an explicit "already loaded" note. */
+export function buildRepeatedArtifactLoadResult(
+  artifactId: string,
+  body: unknown
+): Record<string, unknown> {
+  return {
+    artifactId,
+    alreadyLoadedThisTurn: true,
+    hint: ARTIFACT_ALREADY_LOADED_HINT,
+    content: body,
+  }
+}
+
 function serializeForSize(value: unknown): string {
   try {
     return JSON.stringify(value)

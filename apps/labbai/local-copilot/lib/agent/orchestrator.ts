@@ -78,6 +78,7 @@ import {
 } from '@/local-copilot/lib/context/follow-up-directives'
 import {
   applyMicrocompactInPlace,
+  MICROCOMPACT_PRESERVE_LATEST_TOOL_NAMES,
   microcompactMessages,
 } from '@/local-copilot/lib/context/microcompact'
 import { resolveOpenWorkflowId } from '@/local-copilot/lib/context/open-workflow'
@@ -834,6 +835,8 @@ async function* runLocalCopilotAgentTurn(
     readVfsPaths: new Set(),
     allowedWorkflowIds: new Set(),
     blocksMetadataByType: new Map(),
+    discoveryCache: new Map(),
+    loadedArtifactIds: new Set(),
     artifactStore: createArtifactStore(),
     turnMutations: createTurnMutations(),
     resolvedSecretTraceRegistry,
@@ -2230,7 +2233,9 @@ async function* runLocalCopilotAgentTurn(
       yield { type: 'status', message: 'Reviewing results…' }
     }
 
-    const microcompactStats = applyMicrocompactInPlace(messages)
+    const microcompactStats = applyMicrocompactInPlace(messages, {
+      preserveLatestToolNames: MICROCOMPACT_PRESERVE_LATEST_TOOL_NAMES,
+    })
     if (microcompactStats.clearedCount > 0) {
       logger.info('Arena Copilot microcompact applied', {
         round,

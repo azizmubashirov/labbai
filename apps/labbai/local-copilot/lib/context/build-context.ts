@@ -4,6 +4,7 @@ import { createLogger } from '@labbai/logger'
 import { getErrorMessage } from '@labbai/utils/errors'
 import type { WorkflowState } from '@labbai/workflow-types/workflow'
 import { and, desc, eq, isNull } from 'drizzle-orm'
+import { isTriggerCapableBlock } from '@/lib/catalog/projection/block-summary'
 import { generateWorkspaceSnapshot } from '@/lib/copilot/chat/workspace-context'
 import type { VfsSnapshotV1 } from '@/lib/copilot/generated/vfs-snapshot-v1'
 import { loadUserMemoriesForContext } from '@/lib/copilot/tools/server/other/user-memory'
@@ -544,11 +545,16 @@ async function loadExecutionContext(params: {
 function summarizeBlocks(blocks: BlockConfig[]): LocalCopilotBlockSummary[] {
   return blocks
     .filter((block) => !block.hideFromToolbar)
-    .map((block) => ({
-      id: block.type,
-      name: block.name,
-      category: block.category,
-      description: block.description,
-      authMode: block.authMode,
-    }))
+    .map((block) => {
+      const triggerIds = block.triggers?.enabled ? block.triggers.available : []
+      return {
+        id: block.type,
+        name: block.name,
+        category: block.category,
+        description: block.description,
+        authMode: block.authMode,
+        ...(isTriggerCapableBlock(block) ? { triggerCapable: true } : {}),
+        ...(triggerIds.length > 0 ? { triggerIds: [...triggerIds] } : {}),
+      }
+    })
 }

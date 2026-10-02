@@ -49,6 +49,11 @@ const DOMAIN_PATTERNS: DomainPattern[] = [
       /\b(build|create|edit|add|wire|connect)\s+(an?\s+)?(workflow|automation|pipeline)\b/i,
       /\b(add|edit|wire|connect|delete)\s+(a\s+)?blocks?\b/i,
       /\b(modify|update|change|fix)\s+(the\s+)?(workflow|block)/i,
+      // Building an agent / bot is a workflow build (an Agent block behind a trigger).
+      /\b(build|create|make|set\s*up|setup|need|want)\b[\s\S]*\b(agent|bot|chatbot|assistant)\b/i,
+      // A bot on a messaging channel ("support agent on Telegram Business", "telegram uchun bot").
+      /(telegram|whatsapp|instagram|телеграм|ватсап|инстаграм)[\s\S]*(bot|agent|business|account|бот|агент|аккаунт|бизнес)|(bot|agent|бот|агент)[\s\S]*(telegram|whatsapp|instagram|телеграм|ватсап|инстаграм)/i,
+      /(создай|сделай|настрой|yarat|tuz)[\s\S]*(бот|агент|bot|agent)|(бот|агент|bot|agent)[\s\S]*(yarat|tuz|создай|сделай)/i,
     ],
   },
   {
@@ -63,7 +68,7 @@ const DOMAIN_PATTERNS: DomainPattern[] = [
     domain: 'knowledge',
     weight: 3,
     patterns: [
-      /\b(knowledge\s*base|kb\b|vector|semantic\s+search|ingest\s+(doc|document|file)|rag)\b/i,
+      /\b(knowledge(\s*base)?|kb\b|vector|semantic\s+search|ingest\s+(doc|document|file)|rag)\b/i,
     ],
   },
   {

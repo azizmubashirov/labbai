@@ -62,7 +62,7 @@ const CORE_LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   {
     name: 'get_blocks_metadata',
     description:
-      'Returns exact subblock field names, types, and examples for block types. Call ONCE with every type you need (e.g. ["agent","start_trigger","gmail"]) before edit_workflow — do not re-fetch the same types in the same turn.',
+      'Returns exact field ids, types, required flags, options, operations, outputs and trigger fields for block types. Call ONCE with every type you need (e.g. ["agent","start_trigger","telegram"]) before edit_workflow — do not re-fetch the same types in the same turn. Trigger aliases (telegram_trigger, telegram_webhook) resolve to the integration block in trigger mode; unknown ids come back with did-you-mean suggestions.',
     parameters: {
       type: 'object',
       properties: {
@@ -122,11 +122,14 @@ const CORE_LOCAL_COPILOT_TOOLS: LocalCopilotToolDefinition[] = [
   {
     name: 'get_available_blocks',
     description:
-      'Lists all block types available in this Arena deployment with categories and descriptions.',
+      'Lists all block types available in this Arena deployment (id, name, category, auth mode). Pass { "category": "triggers" } for every block that can start a workflow, including integration triggers (Telegram, WhatsApp, Gmail, …) that are added with triggerMode: true.',
     parameters: {
       type: 'object',
       properties: {
-        category: { type: 'string', description: 'Optional category filter' },
+        category: {
+          type: 'string',
+          description: 'Optional category filter: "triggers", "tools" or "blocks"',
+        },
       },
       additionalProperties: false,
     },

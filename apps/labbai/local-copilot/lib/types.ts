@@ -175,6 +175,10 @@ export interface LocalCopilotBlockSummary {
   category: string
   description: string
   authMode?: string
+  /** Can start a workflow: a core trigger block, or an integration block in trigger mode. */
+  triggerCapable?: boolean
+  /** Registered trigger ids this block runs (e.g. `telegram_webhook` for `telegram`). */
+  triggerIds?: string[]
 }
 
 export type WorkflowPatchOperation =

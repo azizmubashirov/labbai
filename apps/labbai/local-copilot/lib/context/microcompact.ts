@@ -13,7 +13,18 @@ export interface MicrocompactResult {
 
 export interface MicrocompactOptions {
   keepRecentRounds?: number
+  /**
+   * Tool names whose most recent result stays verbatim even when its round is
+   * old (e.g. `get_blocks_metadata`: edit_workflow is built from it several
+   * rounds later; clearing it made the model fetch it again).
+   */
+  preserveLatestToolNames?: ReadonlySet<string>
 }
+
+/** In-turn default: keep the latest block metadata the build depends on. */
+export const MICROCOMPACT_PRESERVE_LATEST_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'get_blocks_metadata',
+])
 
 /**
  * Zero-cost compaction: replace aged tool-result bodies with short fingerprints.
@@ -37,11 +48,17 @@ export function microcompactMessages(
   }
 
   const toolNameByCallId = buildToolNameByCallId(messages)
+  const preservedIndices = findLatestToolResultIndices(
+    messages,
+    toolNameByCallId,
+    options.preserveLatestToolNames
+  )
   let clearedCount = 0
   let charsFreed = 0
 
   const next = messages.map((message, index) => {
     if (message.role !== 'tool' || !clearIndexSet.has(index)) return message
+    if (preservedIndices.has(index)) return message
 
     const content = typeof message.content === 'string' ? message.content : ''
     if (content.startsWith(CLEARED_PREFIX)) return message
@@ -94,6 +111,29 @@ function findToolRoundIndices(messages: ChatMessage[]): number[][] {
   }
 
   return rounds
+}
+
+/** Index of the newest tool result for each preserved tool name. */
+function findLatestToolResultIndices(
+  messages: ChatMessage[],
+  toolNameByCallId: Map<string, string>,
+  preserve: ReadonlySet<string> | undefined
+): Set<number> {
+  const indices = new Set<number>()
+  if (!preserve || preserve.size === 0) return indices
+  const found = new Set<string>()
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message.role !== 'tool' || !message.toolCallId) continue
+    const toolName = toolNameByCallId.get(message.toolCallId)
+    if (!toolName || !preserve.has(toolName) || found.has(toolName)) continue
+    const content = typeof message.content === 'string' ? message.content : ''
+    // A failed lookup is not what the build uses — keep the newest successful one.
+    if (content.startsWith(CLEARED_PREFIX) || content.startsWith('{"success":false')) continue
+    found.add(toolName)
+    indices.add(index)
+  }
+  return indices
 }
 
 function buildToolNameByCallId(messages: ChatMessage[]): Map<string, string> {
