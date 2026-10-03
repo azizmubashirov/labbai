@@ -56,6 +56,11 @@ export interface WorkflowLintResult {
   emptyOutgoingPorts: WorkflowLintEmptyOutgoingPort[]
   invalidBranchPorts: WorkflowLintInvalidBranchPort[]
   invalidConnectionTargets: WorkflowLintInvalidConnectionTarget[]
+  /**
+   * The current edges as "Source → Target", only when a block is unreachable — so a model
+   * that wired the graph backwards can see what it actually built.
+   */
+  connections?: string[]
 }
 
 /** Tier-1 (sync, config) field issues for a single block. */
@@ -230,6 +235,16 @@ export function lintEditedWorkflowState(workflowState: Pick<WorkflowState, 'bloc
     emptyOutgoingPorts,
     invalidBranchPorts,
     invalidConnectionTargets,
+    ...(orphanBlocks.length > 0
+      ? {
+          connections: edges
+            .filter((edge) => blocks[edge?.source || ''] && blocks[edge?.target || ''])
+            .map(
+              (edge) =>
+                `"${blocks[edge.source].name || edge.source}" → "${blocks[edge.target].name || edge.target}"`
+            ),
+        }
+      : {}),
   } satisfies WorkflowLintResult
 }
 
@@ -296,6 +311,9 @@ export function formatWorkflowLintMessage(lint: WorkflowLintIssueView) {
       `Blocks with no incoming edge: ${lint.orphanBlocks
         .map((block) => `"${block.blockName || block.blockId}" (${block.blockType || 'unknown'})`)
         .join(', ')}`
+    )
+    parts.push(
+      `Current connections: ${lint.connections?.length ? lint.connections.join(', ') : 'none'}. A connection is set on its UPSTREAM block: to make A → B, edit block A with params.connections = { "source": "<B block id>" } ("source" is A's output handle, not where A comes from). Remove a backwards edge by editing its upstream block`
     )
   }
 

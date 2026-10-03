@@ -27,6 +27,7 @@ import {
 import { applyAgentToolUsageControlModes } from '@/lib/workflows/tool-input/usage-control'
 import { hasTriggerCapability } from '@/lib/workflows/triggers/trigger-utils'
 import { getBlock } from '@/blocks/registry'
+import { isTriggerBlockType } from '@/executor/constants'
 import type { BlockConfig } from '@/blocks/types'
 import { overlayVisibility } from '@/blocks/visibility/context'
 import { TRIGGER_RUNTIME_SUBBLOCK_IDS } from '@/triggers/constants'
@@ -693,6 +694,28 @@ export function addConnectionsAsEdges(
     const sourceHandle = normalizeHandle(rawHandle)
 
     const addEdgeForTarget = (targetBlock: string, targetHandle?: string) => {
+      // A trigger / start block is never an edge target. A plain `source` connection that
+      // points at one was written backwards ("B comes from the trigger") — wire it the way it
+      // was meant (trigger → B) instead of dropping it and leaving B unreachable.
+      const target = modifiedState?.blocks?.[targetBlock]
+      if (
+        sourceHandle === 'source' &&
+        !targetHandle &&
+        target &&
+        (Boolean(target.triggerMode) || isTriggerBlockType(target.type))
+      ) {
+        createValidatedEdge(
+          modifiedState,
+          targetBlock,
+          blockId,
+          'source',
+          'target',
+          'add_edge',
+          logger,
+          skippedItems
+        )
+        return
+      }
       createValidatedEdge(
         modifiedState,
         blockId,
