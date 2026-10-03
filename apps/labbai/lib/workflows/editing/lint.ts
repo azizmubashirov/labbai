@@ -237,12 +237,13 @@ export function lintEditedWorkflowState(workflowState: Pick<WorkflowState, 'bloc
     invalidConnectionTargets,
     ...(orphanBlocks.length > 0
       ? {
-          connections: edges
-            .filter((edge) => blocks[edge?.source || ''] && blocks[edge?.target || ''])
-            .map(
-              (edge) =>
-                `"${blocks[edge.source].name || edge.source}" → "${blocks[edge.target].name || edge.target}"`
-            ),
+          connections: edges.flatMap((edge) => {
+            const from = blocks[edge?.source || '']
+            const to = blocks[edge?.target || '']
+            return from && to
+              ? [`"${from.name || edge.source}" → "${to.name || edge.target}"`]
+              : []
+          }),
         }
       : {}),
   } satisfies WorkflowLintResult
