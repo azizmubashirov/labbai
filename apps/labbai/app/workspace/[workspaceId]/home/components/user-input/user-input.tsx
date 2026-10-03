@@ -10,24 +10,11 @@ import {
   useRef,
   useState,
 } from 'react'
-import {
-  Chip,
-  cn,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Tooltip,
-  toast,
-} from '@labbai/emcn'
-import { ChevronDown, Paperclip, Plus, Slash } from '@labbai/emcn/icons'
+import { Chip, cn, Tooltip, toast } from '@labbai/emcn'
+import { Paperclip, Plus, Slash } from '@labbai/emcn/icons'
 import { createLogger } from '@labbai/logger'
 import { useParams } from 'next/navigation'
 import { getMothershipAttachmentPreviewUrl } from '@/lib/copilot/chat/attachment-preview'
-import { isCloudflareAIEnabled } from '@/lib/core/config/env-flags'
 import { LABBAI_RESOURCE_DRAG_TYPE, LABBAI_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { MOTHERSHIP_ADD_CONTEXT_EVENT } from '@/lib/mothership/events'
 import { MOTHERSHIP_ACCEPT_ATTRIBUTE } from '@/lib/uploads/utils/validation'
@@ -54,75 +41,12 @@ import { mentionifyIntegrations } from '@/blocks/integration-matcher'
 import { useChatInputFocus } from '@/hooks/use-chat-input-focus'
 import { useVoiceInput } from '@/hooks/use-voice-input'
 import { SessionMemoryInspector } from '@/local-copilot/components/session-memory-inspector'
-import {
-  getAvailableLocalCopilotProviderGroups,
-  getLocalCopilotCatalogEntriesForGroup,
-  getLocalCopilotCatalogEntry,
-  isLocalCopilotCatalogId,
-  type LocalCopilotCatalogId,
-} from '@/local-copilot/lib/model-catalog'
 import { type DraftPayload, useMothershipDraftsStore } from '@/stores/mothership-drafts/store'
 import type { ChatContext } from '@/stores/panel'
 
 export type { FileAttachmentForApi } from '@/app/workspace/[workspaceId]/home/types'
 
 const logger = createLogger('UserInput')
-
-interface LocalCopilotModelPickerProps {
-  catalogId: LocalCopilotCatalogId
-  onCatalogIdChange: (id: LocalCopilotCatalogId) => void
-}
-
-/**
- * Single Local Copilot model dropdown with per-provider section headers.
- */
-function LocalCopilotModelPicker({ catalogId, onCatalogIdChange }: LocalCopilotModelPickerProps) {
-  const selectedLabel = getLocalCopilotCatalogEntry(catalogId)?.label ?? 'GPT-5.5'
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type='button'
-          aria-label='Local Copilot model'
-          className={cn(
-            'ml-1 inline-flex h-7 items-center gap-0.5 rounded-[10px] bg-[var(--surface-5)] px-2.5',
-            'text-[var(--text-primary)] text-sm dark:bg-[var(--surface-4)]',
-            'hover-hover:bg-[var(--surface-2)] dark:hover-hover:bg-[var(--surface-6)]'
-          )}
-        >
-          {selectedLabel}
-          <ChevronDown className='size-[12px] text-[var(--text-muted)]' />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align='start' side='top' className='min-w-[14rem]'>
-        <DropdownMenuRadioGroup
-          value={catalogId}
-          onValueChange={(value) => {
-            if (isLocalCopilotCatalogId(value)) {
-              onCatalogIdChange(value)
-            }
-          }}
-        >
-          {getAvailableLocalCopilotProviderGroups(isCloudflareAIEnabled).map((group, groupIndex) => {
-            const entries = getLocalCopilotCatalogEntriesForGroup(group.id, isCloudflareAIEnabled)
-            return (
-              <div key={group.id}>
-                {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
-                <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-                {entries.map((entry) => (
-                  <DropdownMenuRadioItem key={entry.id} value={entry.id}>
-                    {entry.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </div>
-            )
-          })}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 interface UserInputProps {
   defaultValue?: string
@@ -168,14 +92,7 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
   ref
 ) {
   const { workspaceId } = useParams<{ workspaceId: string }>()
-  const {
-    chatId,
-    userId,
-    onContextAdd,
-    onContextRemove,
-    localCopilotCatalogId,
-    setLocalCopilotCatalogId,
-  } = useChatSurface()
+  const { chatId, userId, onContextAdd, onContextRemove } = useChatSurface()
 
   const [initialValue] = useState(() => {
     if (defaultValue) return defaultValue
@@ -681,12 +598,6 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
             </Tooltip.Trigger>
             <Tooltip.Content side='top'>Skills</Tooltip.Content>
           </Tooltip.Root>
-          {localCopilotCatalogId && setLocalCopilotCatalogId ? (
-            <LocalCopilotModelPicker
-              catalogId={localCopilotCatalogId}
-              onCatalogIdChange={setLocalCopilotCatalogId}
-            />
-          ) : null}
           {chatId ? <SessionMemoryInspector chatId={chatId} /> : null}
         </div>
         <div className='flex items-center gap-1.5'>
