@@ -5,6 +5,7 @@ import { toStringOrNull } from '@labbai/utils/coerce'
 import { generateId } from '@labbai/utils/id'
 import { toRecord } from '@labbai/utils/object'
 import { and, desc, eq } from 'drizzle-orm'
+import { announceInboxChange } from '@/lib/inbox/changes'
 import {
   type InboxChannel,
   telegramBotIdFromToken,
@@ -12,7 +13,6 @@ import {
 } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
 import { scheduleInboxNotificationChecks } from '@/lib/notifications/hooks'
-import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 
 const logger = createLogger('InboxOutbound')
 
@@ -138,7 +138,7 @@ export async function recordAgentOutboundMessage(
     return true
   })
   if (!recorded) return null
-  await notifyWorkspaceInboxChanged(workspaceId)
+  await announceInboxChange(workspaceId)
   return { conversationId: conversation.id, messageId }
 }
 

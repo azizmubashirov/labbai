@@ -1,6 +1,7 @@
 import { createLogger } from '@labbai/logger'
 import { getErrorMessage } from '@labbai/utils/errors'
 import { generateId } from '@labbai/utils/id'
+import { announceInboxChange } from '@/lib/inbox/changes'
 import {
   getInboxConversation,
   getInboxReplyRoute,
@@ -29,7 +30,6 @@ import {
 } from '@/lib/notifications/repository'
 import { sendNotificationMessage } from '@/lib/notifications/telegram'
 import { recordNotificationJudgeUsage } from '@/lib/notifications/usage'
-import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 
 const logger = createLogger('NotificationService')
 
@@ -169,7 +169,7 @@ export async function applyNotificationPause(
         })
       : await pauseInboxConversationAi(conversation.id, { kind: 'hard' })
   if (!updated) return false
-  await notifyWorkspaceInboxChanged(conversation.workspaceId)
+  await announceInboxChange(conversation.workspaceId)
   return true
 }
 
@@ -206,7 +206,7 @@ export async function sendNotificationPauseNotice(
       externalMessageId: outcome.status === 'sent' ? outcome.externalMessageId : null,
       error: outcome.status === 'failed' ? outcome.error : null,
     })
-    await notifyWorkspaceInboxChanged(conversation.workspaceId)
+    await announceInboxChange(conversation.workspaceId)
   } catch (error) {
     logger.error('Pause notice failed', {
       conversationId: conversation.id,

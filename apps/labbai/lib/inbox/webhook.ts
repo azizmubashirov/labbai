@@ -1,5 +1,6 @@
 import { createLogger } from '@labbai/logger'
 import { toRecord } from '@labbai/utils/object'
+import { announceInboxChange } from '@/lib/inbox/changes'
 import {
   extractInboundInboxMessages,
   inboxChannelForProvider,
@@ -9,7 +10,6 @@ import { type RecordInboundResult, recordInboundInboxMessages } from '@/lib/inbo
 import { fillInstagramContactNames } from '@/lib/inbox/instagram-profile'
 import { resolveTelegramBotToken } from '@/lib/inbox/telegram-business'
 import { scheduleInboxNotificationChecks } from '@/lib/notifications/hooks'
-import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 
 const logger = createLogger('InboxWebhook')
 
@@ -57,7 +57,7 @@ export async function recordInboxWebhookDelivery(
           requestId: delivery.requestId,
         })
       }
-      await notifyWorkspaceInboxChanged(workspaceId)
+      await announceInboxChange(workspaceId)
       scheduleInboxNotificationChecks(
         result.inserted.map((message) => ({
           workspaceId,

@@ -20,6 +20,7 @@ import {
 } from '@/lib/core/outbox/service'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { getBaseUrl, getSocketServerUrl } from '@/lib/core/utils/urls'
+import { syncWorkflowCrmLink } from '@/lib/crm/deploy-sync'
 import { setWorkflowMcpTransactionLockTimeout } from '@/lib/mcp/server-locks'
 import {
   notifyMcpToolServers,
@@ -543,6 +544,8 @@ async function prepareDeploymentOperation(
         workspaceId: workflowRecord.workspaceId,
         blocks,
       })
+      /* The CRM link mirrors only while this version has the Binora CRM block. */
+      await syncWorkflowCrmLink(tx, { workflowId: payload.workflowId, blocks })
       context.signal.throwIfAborted()
     },
   })
@@ -1345,7 +1348,10 @@ async function syncMcpToolsIfStillActive(params: {
   notifyMcpToolServers(tools)
 }
 
-/** Legacy side-effect sync: the active version's Notifications rules become its triggers. */
+/**
+ * Legacy side-effect sync: the active version's Notifications rules become its triggers, and its
+ * CRM link follows whether the version has the Binora CRM block.
+ */
 async function syncNotificationTriggersIfStillActive(params: {
   workflowId: string
   workspaceId: string | null
@@ -1370,6 +1376,7 @@ async function syncNotificationTriggersIfStillActive(params: {
       workspaceId: params.workspaceId,
       blocks: params.blocks,
     })
+    await syncWorkflowCrmLink(tx, { workflowId: params.workflowId, blocks: params.blocks })
   })
 }
 

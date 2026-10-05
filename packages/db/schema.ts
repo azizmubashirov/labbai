@@ -7968,6 +7968,11 @@ export const inboxMessage = pgTable(
     author: inboxMessageAuthorEnum('author').notNull(),
     /** Operator who sent the message; null for customer and agent messages. */
     operatorUserId: text('operator_user_id').references(() => user.id, { onDelete: 'set null' }),
+    /**
+     * Name of an operator who is not a Labbai user: a person answering from a linked CRM (the
+     * Binora lead card). Null for Labbai operators, whose name comes from `operatorUserId`.
+     */
+    operatorName: text('operator_name'),
     text: text('text').notNull(),
     /**
      * Media on the message (`InboxAttachment[]` in `apps/labbai/lib/inbox/attachments.ts`): channel
@@ -8145,5 +8150,111 @@ export const notificationEvent = pgTable(
       table.workspaceId,
       table.firedAt
     ),
+  })
+)
+
+/** CRMs an agent workflow's conversations can be mirrored into. */
+export const crmLinkProviderEnum = pgEnum('crm_link_provider', ['binora'])
+
+/**
+ * One agent workflow's link to a CRM funnel: every Inbox conversation of the workflow is
+ * mirrored there as a lead (customer, agent and operator messages, and the AI switch), and the
+ * CRM's operators answer the customer or switch the AI through signed callbacks. Configured by
+ * the workflow's CRM block; mirroring runs only while the deployed version has that block.
+ */
+export const crmLink = pgTable(
+  'crm_link',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    workflowId: text('workflow_id')
+      .notNull()
+      .references(() => workflow.id, { onDelete: 'cascade' }),
+    provider: crmLinkProviderEnum('provider').notNull(),
+    /** The CRM channel address, e.g. `https://api.binora.uz/v1/messenger/<token>`. */
+    baseUrl: text('base_url').notNull(),
+    /** Shared signing secret, encrypted with `ENCRYPTION_KEY`. */
+    secretEncrypted: text('secret_encrypted').notNull(),
+    /** Public id of this link in the callback URL the CRM calls back on. */
+    callbackKey: text('callback_key').notNull(),
+    /** Set by deploy sync: the deployed version has an enabled CRM block. */
+    deployed: boolean('deployed').notNull().default(false),
+    /** Messages created before this time are not mirrored (connect time minus any backfill). */
+    mirrorSince: timestamp('mirror_since').notNull().defaultNow(),
+    /** Set when the CRM accepted the signed handshake. */
+    connectedAt: timestamp('connected_at'),
+    /** Channel and funnel names the CRM reported in the handshake. */
+    remoteChannelName: text('remote_channel_name'),
+    remotePipelineName: text('remote_pipeline_name'),
+    lastError: text('last_error'),
+    lastErrorAt: timestamp('last_error_at'),
+    lastDeliveredAt: timestamp('last_delivered_at'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    workflowUnique: uniqueIndex('crm_link_workflow_unique').on(table.workflowId),
+    callbackKeyUnique: uniqueIndex('crm_link_callback_key_unique').on(table.callbackKey),
+    workspaceIdx: index('crm_link_workspace_idx').on(table.workspaceId),
+  })
+)
+
+/**
+ * A message the CRM already has: delivered by the mirror, skipped (nothing to show, or the CRM
+ * refused it for good), or written by the CRM itself (an operator reply from the lead card).
+ */
+export const crmMessageDelivery = pgTable(
+  'crm_message_delivery',
+  {
+    linkId: text('link_id')
+      .notNull()
+      .references(() => crmLink.id, { onDelete: 'cascade' }),
+    messageId: text('message_id')
+      .notNull()
+      .references(() => inboxMessage.id, { onDelete: 'cascade' }),
+    /** `delivered`, `skipped` or `from_crm`. */
+    outcome: text('outcome').notNull(),
+    /** The CRM's own id for a reply it sent (its idempotency key), so a retry is not resent. */
+    remoteKey: text('remote_key'),
+    error: text('error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.linkId, table.messageId] }),
+    remoteKeyUnique: uniqueIndex('crm_message_delivery_remote_key_unique')
+      .on(table.linkId, table.remoteKey)
+      .where(sql`${table.remoteKey} IS NOT NULL`),
+  })
+)
+
+/**
+ * Mirror state of one conversation in one CRM link: what the CRM was last told about the chat
+ * (so a changed AI switch or contact is reported once), the retry clock, and a short lease so
+ * two workers never deliver the same conversation at once.
+ */
+export const crmConversationSync = pgTable(
+  'crm_conversation_sync',
+  {
+    linkId: text('link_id')
+      .notNull()
+      .references(() => crmLink.id, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => inboxConversation.id, { onDelete: 'cascade' }),
+    sentAiEnabled: boolean('sent_ai_enabled'),
+    sentAiPausedUntil: timestamp('sent_ai_paused_until'),
+    sentContactName: text('sent_contact_name'),
+    sentContactHandle: text('sent_contact_handle'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at').notNull().defaultNow(),
+    leaseUntil: timestamp('lease_until'),
+    lastError: text('last_error'),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.linkId, table.conversationId] }),
   })
 )

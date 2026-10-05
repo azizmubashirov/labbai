@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { BinoraCrmConnection } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/crm/binora-crm-connection'
 import { NotificationRecipients } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/notifications/notification-recipients'
 import { NotificationRules } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/notifications/notification-rules'
 
@@ -30,6 +31,7 @@ export interface ModalSubBlockProps {
 export const MODAL_REGISTRY: Readonly<Record<string, ComponentType<ModalSubBlockProps>>> = {
   'notification-recipients': NotificationRecipients,
   'notification-rules': NotificationRules,
+  'binora-crm-connection': BinoraCrmConnection,
 }
 
 export type ModalId = keyof typeof MODAL_REGISTRY

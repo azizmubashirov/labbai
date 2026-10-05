@@ -7,6 +7,7 @@ import { toRecord } from '@labbai/utils/object'
 import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { getEffectiveDecryptedEnv } from '@/lib/environment/utils'
 import { inboxMessageSummary } from '@/lib/inbox/attachments'
+import { announceInboxChange } from '@/lib/inbox/changes'
 import {
   type InboundInboxMessage,
   parseTelegramInboxMessage,
@@ -15,7 +16,6 @@ import {
 } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
 import { pauseInboxConversationAi } from '@/lib/inbox/repository'
-import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 import {
   isTelegramBusinessBotEcho,
   isTelegramBusinessOwnerMessage,
@@ -207,6 +207,7 @@ export async function recordTelegramOwnerMessage(params: {
       .select({
         author: inboxMessage.author,
         operatorUserId: inboxMessage.operatorUserId,
+        operatorName: inboxMessage.operatorName,
         text: inboxMessage.text,
         externalMessageId: inboxMessage.externalMessageId,
       })
@@ -225,7 +226,8 @@ export async function recordTelegramOwnerMessage(params: {
       (row) =>
         row.externalMessageId === message.externalMessageId ||
         (key.length > 0 &&
-          (row.author === 'agent' || (row.author === 'operator' && row.operatorUserId)) &&
+          (row.author === 'agent' ||
+            (row.author === 'operator' && (row.operatorUserId || row.operatorName))) &&
           echoKey(row.text) === key)
     )
     if (isEcho) return null
@@ -263,7 +265,7 @@ export async function recordTelegramOwnerMessage(params: {
     kind: 'temporary',
     until: new Date(now.getTime() + TELEGRAM_OWNER_PAUSE_MINUTES * 60_000),
   })
-  await notifyWorkspaceInboxChanged(params.workspaceId)
+  await announceInboxChange(params.workspaceId)
   return true
 }
 

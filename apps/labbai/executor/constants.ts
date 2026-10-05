@@ -48,6 +48,8 @@ export enum BlockType {
   NOTE = 'note',
   /** Labbai: configures a workflow's Telegram alerts; read at deploy time, never executed. */
   NOTIFICATIONS = 'notifications',
+  /** Labbai: links a workflow's chats to a Binora funnel; read at deploy time, never executed. */
+  BINORA_CRM = 'binora_crm',
 
   SENTINEL_START = 'sentinel_start',
   SENTINEL_END = 'sentinel_end',
@@ -83,6 +85,7 @@ export const METADATA_ONLY_BLOCK_TYPES = [
   BlockType.PARALLEL,
   BlockType.NOTE,
   BlockType.NOTIFICATIONS,
+  BlockType.BINORA_CRM,
 ] as const
 
 export type SentinelType = 'start' | 'end'
@@ -356,9 +359,16 @@ export function isAgentBlockType(blockType: string | undefined): boolean {
   return blockType === BlockType.AGENT
 }
 
-/** Blocks with no ports that never run: the Note and the Notifications configuration block. */
+/**
+ * Blocks with no ports that never run: the Note and the Notifications and Binora CRM
+ * configuration blocks.
+ */
 export function isAnnotationOnlyBlock(blockType: string | undefined): boolean {
-  return blockType === BlockType.NOTE || blockType === BlockType.NOTIFICATIONS
+  return (
+    blockType === BlockType.NOTE ||
+    blockType === BlockType.NOTIFICATIONS ||
+    blockType === BlockType.BINORA_CRM
+  )
 }
 
 export function buildReference(path: string): string {

@@ -41,6 +41,7 @@ vi.mock('@/lib/notifications/repository', () => ({
 vi.mock('@/lib/notifications/telegram', () => ({ sendNotificationMessage: mocks.sendMessage }))
 vi.mock('@/lib/notifications/usage', () => ({ recordNotificationJudgeUsage: mocks.recordUsage }))
 vi.mock('@/lib/realtime/notify', () => ({ notifyWorkspaceInboxChanged: mocks.notifyInbox }))
+vi.mock('@/lib/crm/schedule', () => ({ scheduleCrmSync: vi.fn() }))
 
 import type { JudgeCompleter } from '@/lib/notifications/evaluator'
 import {

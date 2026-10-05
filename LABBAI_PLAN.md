@@ -125,6 +125,14 @@ catalog, from Cloudflare's model catalog read 2026-10-01; full table in HANDOFF.
   messages and pause the AI in that chat for 15 minutes (a person's OFF stays off). Edited
   Business messages are not answered again. Telegram send tools and the Inbox reply through the
   Business connection.
+- **Binora CRM link** (coded 2026-09-29; see HANDOFF.md) — owner decision: operators work in
+  **Binora** (CRM + Asterisk call-center), Labbai is the channel + AI engine. First client: a tour
+  firm. Every chat of an agent workflow (Telegram, WhatsApp, Instagram) becomes a lead in a Binora
+  funnel with all messages (customer, AI, operators); Binora operators reply and switch the AI from
+  the lead card. Labbai speaks Binora's existing ADR-052 protocol (the one Mehmon.AI implemented and
+  never launched), so it replaces Mehmon for this. Configured per workflow on the canvas with a
+  **Binora CRM** block (like Notifications); mirroring runs while the deployed version has the block.
+  Universal by design: a `crm_link` row with a provider (Binora now; amoCRM / Bitrix24 later).
 - **Cloudflare AI** — coded 2026-10-01 (not deployed): one Cloudflare account for every model.
   `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (+ optional `CLOUDFLARE_AI_GATEWAY`) route
   OpenAI (gateway `/openai`: Agent, copilot, wand, notifications, embeddings, vision, images,

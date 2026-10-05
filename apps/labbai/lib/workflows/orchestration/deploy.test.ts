@@ -101,6 +101,8 @@ vi.mock('@/lib/notifications/deploy-sync', () => ({
   removeWorkflowNotificationTriggers: mockRemoveNotificationTriggers,
 }))
 
+vi.mock('@/lib/crm/deploy-sync', () => ({ pauseWorkflowCrmLink: vi.fn() }))
+
 vi.mock('@/lib/webhooks/deploy', () => ({
   validateTriggerWebhookConfigForDeploy: mockValidateTriggerWebhookConfigForDeploy,
 }))

@@ -2,6 +2,7 @@ import { AgentBlock } from '@/blocks/blocks/agent'
 import { AirtableBlock, AirtableBlockMeta } from '@/blocks/blocks/airtable'
 import { ApiBlock } from '@/blocks/blocks/api'
 import { ApiTriggerBlock } from '@/blocks/blocks/api_trigger'
+import { BinoraCrmBlock } from '@/blocks/blocks/binora-crm'
 import { CalComBlock, CalComBlockMeta } from '@/blocks/blocks/calcom'
 import { CalendlyBlock, CalendlyBlockMeta } from '@/blocks/blocks/calendly'
 import { ChatTriggerBlock } from '@/blocks/blocks/chat_trigger'
@@ -98,6 +99,7 @@ export const BLOCK_REGISTRY: Record<string, BlockConfig> = {
   airtable: AirtableBlock,
   api: ApiBlock,
   api_trigger: ApiTriggerBlock,
+  binora_crm: BinoraCrmBlock,
   calcom: CalComBlock,
   calendly: CalendlyBlock,
   chat_trigger: ChatTriggerBlock,

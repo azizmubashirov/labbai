@@ -15,6 +15,7 @@ import {
   inboxOutgoingKind,
   inboxOutgoingSizeError,
 } from '@/lib/inbox/attachments'
+import { announceInboxChange } from '@/lib/inbox/changes'
 import type { InboxChannel } from '@/lib/inbox/channels'
 import { fetchInboxAttachment, type InboxMediaStream } from '@/lib/inbox/media'
 import {
@@ -37,7 +38,6 @@ import {
   updateInboxConversation,
 } from '@/lib/inbox/repository'
 import { type InboxOutgoingMedia, sendInboxReply } from '@/lib/inbox/send'
-import { notifyWorkspaceInboxChanged } from '@/lib/realtime/notify'
 import { resolveActiveWorkspaceApplicationContext } from '@/lib/workspaces/application/workspace-context'
 
 const logger = createLogger('InboxConversations')
@@ -253,7 +253,7 @@ export const updateInboxConversationOperation = defineAuthorizedWorkspaceUseCase
       markRead: input.markRead,
     })
     if (!conversation) throw new OrchestrationError('not_found', 'Conversation not found')
-    await notifyWorkspaceInboxChanged(conversation.workspaceId)
+    await announceInboxChange(conversation.workspaceId)
     return { conversation, previousAiEnabled: existing.aiEnabled }
   },
   /** Only an AI toggle is a semantic change worth auditing; marking read is not. */
@@ -293,7 +293,7 @@ export const setInboxAiForChatOperation = defineAuthorizedWorkspaceUseCase({
 
     const conversation = await updateInboxConversation(existing.id, { aiEnabled: input.aiEnabled })
     if (!conversation) return { conversation: null, previousAiEnabled: null }
-    await notifyWorkspaceInboxChanged(conversation.workspaceId)
+    await announceInboxChange(conversation.workspaceId)
     return { conversation, previousAiEnabled: existing.aiEnabled }
   },
   projectAudit({ input, result }) {
@@ -329,7 +329,7 @@ export const replyToInboxConversationOperation = defineAuthorizedWorkspaceUseCas
       externalMessageId: outcome.status === 'sent' ? outcome.externalMessageId : null,
       error: outcome.status === 'failed' ? outcome.error : null,
     })
-    await notifyWorkspaceInboxChanged(conversation.workspaceId)
+    await announceInboxChange(conversation.workspaceId)
     return {
       conversation,
       messageId,

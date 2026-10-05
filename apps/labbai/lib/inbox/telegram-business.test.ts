@@ -19,6 +19,7 @@ const { tables, mocks } = vi.hoisted(() => {
 vi.mock('@labbai/db/schema', () => ({ ...schemaMock, ...tables }))
 vi.mock('@/lib/inbox/repository', () => ({ pauseInboxConversationAi: mocks.pauseAi }))
 vi.mock('@/lib/realtime/notify', () => ({ notifyWorkspaceInboxChanged: mocks.notifyInbox }))
+vi.mock('@/lib/crm/schedule', () => ({ scheduleCrmSync: vi.fn() }))
 
 import {
   handleTelegramBusinessDelivery,

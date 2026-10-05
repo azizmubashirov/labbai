@@ -32,6 +32,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | Inbox (customer conversations from Telegram / WhatsApp / Instagram) | done (see below) |
 | Notifications (operator alerts via one platform Telegram bot) | phase 1 done (see below); alert buttons later |
 | Telegram Business (agent answers in the owner's own Telegram account) | coded 2026-09-29 (see below); verify in CI and with a real Premium account |
+| Binora CRM link (chats → Binora funnel leads, replies from the lead card) | coded 2026-09-29 (see below); verify in CI and against Binora |
 
 LICENSE RULE (critical): `apps/labbai/ee` was under the Sim Enterprise License. Never read,
 copy or restore `ee` source from git history. Requirements come only from Apache code.
@@ -753,6 +754,74 @@ fixes (`local-copilot/lib/**`):
   `search_docs`.
 - Specialists other than workflow / run / agent no longer get block discovery or
   `edit_workflow`. The static prefix changed once (rules + tools); still byte-stable.
+
+### Binora CRM link (2026-09-29)
+
+Owner decisions: operators sit in **Binora** (`/Users/aziz/Downloads/projects/uysot`, CRM with
+Asterisk call-center, calls already open leads there); Labbai is the channel + AI engine. Every chat
+of an agent workflow becomes a lead in a Binora funnel, the lead card shows the whole chat (customer,
+AI, operators) and Binora operators reply / switch the AI from it. Labbai speaks Binora's existing
+ADR-052 protocol (Binora `integrations/services/messenger.py`), the same one Mehmon.AI implemented
+(`ef38129`, never launched). Written without local builds: verify with CI and against a real Binora.
+Migration `0385_labbai_crm_link` (additive).
+
+How to connect (per agent workflow):
+1. Binora: Sozlamalar → Lid manbalari → Qo'shish → **AI agent (Telegram, WhatsApp)**, choose funnel / stage /
+   owner; copy **Manzil** and **Kalit**.
+2. Labbai: put a **Binora CRM** block on the agent workflow's canvas → Connect Binora → paste both
+   (optionally also send the last 24 h / 3 days of chats) → Connect. Labbai runs the signed
+   handshake at once (a refused key changes nothing), Binora shows the channel as «Ulangan».
+3. Deploy the workflow. Mirroring runs while the deployed version has an enabled Binora CRM block
+   (deploy sync sets `crm_link.deployed`; undeploy / removing the block + redeploy stops it; the
+   link itself stays). Connecting after a deploy picks up the active version at once.
+
+Design:
+- Data: `crm_link` (one per workflow; provider enum `binora`; address; key encrypted with
+  `ENCRYPTION_KEY`; public `callback_key`; `deployed`; `mirror_since`; handshake names; last
+  error / delivery), `crm_message_delivery` (which messages the CRM has: `delivered`, `skipped`,
+  `from_crm` + the CRM's idempotency key), `crm_conversation_sync` (state last sent, retry clock,
+  2-minute lease), `inbox_message.operator_name` (Binora operators are not Labbai users).
+- Outbound (`lib/crm/sync.ts`): no per-writer events. Every Inbox write already ended in
+  `notifyWorkspaceInboxChanged`; those calls are now `announceInboxChange` (`lib/inbox/changes.ts`),
+  which also schedules a background pass for that workspace (`lib/crm/schedule.ts`, loads the CRM
+  code lazily, folds bursts). A pass finds "dirty" conversations in SQL (a message since
+  `mirror_since` with no delivery row, or an AI switch / contact that differs from what was sent)
+  and delivers each conversation in order under a lease; the chat's state is sent when it changed
+  for a chat Binora already knows. Failed replies are skipped; a 400/413/422 from Binora skips that
+  message; anything else backs off (10 s … 30 min) and holds the chat's order. A pass stops 30 s
+  before its 2-minute lease runs out, and lease updates are fenced to the lease taken. Cron
+  `GET /api/cron/crm-sync` (every minute, `docker/crontab`) sweeps what a pass missed; chats quiet
+  for 3 days are no longer retried.
+- Media: Binora gets `GET /api/crm/media/<link>/<message>/<index>?sig=…` links (HMAC with a key
+  derived from `ENCRYPTION_KEY`; only messages this link delivered; bytes streamed from the channel
+  as in the Inbox; non-media served as sandboxed downloads). Needs a public `NEXT_PUBLIC_APP_URL`.
+- Callbacks (`lib/crm/binora/callbacks.ts`): `POST /api/crm/binora/<callback key>/send` and `/ai`,
+  HMAC over the raw body with the link's key (±5 min), only chats the link mirrored. `send` delivers
+  through the Inbox reply path as the workflow owner (credential scope, like the agent's own sends
+  and the notification pause notice), stores the reply as an operator message with Binora's
+  operator name, marks it `from_crm` in the same transaction (never echoed back), pauses the AI for
+  15 min (`CRM_OPERATOR_PAUSE_MINUTES`; a person's OFF stays off) and answers with the chat's
+  state; `idempotencyKey` (Binora's row id, unique per link) is handled under an advisory lock, so a
+  retry racing the first attempt returns the first outcome instead of messaging twice. `ai` is the Inbox
+  switch. The callback URL has no trailing slash; Binora (`main`, `f5014d9`,
+  ADR-054) calls `…/send` for such agents and keeps `…/send/` for Mehmon.AI.
+- Management: `lib/crm/application/links.ts` (operations `crm.links.{get,connect,delete}`,
+  session-only, write role), `GET/PUT/DELETE /api/workspaces/[id]/crm/workflows/[workflowId]/link`,
+  block UI `.../sub-block/components/crm/binora-crm-connection.tsx` (modal id
+  `binora-crm-connection`). The Binora address must be reachable (egress profile
+  `configuredEndpoint`).
+- Snapshot: WhatsApp chats carry the customer's number as `peer.phone`, so Binora joins the chat to
+  a caller's card; Telegram/Instagram carry none. Conversation status is always `active`.
+- Binora side (same session, Binora `main` `f5014d9`, ADR-054, not deployed): callback URL shape,
+  chat labels by platform (Telegram / WhatsApp / Instagram) on the lead card in both UIs, lead
+  source copy points to Labbai, `manage.py setup_tour_funnels --company <slug>
+  --retire-construction` (tour firm: Call Center «Yangi → Bog'lanildi → Taklif yuborildi → Bron /
+  To'lov → Yutildi / Yo'qotildi» where every call and chat lands, and Sotuv «Ofisga keladi →
+  Goryashiy so'ragan → Keyinroq bormoqchi → To'lov qildi / Rad etdi»), and the Asterisk CRM call
+  button no longer fakes a started call when the browser phone is not connected.
+- Limits: one Binora channel per workflow; Binora's own 24-hour window for replies applies (the
+  channel's error is shown on the card); CRM AI switches are not in the activity log; replies from
+  the card are text only.
 
 ## How to verify (no local builds — the owner's Mac has 8 GB)
 

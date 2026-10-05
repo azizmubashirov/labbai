@@ -110,6 +110,14 @@ const INDIRECT_ZOD_ROUTES = new Set([
   // Returns immediately after Trigger.dev accepts the asynchronous dispatcher task.
   'apps/labbai/app/api/cron/workspace-file-search-dispatch/route.ts',
   'apps/labbai/app/api/cron/knowledge-projection/route.ts',
+  'apps/labbai/app/api/cron/crm-sync/route.ts',
+  // Binora CRM callbacks: the body is HMAC-signed with the CRM link's secret over the raw bytes,
+  // so it is read raw and validated in `lib/crm/binora/callbacks.ts` after the signature check.
+  'apps/labbai/app/api/crm/binora/[key]/send/route.ts',
+  'apps/labbai/app/api/crm/binora/[key]/ai/route.ts',
+  // Signed media link for a CRM lead card: the `sig` capability is verified in `lib/crm/media.ts`
+  // before anything is read; the response is a binary stream, not a JSON contract.
+  'apps/labbai/app/api/crm/media/[linkId]/[messageId]/[index]/route.ts',
   'apps/labbai/app/api/logs/cleanup/route.ts',
   'apps/labbai/app/api/knowledge/connectors/sync/route.ts',
   'apps/labbai/app/api/knowledge/connectors/member-sync/route.ts',

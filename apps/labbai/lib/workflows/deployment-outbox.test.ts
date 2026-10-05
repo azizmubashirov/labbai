@@ -93,6 +93,8 @@ vi.mock('@/lib/notifications/deploy-sync', () => ({
   syncWorkflowNotificationTriggers: mockSyncNotificationTriggers,
 }))
 
+vi.mock('@/lib/crm/deploy-sync', () => ({ syncWorkflowCrmLink: vi.fn() }))
+
 vi.mock('@/lib/posthog/server', () => ({
   captureServerEvent: mockCaptureServerEvent,
 }))

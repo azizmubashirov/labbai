@@ -59,6 +59,7 @@ vi.mock('@/lib/inbox/outbound', () => ({
 }))
 vi.mock('@/lib/inbox/media', () => ({ fetchInboxAttachment: mocks.fetchAttachment }))
 vi.mock('@/lib/realtime/notify', () => ({ notifyWorkspaceInboxChanged: mocks.notifyInbox }))
+vi.mock('@/lib/crm/schedule', () => ({ scheduleCrmSync: vi.fn() }))
 vi.mock('@/lib/inbox/operator-media', () => ({
   storeInboxOperatorFile: mocks.storeFile,
   prepareInboxVoiceNote: mocks.prepareVoice,

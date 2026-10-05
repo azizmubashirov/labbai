@@ -12,6 +12,7 @@ import { env } from '@/lib/core/config/env'
 import type { OrchestrationErrorCode } from '@/lib/core/orchestration/types'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { getSocketServerUrl } from '@/lib/core/utils/urls'
+import { pauseWorkflowCrmLink } from '@/lib/crm/deploy-sync'
 import type { DbOrTx } from '@/lib/db/types'
 import { removeWorkflowNotificationTriggers } from '@/lib/notifications/deploy-sync'
 import { captureServerEvent } from '@/lib/posthog/server'
@@ -567,8 +568,9 @@ export async function performFullUndeploy(
   const result = await undeployWorkflow({
     workflowId,
     onUndeployTransaction: async (tx, undeploy) => {
-      /* An undeployed workflow's Notifications rules stop taking effect with it. */
+      /* An undeployed workflow's Notifications rules and CRM mirroring stop with it. */
       await removeWorkflowNotificationTriggers(tx, workflowId)
+      await pauseWorkflowCrmLink(tx, workflowId)
       outboxEventId = await enqueueWorkflowUndeploySideEffects(tx, {
         workflowId,
         deploymentVersionIds: undeploy.deploymentVersionIds,

@@ -498,9 +498,13 @@ export function filterUniqueWorkflowEdges<T extends WorkflowEdgeHandles>(
 const WORKFLOW_CONTAINER_BLOCK_TYPES = new Set(['loop', 'parallel'])
 /**
  * Blocks that sit on the canvas without joining the graph: the "note" annotation and Labbai's
- * "notifications" configuration block (its rules are read at deploy time, never executed).
+ * "notifications" and "binora_crm" configuration blocks (read at deploy time, never executed).
  */
-const WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPES: ReadonlySet<string> = new Set(['note', 'notifications'])
+const WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPES: ReadonlySet<string> = new Set([
+  'note',
+  'notifications',
+  'binora_crm',
+])
 /** Legacy trigger block type — see TRIGGER_TYPES.STARTER in apps/labbai/lib/workflows/triggers/triggers.ts. */
 const LEGACY_STARTER_BLOCK_TYPE = 'starter'
 
@@ -543,8 +547,8 @@ export function getWorkflowEdgeScopeDropReason(
 }
 
 /**
- * True when a block's type is annotation-only — the "note" block or the "notifications"
- * configuration block — which cannot participate in edges.
+ * True when a block's type is annotation-only — the "note" block or a configuration block
+ * ("notifications", "binora_crm") — which cannot participate in edges.
  */
 export function isWorkflowAnnotationOnlyBlockType(blockType: string | undefined): boolean {
   return blockType !== undefined && WORKFLOW_ANNOTATION_ONLY_BLOCK_TYPES.has(blockType)

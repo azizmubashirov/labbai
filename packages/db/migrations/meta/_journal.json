@@ -2689,6 +2689,13 @@
       "when": 1790439536617,
       "tag": "0384_labbai_copilot_default_model_text",
       "breakpoints": true
+    },
+    {
+      "idx": 385,
+      "version": "7",
+      "when": 1790525936617,
+      "tag": "0385_labbai_crm_link",
+      "breakpoints": true
     }
   ]
 }

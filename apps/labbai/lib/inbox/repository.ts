@@ -157,7 +157,7 @@ export async function listInboxMessages(
       id: inboxMessage.id,
       conversationId: inboxMessage.conversationId,
       author: inboxMessage.author,
-      operatorName: user.name,
+      operatorName: sql<string | null>`coalesce(${user.name}, ${inboxMessage.operatorName})`,
       text: inboxMessage.text,
       attachments: inboxMessage.attachments,
       status: inboxMessage.status,
