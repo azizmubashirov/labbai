@@ -37,6 +37,7 @@ const ARTIFACT_LOAD_TRUNCATION_MARKER =
  * get a larger inline budget so they are not offloaded to an artifact.
  */
 const DISCOVERY_INLINE_TOOL_NAMES = new Set([
+  'get_workflow_context',
   'get_blocks_metadata',
   'get_available_blocks',
   'get_available_integrations',
@@ -542,6 +543,12 @@ export function formatToolResultForLlm(
       next.needsOAuthConnect = true
       next.followUpHint =
         'Workflow structure is complete. The only remaining lint is a missing OAuth credential — call oauth_get_auth_link once, share the link, then STOP. Do not re-edit; edits cannot clear credential lint.'
+    } else if (toolName === 'edit_workflow' && record.success !== false) {
+      // A clean edit: the full workflow state pushed the result over the inline budget, so
+      // it was offloaded and the model spent a round reloading it after every edit.
+      next.copilotSanitizedWorkflowState = undefined
+      next.followUpHint =
+        'Edit applied and validated automatically. Do not call validate_workflow or reload the workflow for this edit; use get_workflow_context with blockNames only if you need a block you have not seen.'
     }
 
     if (

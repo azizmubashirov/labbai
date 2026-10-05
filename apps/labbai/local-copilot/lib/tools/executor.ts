@@ -1511,6 +1511,8 @@ const PER_TURN_TOOL_CALL_CAPS: Readonly<Record<string, number>> = {
   load_copilot_artifact: 6,
   search_online: 4,
   explain_error: 3,
+  // edit_workflow already validates every edit (verification evidence).
+  validate_workflow: 2,
 }
 
 /** An error message once `toolName` used its per-turn allowance, else undefined. */

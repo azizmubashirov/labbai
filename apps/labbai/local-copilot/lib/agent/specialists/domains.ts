@@ -298,7 +298,22 @@ export interface HybridParentToolResolution {
 }
 
 /**
- * The parent turn's tool list, identical on every turn: every domain's leaf tools plus the
+ * Domains whose leaf tools the parent holds directly — building and running agents. The
+ * rest (file, media, research, custom tools/MCP, third-party actions) are reached through
+ * their specialist entry tools: carrying every domain's leaves made the cached prefix ~53k
+ * tokens, re-read on every model round.
+ */
+const PARENT_LEAF_DOMAINS: readonly LocalCopilotCloudSpecialistDomain[] = [
+  'workflow',
+  'run',
+  'deploy',
+  'auth',
+  'knowledge',
+  'table',
+]
+
+/**
+ * The parent turn's tool list, identical on every turn: the build domains' leaf tools plus the
  * specialist entry tools. Intent no longer narrows it — a different tool set per intent
  * changed the cached prefix, so a chat whose turns were classified differently re-wrote the
  * 1-hour prefix (~20k tokens at 2x input) several times an hour, and a non-workflow intent
@@ -310,8 +325,8 @@ export function resolveFixedParentTools(params: {
   specialistTools: LocalCopilotToolDefinition[]
 }): LocalCopilotToolDefinition[] {
   const names = new Set<string>(ALWAYS_ON_TOOL_NAMES)
-  for (const domainTools of Object.values(DOMAIN_TOOL_NAMES)) {
-    for (const name of domainTools) names.add(name)
+  for (const domain of PARENT_LEAF_DOMAINS) {
+    for (const name of DOMAIN_TOOL_NAMES[domain]) names.add(name)
   }
   const tools = filterToolsByNames(params.allTools, names)
   const seen = new Set(tools.map((tool) => tool.name))

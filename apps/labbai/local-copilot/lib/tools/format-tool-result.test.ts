@@ -19,9 +19,24 @@ describe('formatToolResultForLlm edit_workflow', () => {
       },
     }
 
-    const output = formatToolResultForLlm('edit_workflow', { success: true, workflowState })
+    const output = formatToolResultForLlm('edit_workflow', {
+      success: true,
+      workflowState,
+      skippedItems: [{ reason: 'unknown field' }],
+    })
 
     expect(output).toContain('copilotSanitizedWorkflowState')
     expect(output).toContain('gpt-5-mini')
+  })
+
+  it('drops the workflow state from a clean edit so it is not offloaded and reloaded', () => {
+    const workflowState = {
+      blocks: { agent: { type: 'agent', name: 'Agent', inputs: { model: 'gpt-5-mini' } } },
+    }
+
+    const output = formatToolResultForLlm('edit_workflow', { success: true, workflowState })
+
+    expect(output).not.toContain('copilotSanitizedWorkflowState')
+    expect(output).toContain('validated automatically')
   })
 })
