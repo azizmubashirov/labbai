@@ -32,7 +32,7 @@ Owner wants: **cleanup only for now, no new features**, then the owner tests it.
 | Inbox (customer conversations from Telegram / WhatsApp / Instagram) | done (see below) |
 | Notifications (operator alerts via one platform Telegram bot) | phase 1 done (see below); alert buttons later |
 | Telegram Business (agent answers in the owner's own Telegram account) | coded 2026-09-29 (see below); verify in CI and with a real Premium account |
-| Binora CRM link (chats → Binora funnel leads, replies from the lead card) | coded 2026-09-29 (see below); verify in CI and against Binora |
+| Binora CRM link (chats → Binora funnel leads, replies from the lead card) | deployed 2026-10-05 (CI green on `68ec797f`); not yet connected to a Binora channel |
 
 LICENSE RULE (critical): `apps/labbai/ee` was under the Sim Enterprise License. Never read,
 copy or restore `ee` source from git history. Requirements come only from Apache code.
@@ -756,6 +756,14 @@ fixes (`local-copilot/lib/**`):
   `edit_workflow`. The static prefix changed once (rules + tools); still byte-stable.
 
 ### Binora CRM link (2026-09-29)
+
+**Deployed 2026-10-05.** Labbai prod runs `68ec797f` (migration 0385 applied; `crm-sync` cron
+succeeds every minute; DB dump `/home/ubuntu/labbai/backups/labbai-20261005-151350Z.dump` taken
+before). The first `deploy.sh` pull of the app image timed out against GitHub's CDN and left the
+old app running — re-pull `app` and `up -d app` if that happens again. Binora prod runs `0486db8`
+(ADR-054). Tur Firma (`company-813d1025`): funnels are now Call Center (default) + Sotuv; its
+«Telegram AI» lead source still points at Mehmon.AI (`api.labbai.uz`) until a Labbai workflow's
+Binora CRM block connects to it.
 
 Owner decisions: operators sit in **Binora** (`/Users/aziz/Downloads/projects/uysot`, CRM with
 Asterisk call-center, calls already open leads there); Labbai is the channel + AI engine. Every chat
