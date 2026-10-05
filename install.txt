@@ -1,0 +1,24 @@
+bun install v1.4.1 (4661e494f)
+Resolving dependencies
+Resolved, downloaded and extracted [2]
+
+$ bun husky
+
++ @babel/parser@7.29.2
++ @biomejs/biome@2.0.6
++ @labbai/utils@workspace:packages/utils
++ @typescript/native@7.0.2
++ @typescript/typescript6@6.0.2
++ ajv@8.18.0
++ concurrently@10.0.5
++ drizzle-orm@0.45.2
++ husky@9.1.7
++ json-schema-to-typescript@15.0.4
++ lint-staged@16.0.0
++ react@19.2.4
++ turbo@2.9.14
++ vitest@4.1.9
++ zod@4.3.6
++ @next/swc-linux-x64-gnu@16.3.4
+
+1594 packages installed [2.94s]
