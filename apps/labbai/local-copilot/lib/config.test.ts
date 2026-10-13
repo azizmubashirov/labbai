@@ -32,6 +32,7 @@ const ENV_KEYS = [
   'COPILOT_PROVIDER_API_KEY',
   'COPILOT_THINKING_LEVEL',
   'COPILOT_ENABLED',
+  'COPILOT_ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
   'OPENAI_API_KEY_1',
   'OPENAI_API_KEY_2',
@@ -239,6 +240,32 @@ describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () =>
     const config = buildLocalCopilotConfigForCatalog('gpt-4.1')
     expect(config.provider).toBe('openai')
     expect(config.model).toBe('gpt-5.5')
+  })
+
+  it('sends Claude through Anthropic first when COPILOT_ANTHROPIC_API_KEY is set', () => {
+    process.env.COPILOT_ANTHROPIC_API_KEY = ' sk-ant-console '
+
+    const config = buildLocalCopilotConfigForCatalog('anthropic/claude-sonnet-5')
+    expect(config.provider).toBe('cloudflare')
+    expect(config.apiKey).toBe('cf-token')
+    expect(config.anthropicDirect).toEqual({
+      apiKey: 'sk-ant-console',
+      baseUrl: 'https://api.anthropic.com/v1',
+    })
+  })
+
+  it('stays on Cloudflare only without COPILOT_ANTHROPIC_API_KEY', () => {
+    expect(buildLocalCopilotConfigForCatalog('anthropic/claude-sonnet-5').anthropicDirect).toBe(
+      undefined
+    )
+  })
+
+  it('never puts Anthropic in front of a non-Cloudflare transport', () => {
+    process.env.COPILOT_ANTHROPIC_API_KEY = 'sk-ant-console'
+    process.env.COPILOT_PROVIDER = 'openai'
+    process.env.OPENAI_API_KEY = 'sk-platform'
+
+    expect(getLocalCopilotConfig().anthropicDirect).toBe(undefined)
   })
 
   it('falls back to the env config for a Cloudflare pick outside Cloudflare mode', () => {

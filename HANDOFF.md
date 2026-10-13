@@ -492,6 +492,30 @@ Code:
   since migration **0384** (stores the picker id; old enum labels are decoded on read), because
   the 16-value enum could not hold ~45 choices.
 
+#### Copilot on an Anthropic Console account (2026-10-13)
+
+Owner decision: the owner got $100 of Anthropic API credit (console.anthropic.com) — use it for the
+**copilot only**, with Cloudflare as the fallback. One optional server var:
+
+```
+COPILOT_ANTHROPIC_API_KEY=sk-ant-...   # Anthropic Console API key; unset = Cloudflare only
+```
+
+- Only on the `cloudflare` copilot transport (Cloudflare mode). Agent blocks, wand, notifications
+  etc. are untouched — they still bill Cloudflare.
+- `local-copilot/lib/config.ts` puts `anthropicDirect` on the config; the copilot transport passes
+  it to `sendChatCompletionRequest` (`providers/cloudflare/anthropic-messages.ts`), which sends every
+  `anthropic/*` request (Sonnet 5 orchestrator, Haiku 4.5 specialists) to
+  `https://api.anthropic.com/v1/messages` first: same Messages body and cache breakpoints (1-hour on
+  the static prefix) as on Cloudflare, Anthropic's model id (`anthropic/claude-haiku-4.5` →
+  `claude-haiku-4-5`), `x-api-key` + `anthropic-version: 2023-06-01`, never the Cloudflare token.
+- Fallback: any non-2xx answer or a network failure → the same request goes to Cloudflare as
+  before. 401 / 402 (`billing_error`, credit spent) / 403 also skip Anthropic for 15 minutes, so a
+  spent credit costs one failed call per 15 minutes, not one per request. An aborted request is not
+  retried. Logged as `Anthropic API did not take the request; using Cloudflare`.
+- Cost ledger unchanged (same model ids and prices; Anthropic and Cloudflare pass the same rates).
+- Turn off: remove the var and recreate the app container.
+
 #### Full model list (second step, 2026-10-01)
 
 Owner decision: don't limit to a few models — in Cloudflare mode offer **every** Claude, Gemini

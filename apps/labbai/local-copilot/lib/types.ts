@@ -8,6 +8,7 @@ import type {
   TurnCompletionStatus,
   VerificationRecord,
 } from '@/local-copilot/lib/verification/types'
+import type { AnthropicDirectTarget } from '@/providers/cloudflare/anthropic-messages'
 
 /**
  * Local Copilot LLM transports. `openai` is the OpenAI API (or the Cloudflare gateway's
@@ -46,6 +47,12 @@ export interface LocalCopilotConfig {
    * no {@link apiKey} is needed and no `Authorization` header is sent.
    */
   gatewayAuth?: boolean
+  /**
+   * `COPILOT_ANTHROPIC_API_KEY` on the `cloudflare` transport: Claude requests go to
+   * Anthropic's own API first (billed to that Anthropic Console account) and fall back to
+   * Cloudflare when Anthropic does not answer (out of credit, bad key, overload, outage).
+   */
+  anthropicDirect?: AnthropicDirectTarget
 }
 
 export interface LocalCopilotWorkspaceContext {

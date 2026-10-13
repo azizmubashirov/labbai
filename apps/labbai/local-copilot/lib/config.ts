@@ -6,6 +6,7 @@ import {
   resolveLocalCopilotCatalogEntry,
 } from '@/local-copilot/lib/model-catalog'
 import type { LocalCopilotConfig, LocalCopilotProviderId } from '@/local-copilot/lib/types'
+import { ANTHROPIC_API_BASE_URL } from '@/providers/cloudflare/anthropic-messages'
 import {
   CLOUDFLARE_AIG_GATEWAY_ID_HEADER,
   getCloudflareAIConfig,
@@ -220,6 +221,19 @@ function resolveExtraHeaders(provider: LocalCopilotProviderId): Record<string, s
 }
 
 /**
+ * Anthropic's own API in front of Cloudflare for Claude, when `COPILOT_ANTHROPIC_API_KEY`
+ * (an Anthropic Console key) is set on the `cloudflare` transport. Cloudflare stays the
+ * fallback, so the key can be added or removed at any time; unset = Cloudflare only.
+ */
+function resolveAnthropicDirect(
+  provider: LocalCopilotProviderId
+): LocalCopilotConfig['anthropicDirect'] {
+  if (provider !== 'cloudflare') return undefined
+  const apiKey = process.env.COPILOT_ANTHROPIC_API_KEY?.trim()
+  return apiKey ? { apiKey, baseUrl: ANTHROPIC_API_BASE_URL } : undefined
+}
+
+/**
  * Reads Local Copilot configuration from environment variables.
  *
  * Default transport: in Cloudflare mode (`CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`)
@@ -231,7 +245,8 @@ function resolveExtraHeaders(provider: LocalCopilotProviderId): Record<string, s
  * `COPILOT_PROVIDER` (`openai` | `cloudflare` | `azure-openai` | `openai-compatible`),
  * `COPILOT_MODEL`, `COPILOT_SPECIALIST_MODEL`,
  * `COPILOT_BASE_URL`, `COPILOT_PROVIDER_API_KEY`, `COPILOT_THINKING_LEVEL`,
- * `COPILOT_ENABLED`.
+ * `COPILOT_ENABLED`, `COPILOT_ANTHROPIC_API_KEY` (Claude through Anthropic's own API first,
+ * Cloudflare as the fallback).
  */
 export function getLocalCopilotConfig(): LocalCopilotConfig {
   const provider = resolveProvider(process.env.COPILOT_PROVIDER)
@@ -248,6 +263,7 @@ export function getLocalCopilotConfig(): LocalCopilotConfig {
     baseUrl: resolveBaseUrl(provider),
     extraHeaders: resolveExtraHeaders(provider),
     gatewayAuth: usesGatewayAuth(provider),
+    anthropicDirect: resolveAnthropicDirect(provider),
   }
 }
 
@@ -284,6 +300,7 @@ export function buildLocalCopilotConfigForCatalog(
       baseUrl: resolveBaseUrl(provider),
       extraHeaders: resolveExtraHeaders(provider),
       gatewayAuth: false,
+      anthropicDirect: resolveAnthropicDirect(provider),
     }
   }
 

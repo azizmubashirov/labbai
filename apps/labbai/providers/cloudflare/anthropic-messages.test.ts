@@ -3,11 +3,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  ANTHROPIC_API_VERSION,
   ANTHROPIC_MAX_CACHE_BREAKPOINTS,
   ANTHROPIC_STATIC_CONTEXT_MARKER,
   isAnthropicModelId,
   resetCloudflareAnthropicMessagesFallback,
   sendChatCompletionRequest,
+  toAnthropicApiModelId,
   toAnthropicMessagesBody,
   toChatCompletionFromAnthropicMessage,
 } from '@/providers/cloudflare/anthropic-messages'
@@ -622,5 +624,131 @@ describe('sendChatCompletionRequest', () => {
     )
     expect(response.status).toBe(429)
     expect(send).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('toAnthropicApiModelId', () => {
+  it('names Cloudflare Claude ids the way Anthropic does', () => {
+    expect(toAnthropicApiModelId('anthropic/claude-sonnet-5')).toBe('claude-sonnet-5')
+    expect(toAnthropicApiModelId('anthropic/claude-haiku-4.5')).toBe('claude-haiku-4-5')
+    expect(toAnthropicApiModelId('anthropic/claude-opus-5.5')).toBe('claude-opus-5-5')
+  })
+})
+
+describe('sendChatCompletionRequest with Anthropic first (local copilot)', () => {
+  const send = vi.fn<(url: string, init: RequestInit) => Promise<Response>>()
+  const direct = { apiKey: 'sk-ant-test', baseUrl: 'https://api.anthropic.com/v1' }
+  const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages'
+
+  beforeEach(() => {
+    send.mockReset()
+    resetCloudflareAnthropicMessagesFallback()
+  })
+
+  function chatInit(body: Body): RequestInit {
+    return {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer cf-token' },
+      body: JSON.stringify(body),
+    }
+  }
+
+  const claudeStream = { model: 'anthropic/claude-sonnet-5', stream: true, messages: [] }
+
+  it("sends Claude to Anthropic with the key and Anthropic's model id, never the Cloudflare token", async () => {
+    const sse = new Response('data: {"type":"message_stop"}\n\n', {
+      headers: { 'content-type': 'text/event-stream' },
+    })
+    send.mockResolvedValueOnce(sse)
+
+    const response = await sendChatCompletionRequest(CHAT_URL, chatInit(claudeStream), send, {
+      direct,
+    })
+
+    expect(response).toBe(sse)
+    expect(send).toHaveBeenCalledTimes(1)
+    const [url, init] = send.mock.calls[0]
+    expect(url).toBe(ANTHROPIC_MESSAGES_URL)
+    const headers = new Headers(init.headers)
+    expect(headers.get('x-api-key')).toBe('sk-ant-test')
+    expect(headers.get('anthropic-version')).toBe(ANTHROPIC_API_VERSION)
+    expect(headers.has('authorization')).toBe(false)
+    const body = JSON.parse(String(init.body)) as Body
+    expect(body.model).toBe('claude-sonnet-5')
+    expect(body.stream).toBe(true)
+  })
+
+  it('falls back to Cloudflare when Anthropic is out of credit, and skips Anthropic for a while', async () => {
+    send
+      .mockResolvedValueOnce(
+        new Response('{"type":"error","error":{"type":"billing_error"}}', { status: 402 })
+      )
+      .mockResolvedValueOnce(new Response('data: {}\n\n'))
+      .mockResolvedValueOnce(new Response('data: {}\n\n'))
+
+    await sendChatCompletionRequest(CHAT_URL, chatInit(claudeStream), send, { direct })
+    await sendChatCompletionRequest(CHAT_URL, chatInit(claudeStream), send, { direct })
+
+    expect(send.mock.calls.map(([url]) => url)).toEqual([
+      ANTHROPIC_MESSAGES_URL,
+      MESSAGES_URL,
+      MESSAGES_URL,
+    ])
+    expect(new Headers(send.mock.calls[1][1].headers).get('authorization')).toBe('Bearer cf-token')
+    expect(JSON.parse(String(send.mock.calls[1][1].body)).model).toBe('anthropic/claude-sonnet-5')
+  })
+
+  it('falls back to Cloudflare on an overload without skipping Anthropic next time', async () => {
+    send
+      .mockResolvedValueOnce(new Response('{}', { status: 529 }))
+      .mockResolvedValueOnce(new Response('data: {}\n\n'))
+      .mockResolvedValueOnce(new Response('data: {}\n\n'))
+
+    await sendChatCompletionRequest(CHAT_URL, chatInit(claudeStream), send, { direct })
+    await sendChatCompletionRequest(CHAT_URL, chatInit(claudeStream), send, { direct })
+
+    expect(send.mock.calls.map(([url]) => url)).toEqual([
+      ANTHROPIC_MESSAGES_URL,
+      MESSAGES_URL,
+      ANTHROPIC_MESSAGES_URL,
+    ])
+  })
+
+  it('falls back to Cloudflare when Anthropic cannot be reached', async () => {
+    send
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce(new Response('data: {}\n\n'))
+
+    const response = await sendChatCompletionRequest(CHAT_URL, chatInit(claudeStream), send, {
+      direct,
+    })
+
+    expect(response.status).toBe(200)
+    expect(send.mock.calls.map(([url]) => url)).toEqual([ANTHROPIC_MESSAGES_URL, MESSAGES_URL])
+  })
+
+  it('does not retry an aborted request elsewhere', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    send.mockRejectedValueOnce(new DOMException('aborted', 'AbortError'))
+
+    await expect(
+      sendChatCompletionRequest(
+        CHAT_URL,
+        { ...chatInit(claudeStream), signal: controller.signal },
+        send,
+        { direct }
+      )
+    ).rejects.toThrow()
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves non-Claude models on Cloudflare', async () => {
+    send.mockResolvedValueOnce(new Response('{}'))
+    const init = chatInit({ model: 'openai/gpt-5.5', messages: [] })
+
+    await sendChatCompletionRequest(CHAT_URL, init, send, { direct })
+
+    expect(send).toHaveBeenCalledWith(CHAT_URL, init)
   })
 })

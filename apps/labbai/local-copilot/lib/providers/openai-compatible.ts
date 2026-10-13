@@ -200,19 +200,18 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
       /**
        * Claude on Cloudflare goes to the Anthropic Messages endpoint with prompt-cache
        * breakpoints — 1-hour ones on the static prefix when the request has a cache layout
-       * (its SSE is read below like any other stream); other models and transports post the
-       * Chat Completions body unchanged.
+       * (its SSE is read below like any other stream) — and, with `COPILOT_ANTHROPIC_API_KEY`,
+       * to Anthropic's own API first. Other models and transports post the Chat Completions
+       * body unchanged.
        */
       const response =
         config.provider === 'cloudflare'
-          ? await sendChatCompletionRequest(
-              url,
-              init,
-              send,
-              request.promptCache
+          ? await sendChatCompletionRequest(url, init, send, {
+              ...(request.promptCache
                 ? { staticPrefix: { stableToolCount: request.promptCache.stableToolCount } }
-                : {}
-            )
+                : {}),
+              ...(config.anthropicDirect ? { direct: config.anthropicDirect } : {}),
+            })
           : await send(url, init)
 
       if (!response.ok) {

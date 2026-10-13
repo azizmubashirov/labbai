@@ -30,6 +30,7 @@
  * costs the prompt cache altogether.
  */
 import { createLogger } from '@labbai/logger'
+import { getErrorMessage } from '@labbai/utils/errors'
 import { isRecordLike } from '@labbai/utils/object'
 import { getMaxOutputTokensForModel } from '@/providers/models'
 import {
@@ -59,7 +60,25 @@ export interface AnthropicStaticPrefix {
 
 export interface AnthropicMessagesOptions {
   staticPrefix?: AnthropicStaticPrefix
+  /**
+   * Anthropic's own API, tried first for `anthropic/*` models (the local copilot billed to an
+   * Anthropic Console account). Whatever it does not answer goes to Cloudflare as before.
+   */
+  direct?: AnthropicDirectTarget
 }
+
+/** Anthropic's Messages API with an Anthropic Console key. */
+export interface AnthropicDirectTarget {
+  apiKey: string
+  /** API root without a trailing slash, e.g. `https://api.anthropic.com/v1`. */
+  baseUrl: string
+}
+
+/** Anthropic's public API root. */
+export const ANTHROPIC_API_BASE_URL = 'https://api.anthropic.com/v1'
+
+/** `anthropic-version` header every Messages API request carries. */
+export const ANTHROPIC_API_VERSION = '2023-06-01'
 
 /**
  * First block of the first user turn in a static-prefix request: constant text that
@@ -102,10 +121,31 @@ export type SendRequest = (url: string, init: RequestInit) => Promise<Response>
 const messagesFallbackUntil = new Map<string, number>()
 const oneHourTtlRejectedUntil = new Map<string, number>()
 
-/** Clears the per-model `/messages` fallback and TTL memory (tests). */
+/**
+ * Anthropic answers that say the key itself cannot be used — invalid (401), out of credit
+ * (402 `billing_error`) or not allowed (403). Asking again within minutes gets the same
+ * answer, so requests skip Anthropic for {@link ANTHROPIC_DIRECT_COOLDOWN_MS}.
+ */
+const ANTHROPIC_DIRECT_KEY_STATUSES = new Set([401, 402, 403])
+
+/** How long requests go straight to Cloudflare after Anthropic rejected the key. */
+const ANTHROPIC_DIRECT_COOLDOWN_MS = 15 * 60 * 1000
+
+let anthropicDirectSkipUntil = 0
+
+/** Clears the per-model `/messages` fallback, TTL and Anthropic-key memory (tests). */
 export function resetCloudflareAnthropicMessagesFallback(): void {
   messagesFallbackUntil.clear()
   oneHourTtlRejectedUntil.clear()
+  anthropicDirectSkipUntil = 0
+}
+
+/**
+ * A Cloudflare Claude id as Anthropic's API names it: no `anthropic/` namespace, and version
+ * dots become dashes (`anthropic/claude-haiku-4.5` → `claude-haiku-4-5`).
+ */
+export function toAnthropicApiModelId(model: string): string {
+  return model.trim().replace(/^anthropic\//i, '').replace(/\./g, '-')
 }
 
 /** True while `until` (a per-model cooldown) is still in the future; clears it once expired. */
@@ -546,23 +586,96 @@ interface AnthropicRoute {
   shortTtlInit?: RequestInit
 }
 
+/** The JSON body of a Chat Completions POST, or null for anything else. */
+function readChatCompletionPost(url: string, init: RequestInit): Record<string, unknown> | null {
+  if (!/\/chat\/completions$/.test(url)) return null
+  if ((init.method ?? 'GET').toUpperCase() !== 'POST') return null
+  if (typeof init.body !== 'string') return null
+  try {
+    const body: unknown = JSON.parse(init.body)
+    return isRecordLike(body) ? body : null
+  } catch {
+    return null
+  }
+}
+
+/** A non-streaming Anthropic answer as a Chat Completions `chat.completion` response. */
+async function toChatCompletionResponse(response: Response): Promise<Response> {
+  const message: unknown = await response.json()
+  return new Response(JSON.stringify(toChatCompletionFromAnthropicMessage(message)), {
+    status: response.status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+/**
+ * Sends a Claude chat completion to Anthropic's own Messages API (same body and cache
+ * breakpoints as on Cloudflare, Anthropic's model id). Returns the response to use, or null
+ * when Cloudflare should answer instead: not a Claude request, the key is cooling down, the
+ * network failed, or Anthropic refused — out of credit, bad key, rate limit, overload, or a
+ * request it rejects. An aborted request is not retried elsewhere.
+ */
+async function tryAnthropicDirect(
+  url: string,
+  init: RequestInit,
+  send: SendRequest,
+  target: AnthropicDirectTarget,
+  options: AnthropicMessagesOptions
+): Promise<Response | null> {
+  if (Date.now() < anthropicDirectSkipUntil) return null
+  const chat = readChatCompletionPost(url, init)
+  if (!chat || !isAnthropicModelId(chat.model)) return null
+
+  const body = toAnthropicMessagesBody(
+    chat,
+    options.staticPrefix ? { staticPrefix: options.staticPrefix } : {}
+  )
+  const model = toAnthropicApiModelId(chat.model)
+  body.model = model
+
+  let response: Response
+  try {
+    response = await send(`${target.baseUrl}/messages`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': target.apiKey,
+        'anthropic-version': ANTHROPIC_API_VERSION,
+      },
+      body: JSON.stringify(body),
+      signal: init.signal,
+    })
+  } catch (error) {
+    if (init.signal?.aborted) throw error
+    logger.warn('Anthropic API unreachable; using Cloudflare', {
+      model,
+      error: getErrorMessage(error),
+    })
+    return null
+  }
+
+  if (response.ok) return body.stream === true ? response : toChatCompletionResponse(response)
+
+  const errorText = await response.text().catch(() => '')
+  if (ANTHROPIC_DIRECT_KEY_STATUSES.has(response.status)) {
+    anthropicDirectSkipUntil = Date.now() + ANTHROPIC_DIRECT_COOLDOWN_MS
+  }
+  logger.warn('Anthropic API did not take the request; using Cloudflare', {
+    model,
+    status: response.status,
+    error: errorText.slice(0, 500),
+  })
+  return null
+}
+
 /** The `/messages` rewrite of a Claude chat-completions POST, or null to send it unchanged. */
 function resolveAnthropicRoute(
   url: string,
   init: RequestInit,
   options: AnthropicMessagesOptions
 ): AnthropicRoute | null {
-  if (!/\/chat\/completions$/.test(url)) return null
-  if ((init.method ?? 'GET').toUpperCase() !== 'POST') return null
-  if (typeof init.body !== 'string') return null
-  let body: unknown
-  try {
-    body = JSON.parse(init.body)
-  } catch {
-    return null
-  }
-  if (!isRecordLike(body)) return null
-  const chat: Record<string, unknown> = body
+  const chat = readChatCompletionPost(url, init)
+  if (!chat) return null
   const requestedModel = chat.model
   if (!isAnthropicModelId(requestedModel)) return null
   const model = requestedModel.trim()
@@ -599,9 +712,11 @@ function resolveAnthropicRoute(
 
 /**
  * Sends a Chat Completions POST, routing `anthropic/*` models through Cloudflare's
- * Anthropic Messages endpoint (prompt caching). Streaming responses are returned as the
- * Anthropic SSE body (the OpenAI-compat readers translate it); non-streaming responses are
- * converted to a `chat.completion` JSON body. Anything else is sent unchanged.
+ * Anthropic Messages endpoint (prompt caching). With `options.direct` a Claude request goes
+ * to Anthropic's own API first and falls back to Cloudflare when Anthropic does not answer.
+ * Streaming responses are returned as the Anthropic SSE body (the OpenAI-compat readers
+ * translate it); non-streaming responses are converted to a `chat.completion` JSON body.
+ * Anything else is sent unchanged.
  *
  * `options.staticPrefix` (local copilot) selects the static-prefix layout with 1-hour
  * breakpoints; Agent blocks send none and keep the default layout.
@@ -612,6 +727,10 @@ export async function sendChatCompletionRequest(
   send: SendRequest,
   options: AnthropicMessagesOptions = {}
 ): Promise<Response> {
+  if (options.direct) {
+    const direct = await tryAnthropicDirect(url, init, send, options.direct, options)
+    if (direct) return direct
+  }
   const route = resolveAnthropicRoute(url, init, options)
   if (!route) return send(url, init)
 
@@ -645,10 +764,5 @@ export async function sendChatCompletionRequest(
     return send(url, init)
   }
   if (!response.ok || route.stream) return response
-
-  const message: unknown = await response.json()
-  return new Response(JSON.stringify(toChatCompletionFromAnthropicMessage(message)), {
-    status: response.status,
-    headers: { 'content-type': 'application/json' },
-  })
+  return toChatCompletionResponse(response)
 }
