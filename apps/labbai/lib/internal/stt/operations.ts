@@ -2,6 +2,7 @@ import { createLogger } from '@labbai/logger'
 import { getErrorMessage } from '@labbai/utils/errors'
 import { sleep } from '@labbai/utils/helpers'
 import { extractAudioFromVideo, isVideoFile } from '@/lib/audio/extractor'
+import { env } from '@/lib/core/config/env'
 import { getMaxExecutionTimeout } from '@/lib/core/execution-limits'
 import type { EgressProfile } from '@/lib/core/security/egress/profiles'
 import {
@@ -123,6 +124,14 @@ interface GeminiApiResponse {
   }>
 }
 
+interface RubaiApiResponse {
+  text?: string
+  confidence?: number | null
+  duration?: number
+  language?: string
+  detail?: string
+}
+
 interface SttOutput {
   transcript: string
   segments?: TranscriptSegment[]
@@ -164,7 +173,7 @@ export async function executeSttOperation(
 
     const {
       provider,
-      apiKey,
+      apiKey = '',
       model,
       language,
       timestamps,
@@ -413,6 +422,12 @@ export async function executeSttOperation(
         )
         transcript = result.transcript
         segments = result.segments
+        detectedLanguage = result.language
+        duration = result.duration
+        confidence = result.confidence
+      } else if (provider === 'rubai') {
+        const result = await transcribeWithRubai(audioBuffer, audioMimeType, signal)
+        transcript = result.transcript
         detectedLanguage = result.language
         duration = result.duration
         confidence = result.confidence
@@ -682,6 +697,53 @@ async function transcribeWithElevenLabs(
     segments: segments.length > 0 ? segments : undefined,
     language: data.language_code,
     duration: undefined, // ElevenLabs doesn't return duration in response
+  }
+}
+
+/**
+ * Posts raw audio to the `labbai-stt` Modal endpoint (`infra/labbai-stt`). The endpoint and
+ * its proxy-auth token are server configuration, so a workflow never holds or chooses them.
+ */
+async function transcribeWithRubai(
+  audioBuffer: Buffer,
+  mimeType: string,
+  signal?: AbortSignal
+): Promise<{
+  transcript: string
+  language?: string
+  duration?: number
+  confidence?: number
+}> {
+  const { RUBAI_STT_URL, RUBAI_STT_TOKEN_ID, RUBAI_STT_TOKEN_SECRET } = env
+  if (!RUBAI_STT_URL || !RUBAI_STT_TOKEN_ID || !RUBAI_STT_TOKEN_SECRET) {
+    throw new Error('RubaiSTT is not configured on this deployment')
+  }
+
+  const response = await fetch(RUBAI_STT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': mimeType,
+      'Modal-Key': RUBAI_STT_TOKEN_ID,
+      'Modal-Secret': RUBAI_STT_TOKEN_SECRET,
+    },
+    body: new Uint8Array(audioBuffer),
+    signal,
+  })
+
+  const data = (await response.json().catch(() => null)) as RubaiApiResponse | null
+
+  if (!response.ok) {
+    throw new Error(`RubaiSTT error: ${data?.detail || `HTTP ${response.status}`}`)
+  }
+  if (typeof data?.text !== 'string') {
+    throw new Error('Invalid response structure from RubaiSTT')
+  }
+
+  return {
+    transcript: data.text,
+    language: data.language,
+    duration: data.duration,
+    confidence: data.confidence ?? undefined,
   }
 }
 

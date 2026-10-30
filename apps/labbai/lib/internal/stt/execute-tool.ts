@@ -16,6 +16,8 @@ const STT_TOOL_IDS = new Set([
   'stt_elevenlabs_v2',
   'stt_gemini',
   'stt_gemini_v2',
+  'stt_rubai',
+  'stt_rubai_v2',
   'stt_whisper',
   'stt_whisper_v2',
 ])

@@ -2,7 +2,14 @@ import { z } from 'zod'
 import { resolvedSecretTraceProvenanceSchema, userFileSchema } from '@/lib/api/contracts/primitives'
 import { RESOLVED_SECRET_PROVENANCE_FIELD } from '@/lib/execution/private-tool-metadata'
 
-export const sttProviders = ['whisper', 'deepgram', 'elevenlabs', 'assemblyai', 'gemini'] as const
+export const sttProviders = [
+  'whisper',
+  'deepgram',
+  'elevenlabs',
+  'assemblyai',
+  'gemini',
+  'rubai',
+] as const
 const MISSING_STT_FIELDS_ERROR = 'Missing required fields: provider and apiKey'
 
 export const sttUserFileSchema = userFileSchema.extend({
@@ -19,7 +26,7 @@ export const sttOperationInputSchema = z
       .refine((provider) => sttProviders.includes(provider as (typeof sttProviders)[number]), {
         message: `Invalid provider. Must be one of: ${sttProviders.join(', ')}`,
       }),
-    apiKey: z.string({ error: MISSING_STT_FIELDS_ERROR }).min(1, MISSING_STT_FIELDS_ERROR),
+    apiKey: z.string({ error: MISSING_STT_FIELDS_ERROR }).optional(),
     model: z.string().optional(),
     audioFile: sttUserFileInputSchema.optional(),
     audioFileReference: sttUserFileInputSchema.optional(),
@@ -37,5 +44,10 @@ export const sttOperationInputSchema = z
     [RESOLVED_SECRET_PROVENANCE_FIELD]: resolvedSecretTraceProvenanceSchema.optional(),
   })
   .passthrough()
+  .superRefine((input, ctx) => {
+    if (input.provider !== 'rubai' && !input.apiKey) {
+      ctx.addIssue({ code: 'custom', path: ['apiKey'], message: MISSING_STT_FIELDS_ERROR })
+    }
+  })
 
 export type SttOperationInput = z.output<typeof sttOperationInputSchema>

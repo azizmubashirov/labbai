@@ -191,6 +191,10 @@ export interface TelegramGetChatMemberParams extends TelegramAuthParams {
   userId: number
 }
 
+export interface TelegramGetFileParams extends Pick<TelegramAuthParams, 'botToken'> {
+  fileId: string
+}
+
 export interface TelegramChatFullInfo {
   id: number
   type: string
@@ -296,6 +300,15 @@ export interface TelegramGetChatMemberResponse extends ToolResponse {
   }
 }
 
+export interface TelegramGetFileResponse extends ToolResponse {
+  output: {
+    file: ToolFileData
+    fileId: string
+    mimeType: string
+    fileSize: number
+  }
+}
+
 export type TelegramResponse =
   | TelegramSendMessageResponse
   | TelegramSendPhotoResponse
@@ -307,6 +320,7 @@ export type TelegramResponse =
   | TelegramBooleanResponse
   | TelegramGetChatResponse
   | TelegramGetChatMemberResponse
+  | TelegramGetFileResponse
 
 // Legacy type for backwards compatibility
 interface TelegramMessageParams {

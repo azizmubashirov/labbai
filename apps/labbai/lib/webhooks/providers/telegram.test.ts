@@ -185,6 +185,21 @@ describe('telegramHandler.formatInput', () => {
     })
   })
 
+  it('exposes the file ID of an attachment, using the largest photo size', async () => {
+    const message = { message_id: 51, chat: { id: 1 }, from: { id: 2 } }
+    const fileId = async (attachment: Record<string, unknown>) => {
+      const { input } = await format({ update_id: 14, message: { ...message, ...attachment } })
+      return (input as { message: { fileId?: string } }).message.fileId
+    }
+
+    await expect(fileId({ voice: { file_id: 'voice-1', duration: 3 } })).resolves.toBe('voice-1')
+    await expect(fileId({ document: { file_id: 'doc-1' } })).resolves.toBe('doc-1')
+    await expect(fileId({ photo: [{ file_id: 'small' }, { file_id: 'large' }] })).resolves.toBe(
+      'large'
+    )
+    await expect(fileId({ text: 'salom' })).resolves.toBeUndefined()
+  })
+
   it('never starts a run for owner messages, edits or connection updates', async () => {
     const owner = { ...customerBusinessMessage, from: { id: 9001, first_name: 'Owner' } }
     expect((await format({ update_id: 11, business_message: owner })).skip).toBeDefined()

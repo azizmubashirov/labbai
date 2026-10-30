@@ -1,8 +1,10 @@
 import { db, webhook, workflowDeploymentVersion } from '@labbai/db'
 import { createLogger } from '@labbai/logger'
 import { safeCompare } from '@labbai/security/compare'
+import { toStringOrNull } from '@labbai/utils/coerce'
 import { getErrorMessage } from '@labbai/utils/errors'
 import { generateShortId } from '@labbai/utils/id'
+import { toArray, toRecord } from '@labbai/utils/object'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
@@ -33,6 +35,16 @@ export const TELEGRAM_SECRET_TOKEN_HEADER = 'x-telegram-bot-api-secret-token'
 
 /** Length of the generated `secret_token`; Telegram accepts 1-256 characters of `A-Za-z0-9_-`. */
 const TELEGRAM_SECRET_TOKEN_LENGTH = 48
+
+/** Message fields that hold one file object; `photo` is the exception, a list of sizes. */
+const TELEGRAM_FILE_FIELDS = ['document', 'audio', 'video', 'voice', 'sticker'] as const
+
+/** The `file_id` Download File needs. Telegram lists photo sizes smallest first. */
+function getTelegramFileId(message: Record<string, unknown>): string | undefined {
+  const attachment =
+    toArray(message.photo).at(-1) ?? TELEGRAM_FILE_FIELDS.map((f) => message[f]).find(Boolean)
+  return toStringOrNull(toRecord(attachment).file_id) ?? undefined
+}
 
 export const telegramHandler: WebhookProviderHandler = {
   /**
@@ -182,6 +194,7 @@ export const telegramHandler: WebhookProviderHandler = {
             text: rawMessage.text,
             date: rawMessage.date,
             messageType,
+            fileId: getTelegramFileId(rawMessage),
             raw: rawMessage,
           },
           sender: from

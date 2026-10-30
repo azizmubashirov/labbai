@@ -69,6 +69,14 @@ export interface SttParams {
 
 export interface SttV2Params extends Omit<SttParams, 'audioUrl'> {}
 
+/** RubaiSTT is served from a server-configured endpoint, so a run carries no API key. */
+export interface RubaiSttParams
+  extends Pick<SttParams, 'audioFile' | 'audioFileReference' | 'audioUrl'> {
+  provider: 'rubai'
+}
+
+export interface RubaiSttV2Params extends Omit<RubaiSttParams, 'audioUrl'> {}
+
 export interface TranscriptSegment {
   text: string
   start: number

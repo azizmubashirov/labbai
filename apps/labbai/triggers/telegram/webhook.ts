@@ -77,6 +77,11 @@ export const telegramWebhookTrigger: TriggerConfig = {
           description:
             'Detected content type: text, photo, document, audio, video, voice, sticker, location, contact, poll',
         },
+        fileId: {
+          type: 'string',
+          description:
+            'Telegram file ID of the attached file (if present). Pass it to the Download File operation of the Telegram block',
+        },
         raw: {
           type: 'object',
           description: 'Raw Telegram message object',

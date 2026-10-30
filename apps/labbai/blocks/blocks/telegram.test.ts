@@ -130,3 +130,19 @@ describe('Telegram Business connection param', () => {
     expect(operations).not.toContain('telegram_forward_message')
   })
 })
+
+describe('Telegram Download File params', () => {
+  it('needs a file ID but no chat ID', () => {
+    const mapped = TelegramBlock.tools.config!.params!({
+      botToken: 'bot-token',
+      operation: 'telegram_get_file',
+      fileId: ' file-1 ',
+    })
+
+    expect(mapped).toEqual({ botToken: 'bot-token', fileId: 'file-1' })
+  })
+
+  it('rejects a missing file ID', () => {
+    expect(() => mapParams({ operation: 'telegram_get_file' })).toThrow('File ID is required.')
+  })
+})

@@ -130,6 +130,8 @@ const STT_TOOL_IDS = [
   'stt_elevenlabs_v2',
   'stt_gemini',
   'stt_gemini_v2',
+  'stt_rubai',
+  'stt_rubai_v2',
   'stt_whisper',
   'stt_whisper_v2',
 ] as const
@@ -176,7 +178,7 @@ const GOOGLE_DRIVE_TOOL_IDS = [
 
 const VISION_TOOL_IDS = ['vision_tool', 'vision_tool_v2'] as const
 
-const TELEGRAM_TOOL_IDS = ['telegram_send_document'] as const
+const TELEGRAM_TOOL_IDS = ['telegram_get_file', 'telegram_send_document'] as const
 
 const SMTP_TOOL_IDS = ['smtp_send_mail'] as const
 

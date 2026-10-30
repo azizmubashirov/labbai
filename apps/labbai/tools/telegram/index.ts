@@ -4,6 +4,7 @@ import { telegramEditMessageTextTool } from '@/tools/telegram/edit_message_text'
 import { telegramForwardMessageTool } from '@/tools/telegram/forward_message'
 import { telegramGetChatTool } from '@/tools/telegram/get_chat'
 import { telegramGetChatMemberTool } from '@/tools/telegram/get_chat_member'
+import { telegramGetFileTool } from '@/tools/telegram/get_file'
 import { telegramMessageTool } from '@/tools/telegram/message'
 import { telegramPinMessageTool } from '@/tools/telegram/pin_message'
 import { telegramSendAnimationTool } from '@/tools/telegram/send_animation'
@@ -25,6 +26,7 @@ export {
   telegramForwardMessageTool,
   telegramGetChatTool,
   telegramGetChatMemberTool,
+  telegramGetFileTool,
   telegramMessageTool,
   telegramPinMessageTool,
   telegramSendAnimationTool,

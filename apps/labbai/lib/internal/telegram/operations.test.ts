@@ -22,7 +22,7 @@ vi.mock('@/lib/uploads/utils/file-utils.server', () => ({
   downloadServableFileFromStorage: mocks.downloadServableFileFromStorage,
 }))
 
-import { sendTelegramDocument } from '@/lib/internal/telegram/operations'
+import { downloadTelegramFile, sendTelegramDocument } from '@/lib/internal/telegram/operations'
 
 describe('sendTelegramDocument', () => {
   beforeEach(() => {
@@ -116,5 +116,79 @@ describe('sendTelegramDocument', () => {
       )
     ).rejects.toMatchObject({ status: 404 })
     expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('downloadTelegramFile', () => {
+  const context = { userId: 'user-1', requestId: 'request-1' }
+  const lookup = (filePath: string) =>
+    Response.json({ ok: true, result: { file_unique_id: 'uniq', file_path: filePath } })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal('fetch', mocks.fetch)
+  })
+
+  it('resolves the file ID, downloads it and stores a voice note as Ogg', async () => {
+    mocks.fetch
+      .mockResolvedValueOnce(lookup('voice/file_7.oga'))
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3])))
+
+    const result = await downloadTelegramFile({ botToken: 'token', fileId: 'file+id' }, context)
+
+    expect(mocks.fetch.mock.calls.map(([url]) => url)).toEqual([
+      'https://api.telegram.org/bottoken/getFile?file_id=file%2Bid',
+      'https://api.telegram.org/file/bottoken/voice/file_7.oga',
+    ])
+    assert(isInternalToolFileResult(result))
+    expect(result.files).toEqual([
+      { name: 'telegram-uniq.ogg', mimeType: 'audio/ogg', buffer: Buffer.from([1, 2, 3]) },
+    ])
+    const storedFile: StoredToolFile = {
+      id: 'stored-file-1',
+      key: 'execution/stored-file-1',
+      url: '/api/files/serve/stored-file-1',
+      name: 'telegram-uniq.ogg',
+      type: 'audio/ogg',
+      mimeType: 'audio/ogg',
+      size: 3,
+      context: 'execution',
+    }
+    expect(result.present([storedFile])).toEqual({
+      success: true,
+      output: { file: storedFile, fileId: 'file+id', mimeType: 'audio/ogg', fileSize: 3 },
+    })
+  })
+
+  it('passes Telegram lookup errors through, such as a file over the bot limit', async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      Response.json({ ok: false, description: 'Bad Request: file is too big' }, { status: 400 })
+    )
+
+    await expect(
+      downloadTelegramFile({ botToken: 'token', fileId: 'big' }, context)
+    ).rejects.toMatchObject({ message: 'Bad Request: file is too big', status: 400 })
+    expect(mocks.fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails when Telegram returns no download path', async () => {
+    mocks.fetch.mockResolvedValueOnce(Response.json({ ok: true, result: {} }))
+
+    await expect(
+      downloadTelegramFile({ botToken: 'token', fileId: 'gone' }, context)
+    ).rejects.toMatchObject({ status: 502 })
+  })
+
+  it('stops reading a download that exceeds the bot limit', async () => {
+    mocks.fetch
+      .mockResolvedValueOnce(lookup('documents/file_8.pdf'))
+      .mockResolvedValueOnce(new Response(new Uint8Array(20 * 1024 * 1024 + 1)))
+
+    await expect(
+      downloadTelegramFile({ botToken: 'token', fileId: 'big' }, context)
+    ).rejects.toMatchObject({
+      message: 'Telegram file exceeds the 20 MB download limit',
+      status: 413,
+    })
   })
 })

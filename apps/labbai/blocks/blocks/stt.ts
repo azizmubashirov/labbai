@@ -43,6 +43,7 @@ export const SttBlock: BlockConfig<SttBlockResponse> = {
         { label: 'ElevenLabs', id: 'elevenlabs' },
         { label: 'AssemblyAI', id: 'assemblyai' },
         { label: 'Google Gemini', id: 'gemini' },
+        { label: 'RubaiSTT (Uzbek)', id: 'rubai' },
       ],
       value: () => 'whisper',
       required: true,
@@ -183,7 +184,8 @@ export const SttBlock: BlockConfig<SttBlockResponse> = {
         { label: 'Finnish', id: 'fi' },
       ],
       value: () => 'auto',
-      required: true,
+      required: { field: 'provider', value: 'rubai', not: true },
+      condition: { field: 'provider', value: 'rubai', not: true },
     },
 
     // Timestamps (word-level, sentence-level, or none)
@@ -197,7 +199,8 @@ export const SttBlock: BlockConfig<SttBlockResponse> = {
         { label: 'Word-level', id: 'word' },
       ],
       value: () => 'none',
-      required: true,
+      required: { field: 'provider', value: 'rubai', not: true },
+      condition: { field: 'provider', value: 'rubai', not: true },
     },
 
     // Speaker diarization (Deepgram/AssemblyAI only)
@@ -252,12 +255,20 @@ export const SttBlock: BlockConfig<SttBlockResponse> = {
       type: 'short-input',
       placeholder: 'Enter your API key',
       password: true,
-      required: true,
+      required: { field: 'provider', value: 'rubai', not: true },
+      condition: { field: 'provider', value: 'rubai', not: true },
     },
   ],
 
   tools: {
-    access: ['stt_whisper', 'stt_deepgram', 'stt_elevenlabs', 'stt_assemblyai', 'stt_gemini'],
+    access: [
+      'stt_whisper',
+      'stt_deepgram',
+      'stt_elevenlabs',
+      'stt_assemblyai',
+      'stt_gemini',
+      'stt_rubai',
+    ],
     config: {
       tool: (params) => {
         // Select tool based on provider
@@ -272,6 +283,8 @@ export const SttBlock: BlockConfig<SttBlockResponse> = {
             return 'stt_assemblyai'
           case 'gemini':
             return 'stt_gemini'
+          case 'rubai':
+            return 'stt_rubai'
           default:
             return 'stt_whisper'
         }
@@ -304,7 +317,7 @@ export const SttBlock: BlockConfig<SttBlockResponse> = {
   inputs: {
     provider: {
       type: 'string',
-      description: 'STT provider (whisper, deepgram, elevenlabs, assemblyai, gemini)',
+      description: 'STT provider (whisper, deepgram, elevenlabs, assemblyai, gemini, rubai)',
     },
     apiKey: { type: 'string', description: 'Provider API key' },
     model: {
@@ -336,7 +349,7 @@ export const SttBlock: BlockConfig<SttBlockResponse> = {
     confidence: {
       type: 'number',
       description: 'Overall confidence score',
-      condition: { field: 'provider', value: ['deepgram', 'assemblyai', 'gemini'] },
+      condition: { field: 'provider', value: ['deepgram', 'assemblyai', 'gemini', 'rubai'] },
     },
     sentiment: {
       type: 'array',
@@ -394,6 +407,7 @@ export const SttV2Block: BlockConfig<SttBlockResponse> = {
       'stt_elevenlabs_v2',
       'stt_assemblyai_v2',
       'stt_gemini_v2',
+      'stt_rubai_v2',
     ],
     config: {
       tool: createVersionedToolSelector({
@@ -409,6 +423,8 @@ export const SttV2Block: BlockConfig<SttBlockResponse> = {
               return 'stt_assemblyai'
             case 'gemini':
               return 'stt_gemini'
+            case 'rubai':
+              return 'stt_rubai'
             default:
               return 'stt_whisper'
           }

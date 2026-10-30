@@ -222,6 +222,9 @@ export const env = createEnv({
     COHERE_API_KEY_2:                      z.string().min(1).optional(),           // Additional Cohere API key for load balancing
     COHERE_API_KEY_3:                      z.string().min(1).optional(),           // Additional Cohere API key for load balancing
     ELEVENLABS_API_KEY:                    z.string().min(1).optional(),           // ElevenLabs API key for workspace speech-to-text
+    RUBAI_STT_URL:                         z.string().url().optional(),            // labbai-stt Modal endpoint for Uzbek speech-to-text (infra/labbai-stt)
+    RUBAI_STT_TOKEN_ID:                    z.string().min(1).optional(),           // Modal proxy auth token ID for RUBAI_STT_URL
+    RUBAI_STT_TOKEN_SECRET:                z.string().min(1).optional(),           // Modal proxy auth token secret for RUBAI_STT_URL
     SERPER_API_KEY:                        z.string().min(1).optional(),           // Serper API key for online search
     EXA_API_KEY:                           z.string().min(1).optional(),           // Exa AI API key for enhanced online search
     BLACKLISTED_PROVIDERS:                 z.string().optional(),                  // Comma-separated provider IDs to hide (e.g., "openai,anthropic")

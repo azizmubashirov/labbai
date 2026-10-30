@@ -66,7 +66,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
   description: 'Interact with Telegram',
   authMode: AuthMode.BotToken,
   longDescription:
-    'Integrate Telegram into the workflow. Send, edit, forward, copy, pin, and delete messages; send media, locations, contacts, and polls; react to messages; show chat actions; and look up chat and member info. Can be used in trigger mode to start a workflow when a message is sent to a chat.',
+    'Integrate Telegram into the workflow. Send, edit, forward, copy, pin, and delete messages; send media, locations, contacts, and polls; download files sent to the bot; react to messages; show chat actions; and look up chat and member info. Can be used in trigger mode to start a workflow when a message is sent to a chat.',
   category: 'tools',
   integrationType: IntegrationType.Communication,
   bgColor: '#FFFFFF',
@@ -169,6 +169,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
           { text: 'Fetch member', field: 'userId', core: true },
           { text: 'of chat', field: 'chatId' },
         ],
+        telegram_get_file: [{ text: 'Download file', field: 'fileId', core: true }],
       },
     },
   },
@@ -197,6 +198,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
         { label: 'Set Message Reaction', id: 'telegram_set_message_reaction' },
         { label: 'Get Chat', id: 'telegram_get_chat' },
         { label: 'Get Chat Member', id: 'telegram_get_chat_member' },
+        { label: 'Download File', id: 'telegram_get_file' },
       ],
       value: () => 'telegram_message',
     },
@@ -223,7 +225,18 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
 2. Send any message to the channel (e.g. "I love Labbai")
 3. Visit https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
 4. Look for the chat field in the JSON response at the very bottom where you'll find the chat ID`,
-      required: true,
+      required: { field: 'operation', value: 'telegram_get_file', not: true },
+      condition: { field: 'operation', value: 'telegram_get_file', not: true },
+    },
+    {
+      id: 'fileId',
+      title: 'File ID',
+      type: 'short-input',
+      placeholder: 'e.g. <telegram.message.fileId>',
+      description:
+        'File ID from an incoming message. Only the bot that received the file can download it, up to 20 MB.',
+      required: { field: 'operation', value: 'telegram_get_file' },
+      condition: { field: 'operation', value: 'telegram_get_file' },
     },
     {
       id: 'text',
@@ -635,11 +648,18 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
       'telegram_send_chat_action',
       'telegram_get_chat',
       'telegram_get_chat_member',
+      'telegram_get_file',
     ],
     config: {
       tool: (params) => params.operation || 'telegram_message',
       params: (params) => {
         if (!params.botToken) throw new Error('Bot token required for this operation')
+
+        if (params.operation === 'telegram_get_file') {
+          const fileId = (params.fileId || '').trim()
+          if (!fileId) throw new Error('File ID is required.')
+          return { botToken: params.botToken, fileId }
+        }
 
         const chatId = (params.chatId || '').trim()
         if (!chatId) {
@@ -879,6 +899,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
     isBig: { type: 'string', description: 'Whether to show a big reaction animation' },
     disableNotification: { type: 'string', description: 'Pin the message silently' },
     userId: { type: 'string', description: 'Target user ID for chat member lookup' },
+    fileId: { type: 'string', description: 'Telegram file ID to download' },
     businessConnectionId: {
       type: 'string',
       description: 'Telegram Business connection to send on (empty sends as the bot)',
@@ -894,6 +915,11 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
     message: { type: 'string', description: 'Success or error message' },
     data: { type: 'json', description: 'Response data' },
     files: { type: 'file[]', description: 'Files attached to the message' },
+    // Download file outputs
+    file: { type: 'file', description: 'File downloaded by Download File' },
+    fileId: { type: 'string', description: 'Telegram file ID that was downloaded' },
+    mimeType: { type: 'string', description: 'MIME type of the downloaded file' },
+    fileSize: { type: 'number', description: 'Size of the downloaded file in bytes' },
     // Specific result fields
     messageId: { type: 'number', description: 'Sent message ID' },
     chatId: { type: 'number', description: 'Chat ID where message was sent' },
@@ -1027,6 +1053,12 @@ export const TelegramBlockMeta = {
       description: 'Trigger a workflow when a Telegram message arrives and act on its content.',
       content:
         '# Route an Incoming Telegram Message\n\nUse Telegram as a trigger so the workflow runs whenever a user messages the bot.\n\n## Steps\n1. Enable the Telegram webhook trigger so incoming messages start the workflow.\n2. Read the trigger outputs: text, from_username, chat_id, and chat_type.\n3. Branch on the message content (for example detect a command or a support question) to decide the next action.\n4. Reply with the Send Message operation using the chat_id from the trigger.\n\n## Output\nReturn the parsed incoming message fields and confirm the reply that was sent back to the user.',
+    },
+    {
+      name: 'transcribe-voice-message',
+      description: 'Turn a voice message sent to the bot into text an agent can act on.',
+      content:
+        '# Transcribe a Telegram Voice Message\n\nLet people talk to the bot instead of typing.\n\n## Steps\n1. Enable the Telegram webhook trigger so incoming messages start the workflow.\n2. Branch on <telegram.message.messageType> so only "voice" messages take this path.\n3. Use the Download File operation with <telegram.message.fileId> to store the audio in the workflow.\n4. Pass the file output to a Speech-to-Text block. For Uzbek speech, choose RubaiSTT.\n5. Send the transcript to an Agent block, then reply with the Send Message operation.\n\n## Output\nReturn the transcript and its confidence so low-confidence messages can be confirmed before acting on them.',
     },
     {
       name: 'run-a-poll',
