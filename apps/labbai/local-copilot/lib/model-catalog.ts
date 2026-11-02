@@ -1,8 +1,9 @@
+import { CLOUDFLARE_MODEL_CLAUDE_SONNET_5 } from '@/providers/cloudflare/model-ids'
 import {
-  CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
-  CLOUDFLARE_MODEL_GEMINI_3_8_FLASH,
-} from '@/providers/cloudflare/model-ids'
-import { getModelDisplayName } from '@/providers/models'
+  getModelDisplayName,
+  getModelPickerGroup,
+  getModelPickerGroupLabel,
+} from '@/providers/models'
 
 /**
  * Default catalog selection for new local chats and new user-access rows, and the fallback
@@ -19,17 +20,34 @@ export type LocalCopilotCatalogId = string
 export interface LocalCopilotCatalogEntry {
   id: LocalCopilotCatalogId
   label: string
+  /** Picker section label (the model vendor), as in the Agent block picker. */
+  group: string
 }
 
 /**
- * The models selectable in chat, in picker order. Every entry runs through Cloudflare and
- * must pass a multi-round tool loop there before it is listed; the copilot is the Agent
- * block's stricter sibling, so most catalog models are not offered here.
+ * The models selectable in chat, in the Agent block picker's order. Every entry runs through
+ * Cloudflare and passed a multi-round tool loop there before it was listed: every Opus and
+ * Sonnet but the sunset Sonnet 4.5 (Haiku and Fable are left out by choice), and Gemini 3.5
+ * and newer.
  */
 export const LOCAL_COPILOT_CATALOG: readonly LocalCopilotCatalogEntry[] = [
+  'anthropic/claude-opus-5.5',
+  'anthropic/claude-opus-5',
+  'anthropic/claude-opus-4.8',
+  'anthropic/claude-opus-4.7',
+  'anthropic/claude-opus-4.6',
+  'anthropic/claude-opus-4.5',
   CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
-  CLOUDFLARE_MODEL_GEMINI_3_8_FLASH,
-].map((id) => ({ id, label: getModelDisplayName(id) }))
+  'anthropic/claude-sonnet-4.6',
+  'google/gemini-3.8-flash',
+  'google/gemini-3.7-flash',
+  'google/gemini-3.6-flash',
+  'google/gemini-3.5-flash',
+  'google/gemini-3.5-flash-lite',
+].map((id) => {
+  const group = getModelPickerGroup(id)
+  return { id, label: getModelDisplayName(id), group: group ? getModelPickerGroupLabel(group) : '' }
+})
 
 const CATALOG_IDS = new Set<string>(LOCAL_COPILOT_CATALOG.map((entry) => entry.id))
 

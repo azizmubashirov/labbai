@@ -1,9 +1,11 @@
 'use client'
 
+import { Fragment } from 'react'
 import {
   Chip,
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -38,10 +40,13 @@ export function ModelPicker({ catalogId, onCatalogIdChange }: ModelPickerProps) 
       </DropdownMenuTrigger>
       <DropdownMenuContent align='start' side='top'>
         <DropdownMenuRadioGroup value={catalogId} onValueChange={onCatalogIdChange}>
-          {LOCAL_COPILOT_CATALOG.map((entry) => (
-            <DropdownMenuRadioItem key={entry.id} value={entry.id}>
-              {entry.label}
-            </DropdownMenuRadioItem>
+          {LOCAL_COPILOT_CATALOG.map((entry, index) => (
+            <Fragment key={entry.id}>
+              {entry.group !== LOCAL_COPILOT_CATALOG[index - 1]?.group && (
+                <DropdownMenuLabel>{entry.group}</DropdownMenuLabel>
+              )}
+              <DropdownMenuRadioItem value={entry.id}>{entry.label}</DropdownMenuRadioItem>
+            </Fragment>
           ))}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>

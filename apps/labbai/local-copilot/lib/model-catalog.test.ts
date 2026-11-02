@@ -11,12 +11,36 @@ import {
 } from '@/local-copilot/lib/model-catalog'
 
 describe('LOCAL_COPILOT_CATALOG', () => {
-  it('offers Claude Sonnet 5 (default) and Gemini 3.8 Flash', () => {
-    expect(LOCAL_COPILOT_CATALOG).toEqual([
-      { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5' },
-      { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+  it('offers every Opus and Sonnet but 4.5, then Gemini 3.5 and newer, Sonnet 5 by default', () => {
+    expect(LOCAL_COPILOT_CATALOG.map((entry) => entry.id)).toEqual([
+      'anthropic/claude-opus-5.5',
+      'anthropic/claude-opus-5',
+      'anthropic/claude-opus-4.8',
+      'anthropic/claude-opus-4.7',
+      'anthropic/claude-opus-4.6',
+      'anthropic/claude-opus-4.5',
+      'anthropic/claude-sonnet-5',
+      'anthropic/claude-sonnet-4.6',
+      'google/gemini-3.8-flash',
+      'google/gemini-3.7-flash',
+      'google/gemini-3.6-flash',
+      'google/gemini-3.5-flash',
+      'google/gemini-3.5-flash-lite',
     ])
     expect(DEFAULT_LOCAL_COPILOT_CATALOG_ID).toBe('anthropic/claude-sonnet-5')
+  })
+
+  it('labels each entry with its name and vendor section', () => {
+    expect(LOCAL_COPILOT_CATALOG[6]).toEqual({
+      id: 'anthropic/claude-sonnet-5',
+      label: 'Claude Sonnet 5',
+      group: 'Anthropic',
+    })
+    expect(LOCAL_COPILOT_CATALOG[8]).toEqual({
+      id: 'google/gemini-3.8-flash',
+      label: 'Gemini 3.8 Flash',
+      group: 'Google',
+    })
   })
 })
 
@@ -29,8 +53,9 @@ describe('resolveLocalCopilotCatalogId', () => {
     for (const value of [
       'openai',
       'gpt-5.5',
-      'gpt-5-mini',
-      'anthropic/claude-opus-5.5',
+      'anthropic/claude-haiku-4.5',
+      'anthropic/claude-sonnet-4.5',
+      'google/gemini-3.1-pro',
       '',
       null,
     ]) {

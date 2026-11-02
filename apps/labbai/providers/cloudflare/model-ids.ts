@@ -49,7 +49,6 @@ export const CLOUDFLARE_GOOGLE_MODEL_IDS = [
 
 export const CLOUDFLARE_MODEL_CLAUDE_SONNET_5 = 'anthropic/claude-sonnet-5'
 export const CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5 = 'anthropic/claude-haiku-4.5'
-export const CLOUDFLARE_MODEL_GEMINI_3_8_FLASH = 'google/gemini-3.8-flash'
 export const CLOUDFLARE_MODEL_GEMINI_2_5_PRO = 'google/gemini-2.5-pro'
 export const CLOUDFLARE_MODEL_GEMINI_2_5_FLASH = 'google/gemini-2.5-flash'
 /** Workers AI: strong open model. */
