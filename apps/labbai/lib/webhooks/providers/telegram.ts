@@ -7,6 +7,10 @@ import { generateShortId } from '@labbai/utils/id'
 import { toArray, toRecord } from '@labbai/utils/object'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import {
+  resolveBackgroundWebhookEnv,
+  resolveWebhookProviderConfig,
+} from '@/lib/webhooks/env-resolver'
 import { getNotificationUrl, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import {
   isTelegramBusinessBotEcho,
@@ -312,7 +316,7 @@ export const telegramHandler: WebhookProviderHandler = {
         return
       }
 
-      if (await activeTelegramWebhookUsesBot(ctx.webhook, botToken)) {
+      if (await activeTelegramWebhookUsesBot(ctx.webhook, ctx.workflow, botToken)) {
         logger.info(
           `[${ctx.requestId}] Skipping Telegram webhook deletion because an active deployment uses the same bot token`,
           { webhookId: ctx.webhook.id }
@@ -348,8 +352,19 @@ export const telegramHandler: WebhookProviderHandler = {
   },
 }
 
+/**
+ * Whether a webhook on an active deployment of the same workflow serves this bot. Telegram keeps
+ * one webhook per bot, so deleting the retired row's subscription would also remove the one the
+ * new deployment just registered.
+ *
+ * The token being deleted arrives resolved, while stored rows keep env references such as
+ * `{{TELEGRAM_BOT_TOKEN}}`, so those rows are resolved against the workflow owner's env before
+ * comparing. If that env cannot be read the answer is yes: a leftover subscription is harmless,
+ * a deleted live one silently stops the bot.
+ */
 async function activeTelegramWebhookUsesBot(
   webhookRecord: Record<string, unknown>,
+  workflowRecord: Record<string, unknown>,
   botToken: string
 ): Promise<boolean> {
   const workflowId = webhookRecord.workflowId
@@ -374,8 +389,35 @@ async function activeTelegramWebhookUsesBot(
       )
     )
 
-  return activeWebhooks.some((activeWebhook) => {
-    const config = getProviderConfig({ providerConfig: activeWebhook.providerConfig })
-    return config.botToken === botToken
-  })
+  const activeTokens = activeWebhooks.map(
+    (activeWebhook) => getProviderConfig({ providerConfig: activeWebhook.providerConfig }).botToken
+  )
+  if (activeTokens.includes(botToken)) return true
+
+  const tokenReferences = activeTokens.filter(
+    (token): token is string => typeof token === 'string' && token.includes('{{')
+  )
+  if (tokenReferences.length === 0) return false
+
+  const userId = workflowRecord.userId
+  if (typeof userId !== 'string') return true
+  const workspaceId =
+    typeof workflowRecord.workspaceId === 'string' ? workflowRecord.workspaceId : undefined
+
+  try {
+    const envVars = await resolveBackgroundWebhookEnv(userId, workspaceId)
+    for (const token of tokenReferences) {
+      const resolved = await resolveWebhookProviderConfig({ botToken: token }, userId, workspaceId, {
+        envVars,
+      })
+      if (resolved.botToken === botToken) return true
+    }
+    return false
+  } catch (error) {
+    logger.warn('Could not resolve active Telegram bot tokens; keeping the Telegram webhook', {
+      webhookId,
+      error: getErrorMessage(error),
+    })
+    return true
+  }
 }

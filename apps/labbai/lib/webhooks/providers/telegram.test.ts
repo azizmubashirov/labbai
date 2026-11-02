@@ -1,8 +1,35 @@
 /**
  * @vitest-environment node
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TELEGRAM_SECRET_TOKEN_HEADER, telegramHandler } from '@/lib/webhooks/providers/telegram'
+
+const { mockActiveRows, mockResolveEnv } = vi.hoisted(() => ({
+  mockActiveRows: vi.fn(),
+  mockResolveEnv: vi.fn(),
+}))
+
+vi.mock('@labbai/db', () => ({
+  db: {
+    select: () => ({ from: () => ({ innerJoin: () => ({ where: () => mockActiveRows() }) }) }),
+  },
+  webhook: {},
+  workflowDeploymentVersion: {},
+}))
+
+vi.mock('@/lib/webhooks/env-resolver', () => ({
+  resolveBackgroundWebhookEnv: mockResolveEnv,
+  resolveWebhookProviderConfig: async (
+    config: Record<string, unknown>,
+    _userId: string,
+    _workspaceId: string | undefined,
+    options: { envVars: Record<string, string> }
+  ) => {
+    const token = String(config.botToken)
+    const name = token.replace(/^\{\{\s*|\s*\}\}$/g, '')
+    return { botToken: options.envVars[name] ?? token }
+  },
+}))
 
 vi.mock('@/lib/webhooks/provider-subscription-utils', () => ({
   getNotificationUrl: () => 'https://app.example.com/api/webhooks/trigger/p',
@@ -102,6 +129,59 @@ describe('telegramHandler.createSubscription', () => {
     } as never)
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).allowed_updates).toEqual(expected)
+  })
+})
+
+describe('telegramHandler.deleteSubscription', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    mockResolveEnv.mockResolvedValue({ TELEGRAM_BOT_TOKEN: '1:abc' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function deleteRetired() {
+    return telegramHandler.deleteSubscription?.({
+      webhook: { id: 'old', workflowId: 'wf', providerConfig: { botToken: '1:abc' } },
+      workflow: { userId: 'u', workspaceId: 'ws' },
+      requestId: 'r',
+    })
+  }
+
+  it.each([
+    ['a literal token', '1:abc'],
+    ['an env reference to the same token', '{{TELEGRAM_BOT_TOKEN}}'],
+  ])('keeps the webhook when the active deployment stores %s', async (_label, stored) => {
+    mockActiveRows.mockResolvedValue([{ id: 'new', providerConfig: { botToken: stored } }])
+
+    await deleteRetired()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('deletes the webhook when the active deployment uses another bot', async () => {
+    mockActiveRows.mockResolvedValue([{ id: 'new', providerConfig: { botToken: '2:xyz' } }])
+
+    await deleteRetired()
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://api.telegram.org/bot1:abc/deleteWebhook')
+  })
+
+  it('keeps the webhook when the active token reference cannot be resolved', async () => {
+    mockActiveRows.mockResolvedValue([
+      { id: 'new', providerConfig: { botToken: '{{TELEGRAM_BOT_TOKEN}}' } },
+    ])
+    mockResolveEnv.mockRejectedValue(new Error('env unavailable'))
+
+    await deleteRetired()
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
