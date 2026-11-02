@@ -441,30 +441,24 @@ async function resolveAgentContexts(params: {
 }
 
 /**
- * Existing Local chats created under the hosted Opus default still store
- * `claude-opus-4-8`. Rewrite that leftover onto the generic Claude picker id
- * so follow-up turns and `copilot_messages.model` stop carrying the old id.
+ * Rewrites a chat's stored model that the picker does not offer (old hosted ids such as
+ * `claude-opus-4-8`, earlier picker ids such as `gpt-5.5`) onto the default, so the chat row
+ * stops carrying a model that never runs.
  */
-async function migrateLegacyLocalCopilotChatModel(
-  chatId: string,
-  userId: string
-): Promise<string | undefined> {
+async function migrateLegacyLocalCopilotChatModel(chatId: string, userId: string): Promise<void> {
   const [row] = await db
     .select({ model: copilotChats.model })
     .from(copilotChats)
     .where(and(eq(copilotChats.id, chatId), eq(copilotChats.userId, userId)))
     .limit(1)
 
-  const storedModel = row?.model ?? undefined
-  const remapped = remapLegacyLocalCopilotCatalogId(storedModel)
-  if (!remapped) return storedModel
+  const remapped = remapLegacyLocalCopilotCatalogId(row?.model)
+  if (!remapped) return
 
   await db
     .update(copilotChats)
     .set({ model: remapped, updatedAt: new Date() })
     .where(and(eq(copilotChats.id, chatId), eq(copilotChats.userId, userId)))
-
-  return storedModel
 }
 
 async function persistUserMessage(params: {
@@ -994,14 +988,10 @@ export async function handleUnifiedChatPost(req: NextRequest) {
       return localCopilotUserAccessDeniedResponse()
     }
 
-    const storedChatModel = body.chatId
-      ? await migrateLegacyLocalCopilotChatModel(body.chatId, authenticatedUserId)
-      : undefined
-    const localCatalogId = resolveLocalCopilotRequestCatalogId(
-      body.model?.trim(),
-      defaultModel,
-      storedChatModel
-    )
+    if (body.chatId) {
+      await migrateLegacyLocalCopilotChatModel(body.chatId, authenticatedUserId)
+    }
+    const localCatalogId = resolveLocalCopilotRequestCatalogId(body.model?.trim(), defaultModel)
 
     const userMetadata = {
       ...(authenticatedUserName ? { name: authenticatedUserName } : {}),

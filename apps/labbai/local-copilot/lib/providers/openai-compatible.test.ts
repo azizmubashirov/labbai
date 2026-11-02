@@ -13,6 +13,7 @@ import type {
   ChatCompletionChunk,
   ChatCompletionRequest,
   ChatMessage,
+  ChatToolCall,
 } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
 import { resetCloudflareAnthropicMessagesFallback } from '@/providers/cloudflare/anthropic-messages'
@@ -243,6 +244,66 @@ describe('Cloudflare unified endpoint transport', () => {
         { type: 'done', finishReason: 'stop', usage: { inputTokens: 7, outputTokens: 2 } },
       ])
     )
+  })
+
+  it("keeps Gemini's thought signature on its tool call and sends it back", async () => {
+    const signature = { google: { thought_signature: 'sig-1' } }
+    const fetchMock = vi.fn(async (..._args: FetchArgs) =>
+      sse([
+        {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: 'call_1',
+                    function: { name: 'read', arguments: '{}' },
+                    extra_content: signature,
+                  },
+                  { index: 1, id: 'call_2', function: { name: 'list', arguments: '{}' } },
+                ],
+              },
+              finish_reason: 'tool_calls',
+            },
+          ],
+        },
+      ])
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = createOpenAiCompatibleProvider(cloudflareConfig)
+
+    const toolCalls: ChatToolCall[] = []
+    for await (const chunk of provider.chatCompletionStream({
+      model: 'google/gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+    })) {
+      if (chunk.toolCall) toolCalls.push(chunk.toolCall)
+    }
+    expect(toolCalls).toEqual([
+      { id: 'call_1', name: 'read', arguments: '{}', extraContent: signature },
+      { id: 'call_2', name: 'list', arguments: '{}' },
+    ])
+
+    for await (const _chunk of provider.chatCompletionStream({
+      model: 'google/gemini-3.8-flash',
+      messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: '', toolCalls },
+      ],
+    })) {
+      // drain
+    }
+    const body = JSON.parse(String(fetchMock.mock.calls[1][1]?.body))
+    expect(body.messages[1].tool_calls).toEqual([
+      {
+        id: 'call_1',
+        type: 'function',
+        function: { name: 'read', arguments: '{}' },
+        extra_content: signature,
+      },
+      { id: 'call_2', type: 'function', function: { name: 'list', arguments: '{}' } },
+    ])
   })
 
   it('passes Cloudflare catalog ids through and omits temperature where the model rejects it', async () => {

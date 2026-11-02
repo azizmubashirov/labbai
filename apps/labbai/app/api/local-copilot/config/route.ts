@@ -13,7 +13,11 @@ import {
   getLocalCopilotUserAccess,
   updateLocalCopilotDefaultModel,
 } from '@/local-copilot/lib/access'
-import { getLocalCopilotConfig, isSelfHostedDeployment } from '@/local-copilot/lib/config'
+import {
+  getLocalCopilotConfig,
+  isLocalCopilotModelSelectionEnabled,
+  isSelfHostedDeployment,
+} from '@/local-copilot/lib/config'
 
 const logger = createLogger('LocalCopilotConfigAPI')
 
@@ -26,6 +30,7 @@ function toConfigResponse(access: LocalCopilotUserAccess) {
     model: config.model,
     specialistModel: config.specialistModel,
     selfHosted: isSelfHostedDeployment(),
+    modelSelectionEnabled: isLocalCopilotModelSelectionEnabled(config),
   }
 }
 

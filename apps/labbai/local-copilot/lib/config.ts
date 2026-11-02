@@ -3,7 +3,7 @@ import { DEFAULT_MAX_MODEL_ROUNDS_PER_TURN } from '@/local-copilot/lib/agent/spe
 import {
   DEFAULT_LOCAL_COPILOT_CATALOG_ID,
   type LocalCopilotCatalogId,
-  resolveLocalCopilotCatalogEntry,
+  resolveLocalCopilotCatalogId,
 } from '@/local-copilot/lib/model-catalog'
 import type { LocalCopilotConfig, LocalCopilotProviderId } from '@/local-copilot/lib/types'
 import { ANTHROPIC_API_BASE_URL } from '@/providers/cloudflare/anthropic-messages'
@@ -11,6 +11,7 @@ import {
   CLOUDFLARE_AIG_GATEWAY_ID_HEADER,
   getCloudflareAIConfig,
   getCloudflareUnifiedBaseUrl,
+  isCloudflareAIMode,
 } from '@/providers/cloudflare/config'
 import {
   CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
@@ -24,8 +25,8 @@ import {
 import { OPENAI_MODEL_GPT_5_5, OPENAI_MODEL_GPT_5_MINI } from '@/providers/openai/model-ids'
 
 /**
- * Default Local Copilot main agent model (override with `COPILOT_MODEL`).
- * Also the default picker catalog id.
+ * Default Local Copilot main agent model outside Cloudflare mode (override with
+ * `COPILOT_MODEL`). In Cloudflare mode the picker selection applies instead.
  */
 export const DEFAULT_LOCAL_COPILOT_MODEL = OPENAI_MODEL_GPT_5_5
 const DEFAULT_MODEL: string = DEFAULT_LOCAL_COPILOT_MODEL
@@ -268,28 +269,32 @@ export function getLocalCopilotConfig(): LocalCopilotConfig {
 }
 
 /**
- * Builds a per-request Local Copilot config from an allowlisted catalog id.
- * Does not mutate process-wide env defaults.
- *
- * Catalog ids apply when the env transport is `openai` or `cloudflare`. OpenAI entries
- * run on the env transport (the OpenAI API / gateway, or Cloudflare's unified endpoint as
- * `openai/<id>`); Cloudflare entries (Anthropic, Google, Workers AI) run on `cloudflare`.
- * Every entry but GPT-5.5 / GPT-5 mini is Cloudflare-only and needs Cloudflare mode —
- * without it the env config is used unchanged. When
- * `COPILOT_PROVIDER` pins Azure or another OpenAI-compatible endpoint (deployment names /
- * custom ids), the env config (`COPILOT_MODEL`) wins.
+ * Whether the catalog applies on this deployment: its models run through Cloudflare, so
+ * this needs Cloudflare mode and is off when `COPILOT_PROVIDER` pins Azure or another
+ * OpenAI-compatible endpoint (deployment names / custom ids).
+ */
+export function isLocalCopilotModelSelectionEnabled(
+  config: LocalCopilotConfig = getLocalCopilotConfig()
+): boolean {
+  const supportsCatalog = config.provider === 'openai' || config.provider === 'cloudflare'
+  return supportsCatalog && isCloudflareAIMode()
+}
+
+/**
+ * Builds a per-request Local Copilot config from a catalog id; an id outside the catalog
+ * runs the default. Does not mutate process-wide env defaults. Without
+ * {@link isLocalCopilotModelSelectionEnabled} the env config (`COPILOT_MODEL`) is used
+ * unchanged.
  */
 export function buildLocalCopilotConfigForCatalog(
   catalogId: LocalCopilotCatalogId = DEFAULT_LOCAL_COPILOT_CATALOG_ID
 ): LocalCopilotConfig {
   const base = getLocalCopilotConfig()
-  if (base.provider !== 'openai' && base.provider !== 'cloudflare') return base
+  if (!isLocalCopilotModelSelectionEnabled(base)) return base
 
-  const entry = resolveLocalCopilotCatalogEntry(catalogId)
-  if (entry.cloudflareOnly && !getCloudflareAIConfig()) return base
-  const model = entry.model?.trim() || process.env.COPILOT_MODEL?.trim() || DEFAULT_MODEL
+  const model = resolveLocalCopilotCatalogId(catalogId)
 
-  if (entry.provider === 'cloudflare' && base.provider !== 'cloudflare') {
+  if (base.provider !== 'cloudflare') {
     const provider: LocalCopilotProviderId = 'cloudflare'
     return {
       ...base,

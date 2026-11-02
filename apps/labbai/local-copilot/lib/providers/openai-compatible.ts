@@ -5,6 +5,7 @@ import { buildLocalCopilotPromptCacheKey } from '@/local-copilot/lib/providers/p
 import { fetchProviderWithRetry } from '@/local-copilot/lib/providers/provider-fetch'
 import type {
   ChatCompletionRequest,
+  ChatToolCall,
   LocalCopilotProvider,
   TokenUsage,
 } from '@/local-copilot/lib/providers/types'
@@ -49,6 +50,7 @@ interface OpenAiStreamChunk {
         index: number
         id?: string
         function?: { name?: string; arguments?: string }
+        extra_content?: Record<string, unknown>
       }>
     }
     finish_reason?: string | null
@@ -179,6 +181,7 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
                 id: call.id,
                 type: 'function',
                 function: { name: call.name, arguments: call.arguments },
+                ...(call.extraContent ? { extra_content: call.extraContent } : {}),
               })),
             }
           }
@@ -253,7 +256,7 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
       const decoder = new TextDecoder()
       const translateAnthropic = createAnthropicStreamTranslator()
       let buffer = ''
-      const toolCalls = new Map<number, { id: string; name: string; arguments: string }>()
+      const toolCalls = new Map<number, ChatToolCall>()
       let inputTokens = 0
       let outputTokens = 0
       let cacheReadTokens = 0
@@ -346,6 +349,7 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
               if (toolDelta.function?.arguments) {
                 existing.arguments += toolDelta.function.arguments
               }
+              if (toolDelta.extra_content) existing.extraContent = toolDelta.extra_content
               toolCalls.set(toolDelta.index, existing)
             }
 

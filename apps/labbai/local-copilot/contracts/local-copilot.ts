@@ -61,6 +61,8 @@ export const localCopilotConfigResponseSchema = z.object({
   model: z.string(),
   specialistModel: z.string(),
   selfHosted: z.boolean(),
+  /** Whether the chat model picker applies on this deployment (Cloudflare mode). */
+  modelSelectionEnabled: z.boolean(),
 })
 
 export type LocalCopilotConfigResponse = z.output<typeof localCopilotConfigResponseSchema>

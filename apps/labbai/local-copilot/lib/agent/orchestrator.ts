@@ -118,7 +118,10 @@ import {
   normalizeSingleSelectJsonToOptionsTags,
   stripOptionsTagsForDisplay,
 } from '@/local-copilot/lib/format-options-tag'
-import type { LocalCopilotCatalogId } from '@/local-copilot/lib/model-catalog'
+import {
+  type LocalCopilotCatalogId,
+  resolveLocalCopilotCatalogId,
+} from '@/local-copilot/lib/model-catalog'
 import { buildOAuthConnectControl } from '@/local-copilot/lib/oauth-connect-text'
 import { auditLocalOpsEvent } from '@/local-copilot/lib/ops/audit-metrics'
 import { LOCAL_OPS_COUNTERS, recordLocalOpsEvent } from '@/local-copilot/lib/ops/metrics'
@@ -136,7 +139,7 @@ import {
   buildPromptCacheLayout,
   orderToolsForPromptCache,
 } from '@/local-copilot/lib/providers/prompt-cache'
-import type { ChatMessage } from '@/local-copilot/lib/providers/types'
+import type { ChatMessage, ChatToolCall } from '@/local-copilot/lib/providers/types'
 import {
   prepareLocalToolConfirmation,
   waitForLocalToolConfirmation,
@@ -205,7 +208,6 @@ import { runPostMutationVerification } from '@/local-copilot/lib/verification/ru
 import type { MutationOutcome, VerificationRecord } from '@/local-copilot/lib/verification/types'
 import { createTurnMutations } from '@/local-copilot/lib/writes/turn-mutations'
 import { MAX_TOOL_ITERATIONS } from '@/providers'
-import { CLOUDFLARE_MODEL_CLAUDE_SONNET_5 } from '@/providers/cloudflare/model-ids'
 
 const logger = createLogger('LocalCopilotAgent')
 
@@ -308,9 +310,7 @@ async function* runLocalCopilotAgentTurn(
   const turnCost = ledger.turnCost
   const startedAt = Date.now()
   const timing = createLocalCopilotTurnTiming(startedAt)
-  // The copilot runs on one model for everyone (no picker): a stale client choice or saved
-  // preference is ignored.
-  const catalogId = LOCAL_COPILOT_PINNED_CATALOG_ID
+  const catalogId = resolveLocalCopilotCatalogId(params.catalogId)
   const config = buildLocalCopilotConfigForCatalog(catalogId)
   assertLocalCopilotEnabled(config)
   /**
@@ -1059,11 +1059,7 @@ async function* runLocalCopilotAgentTurn(
     }
     awaitingModelAfterTools = false
 
-    const pendingToolCalls: Array<{
-      id: string
-      name: string
-      arguments: string
-    }> = []
+    const pendingToolCalls: ChatToolCall[] = []
     let roundInputTokens = 0
     let roundOutputTokens = 0
     let roundCacheReadTokens: number | undefined
@@ -2761,6 +2757,3 @@ function truncateForSpecialist(markdown: string): string {
 
 /** Growth required after an in-turn compaction before the next one. */
 const MICROCOMPACT_REGROWTH_TOKENS = 20_000
-
-/** The only model the copilot runs on (Claude Sonnet 5 through Cloudflare). */
-const LOCAL_COPILOT_PINNED_CATALOG_ID = CLOUDFLARE_MODEL_CLAUDE_SONNET_5

@@ -25,6 +25,7 @@ import {
   DropOverlay,
   MicButton,
   MicrophonePermissionHelp,
+  ModelPicker,
   PromptEditor,
   SendButton,
   usePromptEditor,
@@ -92,7 +93,14 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
   ref
 ) {
   const { workspaceId } = useParams<{ workspaceId: string }>()
-  const { chatId, userId, onContextAdd, onContextRemove } = useChatSurface()
+  const {
+    chatId,
+    userId,
+    onContextAdd,
+    onContextRemove,
+    localCopilotCatalogId,
+    setLocalCopilotCatalogId,
+  } = useChatSurface()
 
   const [initialValue] = useState(() => {
     if (defaultValue) return defaultValue
@@ -598,6 +606,12 @@ const UserInputImpl = forwardRef<UserInputHandle, UserInputProps>(function UserI
             </Tooltip.Trigger>
             <Tooltip.Content side='top'>Skills</Tooltip.Content>
           </Tooltip.Root>
+          {localCopilotCatalogId && setLocalCopilotCatalogId ? (
+            <ModelPicker
+              catalogId={localCopilotCatalogId}
+              onCatalogIdChange={setLocalCopilotCatalogId}
+            />
+          ) : null}
           {chatId ? <SessionMemoryInspector chatId={chatId} /> : null}
         </div>
         <div className='flex items-center gap-1.5'>

@@ -8,6 +8,7 @@ import {
   buildLocalCopilotConfigForCatalog,
   DEFAULT_LOCAL_COPILOT_MODEL,
   getLocalCopilotConfig,
+  isLocalCopilotModelSelectionEnabled,
   resolveLocalCopilotMaxRoundsPerTurn,
 } from '@/local-copilot/lib/config'
 
@@ -142,13 +143,12 @@ describe('getLocalCopilotConfig', () => {
     expect(buildLocalCopilotConfigForCatalog('gpt-5-mini').model).toBe('my-model')
   })
 
-  it('applies a catalog selection on OpenAI', () => {
+  it('keeps the env model outside Cloudflare mode, where the picker is off', () => {
     process.env.OPENAI_API_KEY = 'sk-platform'
-    process.env.COPILOT_SPECIALIST_MODEL = 'gpt-5.5'
-    const config = buildLocalCopilotConfigForCatalog('gpt-5-mini')
+    const config = buildLocalCopilotConfigForCatalog('google/gemini-3.8-flash')
     expect(config.provider).toBe('openai')
-    expect(config.model).toBe('gpt-5-mini')
-    expect(config.specialistModel).toBe('gpt-5.5')
+    expect(config.model).toBe('gpt-5.5')
+    expect(isLocalCopilotModelSelectionEnabled(config)).toBe(false)
   })
 })
 
@@ -209,11 +209,12 @@ describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () =>
     process.env.COPILOT_PROVIDER = 'openai'
     process.env.OPENAI_API_KEY = 'sk-platform'
 
-    const config = buildLocalCopilotConfigForCatalog('google/gemini-2.5-pro')
+    const config = buildLocalCopilotConfigForCatalog('google/gemini-3.8-flash')
+    expect(isLocalCopilotModelSelectionEnabled(getLocalCopilotConfig())).toBe(true)
     expect(config).toMatchObject({
       provider: 'cloudflare',
-      model: 'google/gemini-2.5-pro',
-      specialistModel: 'google/gemini-2.5-pro',
+      model: 'google/gemini-3.8-flash',
+      specialistModel: 'google/gemini-3.8-flash',
       apiKey: 'cf-token',
       baseUrl: UNIFIED,
       extraHeaders: { 'cf-aig-gateway-id': 'labbai' },
@@ -228,9 +229,20 @@ describe('Cloudflare mode (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)', () =>
     expect(() => assertLocalCopilotEnabled(getLocalCopilotConfig())).toThrow(/CLOUDFLARE_API_TOKEN/)
   })
 
-  it('runs a Cloudflare-only OpenAI pick on the unified endpoint', () => {
+  it('runs Claude Sonnet 5 for an id the picker does not offer', () => {
     const config = buildLocalCopilotConfigForCatalog('o3')
-    expect(config).toMatchObject({ provider: 'cloudflare', model: 'o3', baseUrl: UNIFIED })
+    expect(config).toMatchObject({
+      provider: 'cloudflare',
+      model: 'anthropic/claude-sonnet-5',
+      specialistModel: 'anthropic/claude-haiku-4.5',
+      baseUrl: UNIFIED,
+    })
+  })
+
+  it('turns the picker off when COPILOT_PROVIDER pins another endpoint', () => {
+    process.env.COPILOT_PROVIDER = 'openai-compatible'
+    process.env.COPILOT_BASE_URL = 'https://llm.example.com/v1'
+    expect(isLocalCopilotModelSelectionEnabled(getLocalCopilotConfig())).toBe(false)
   })
 
   it('falls back to the env config for a Cloudflare-only OpenAI pick outside Cloudflare mode', () => {

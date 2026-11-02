@@ -29,7 +29,11 @@ import {
   buildPromptCacheLayout,
   orderToolsForPromptCache,
 } from '@/local-copilot/lib/providers/prompt-cache'
-import type { ChatMessage, LocalCopilotProvider } from '@/local-copilot/lib/providers/types'
+import type {
+  ChatMessage,
+  ChatToolCall,
+  LocalCopilotProvider,
+} from '@/local-copilot/lib/providers/types'
 import {
   prepareLocalToolConfirmation,
   waitForLocalToolConfirmation,
@@ -296,7 +300,7 @@ export async function executeSpecialistLoop(
         break
       }
 
-      const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = []
+      const pendingToolCalls: ChatToolCall[] = []
       let assistantText = ''
       let roundInputTokens = 0
       let roundOutputTokens = 0

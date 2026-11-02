@@ -7,15 +7,22 @@ export type ChatMessageContentPart =
       source: { type: 'base64'; media_type: string; data: string }
     }
 
+export interface ChatToolCall {
+  id: string
+  name: string
+  arguments: string
+  /**
+   * Opaque provider data sent back unchanged with the call (Gemini's
+   * `extra_content.google.thought_signature`; the next round is rejected without it).
+   */
+  extraContent?: Record<string, unknown>
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string | ChatMessageContentPart[]
   toolCallId?: string
-  toolCalls?: Array<{
-    id: string
-    name: string
-    arguments: string
-  }>
+  toolCalls?: ChatToolCall[]
 }
 
 export interface TokenUsage {
@@ -76,11 +83,7 @@ export interface ChatCompletionRequest {
 export interface ChatCompletionChunk {
   type: 'text' | 'tool_call' | 'done'
   content?: string
-  toolCall?: {
-    id: string
-    name: string
-    arguments: string
-  }
+  toolCall?: ChatToolCall
   finishReason?: string
   usage?: TokenUsage
 }
