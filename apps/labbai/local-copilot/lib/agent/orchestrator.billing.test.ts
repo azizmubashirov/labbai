@@ -135,6 +135,7 @@ vi.mock('@/providers/utils', async (importOriginal) => ({
   calculateCost: () => ({ input: 0.001, output: 0.002, total: 0.003 }),
 }))
 
+import { MAX_TRUNCATED_ROUND_CONTINUATIONS } from '@/local-copilot/lib/agent/limits'
 import { runLocalCopilotAgent } from '@/local-copilot/lib/agent/orchestrator'
 import type { LocalTurnCostSummary } from '@/local-copilot/lib/billing/turn-cost-accumulator'
 import { buildFullLocalCopilotSystemPrompt } from '@/local-copilot/lib/prompts'
@@ -367,6 +368,35 @@ describe('runLocalCopilotAgent billing turn id', () => {
           message.content.includes('stopped at the per-turn step limit')
       )
     ).toBe(true)
+  })
+
+  it('continues after a round cut off at the output limit, then gives up', async () => {
+    const roundsSeen: ChatCompletionRequest[] = []
+    mockChatCompletionStream.mockImplementation(async function* (request: ChatCompletionRequest) {
+      if (request.promptCache === undefined) return
+      roundsSeen.push(request)
+      yield {
+        type: 'done',
+        finishReason: 'length',
+        usage: { inputTokens: 100, outputTokens: 32_000 },
+      }
+    })
+
+    await drainAgent(
+      runLocalCopilotAgent({
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+        chatId: 'chat-1',
+        message: 'hello',
+        messageId: 'msg-truncated',
+        persistLocally: false,
+      })
+    )
+
+    expect(roundsSeen).toHaveLength(MAX_TRUNCATED_ROUND_CONTINUATIONS + 1)
+    const retry = roundsSeen[1].messages.at(-1)
+    expect(retry?.role).toBe('user')
+    expect(retry?.content).toContain('reached the output limit')
   })
 
   it('sends the static rules first and the turn context after them', async () => {

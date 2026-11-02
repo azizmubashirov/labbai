@@ -147,6 +147,32 @@ describe('toAnthropicMessagesBody', () => {
     expect(userTurns[0].content.at(-1).cache_control).toBeUndefined()
   })
 
+  it('sends reasoning_effort as output_config.effort next to a JSON schema format', () => {
+    const schema = { type: 'object', properties: {} }
+    const body = toAnthropicMessagesBody({
+      model: 'anthropic/claude-sonnet-5',
+      reasoning_effort: 'low',
+      response_format: { type: 'json_schema', json_schema: { schema } },
+      messages: [{ role: 'user', content: 'hi' }],
+    }) as Body
+
+    expect(body.output_config).toEqual({
+      effort: 'low',
+      format: { type: 'json_schema', schema },
+    })
+    expect(body.reasoning_effort).toBeUndefined()
+  })
+
+  it('drops an effort the Messages API does not accept', () => {
+    const body = toAnthropicMessagesBody({
+      model: 'anthropic/claude-sonnet-5',
+      reasoning_effort: 'minimal',
+      messages: [{ role: 'user', content: 'hi' }],
+    }) as Body
+
+    expect(body.output_config).toBeUndefined()
+  })
+
   it('converts images, JSON schema output, forced tools, stop and the default max_tokens', () => {
     const body = toAnthropicMessagesBody({
       model: 'anthropic/claude-haiku-4.5',

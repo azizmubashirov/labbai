@@ -416,6 +416,32 @@ describe('Cloudflare unified endpoint transport', () => {
       expect(onUsage).toHaveBeenCalledWith({ inputTokens: 5, outputTokens: 1 })
     })
 
+    it.each([
+      ['anthropic/claude-sonnet-5', undefined, 'medium'],
+      ['anthropic/claude-sonnet-5', 'high', 'high'],
+      ['anthropic/claude-sonnet-5', 'minimal', 'low'],
+      ['anthropic/claude-haiku-4.5', 'medium', undefined],
+    ])('sends %s with thinking level %s at effort %s', async (model, thinkingLevel, effort) => {
+      const fetchMock = vi.fn(async (..._args: FetchArgs) =>
+        sseResponse(cloudflareAnthropicTextSse)
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const stream = createOpenAiCompatibleProvider({
+        ...cloudflareConfig,
+        thinkingLevel,
+      }).chatCompletionStream({
+        model,
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+      for await (const _chunk of stream) {
+        // drain
+      }
+
+      const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
+      expect(body.output_config?.effort).toBe(effort)
+    })
+
     it('sends the same 1-hour cached prefix for two workspaces, chats and dates', async () => {
       const fetchMock = vi.fn(async (..._args: FetchArgs) =>
         sseResponse(cloudflareAnthropicTextSse)

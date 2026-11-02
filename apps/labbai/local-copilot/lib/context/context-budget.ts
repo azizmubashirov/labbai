@@ -28,8 +28,11 @@ export const LOCAL_COPILOT_PROMPT_TOKEN_BUDGET = 120_000
 /** Floor so extreme reservations still leave a usable prompt. */
 export const LOCAL_COPILOT_MIN_PROMPT_TOKEN_BUDGET = 8_000
 
-/** Default local-copilot `maxTokens`. */
-export const LOCAL_COPILOT_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
+/**
+ * Default local-copilot `maxTokens`. Claude's thinking counts against it, so a lower limit
+ * cuts rounds off before their tool call is written.
+ */
+export const LOCAL_COPILOT_DEFAULT_MAX_OUTPUT_TOKENS = 32_000
 
 /**
  * Headroom for tokenizer mismatch, message framing, and cache/tool overhead
@@ -117,7 +120,7 @@ export function resolveDefaultPromptTokenSoftCap(
 }
 
 /**
- * Max completion tokens for a Local Copilot parent/specialist request (8k).
+ * Max completion tokens for a Local Copilot parent/specialist request (32k).
  * OpenAI reasoning models raise it to their own floor in the provider.
  */
 export function resolveLocalCopilotMaxOutputTokens(_model: string): number {

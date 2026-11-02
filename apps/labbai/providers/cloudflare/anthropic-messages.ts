@@ -93,6 +93,9 @@ function cacheControl(ttl: AnthropicCacheTtl): Record<string, string> {
   return ttl === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' }
 }
 
+/** `output_config.effort` values the Messages API accepts. */
+const ANTHROPIC_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+
 /** `max_tokens` is required by Messages; defaults when the caller sent none. */
 const DEFAULT_MAX_TOKENS_NON_STREAMING = 16_000
 const DEFAULT_MAX_TOKENS_STREAMING = 64_000
@@ -393,13 +396,23 @@ function toAnthropicToolChoice(
   return choice
 }
 
-function toOutputConfig(responseFormat: unknown): Record<string, unknown> | undefined {
-  if (!isRecordLike(responseFormat) || responseFormat.type !== 'json_schema') return undefined
-  const jsonSchema: Record<string, unknown> = isRecordLike(responseFormat.json_schema)
-    ? responseFormat.json_schema
-    : {}
-  if (!isRecordLike(jsonSchema.schema)) return undefined
-  return { format: { type: 'json_schema', schema: jsonSchema.schema } }
+function toOutputConfig(
+  responseFormat: unknown,
+  reasoningEffort: unknown
+): Record<string, unknown> | undefined {
+  const outputConfig: Record<string, unknown> = {}
+  if (typeof reasoningEffort === 'string' && ANTHROPIC_EFFORT_LEVELS.has(reasoningEffort)) {
+    outputConfig.effort = reasoningEffort
+  }
+  if (isRecordLike(responseFormat) && responseFormat.type === 'json_schema') {
+    const jsonSchema: Record<string, unknown> = isRecordLike(responseFormat.json_schema)
+      ? responseFormat.json_schema
+      : {}
+    if (isRecordLike(jsonSchema.schema)) {
+      outputConfig.format = { type: 'json_schema', schema: jsonSchema.schema }
+    }
+  }
+  return Object.keys(outputConfig).length > 0 ? outputConfig : undefined
 }
 
 function withCacheControl(block: AnthropicBlock, ttl: AnthropicCacheTtl = '5m'): AnthropicBlock {
@@ -505,7 +518,7 @@ export function toAnthropicMessagesBody(
     tools.length > 0
       ? toAnthropicToolChoice(chat.tool_choice, chat.parallel_tool_calls)
       : undefined
-  const outputConfig = toOutputConfig(chat.response_format)
+  const outputConfig = toOutputConfig(chat.response_format, chat.reasoning_effort)
   const stop =
     typeof chat.stop === 'string'
       ? [chat.stop]

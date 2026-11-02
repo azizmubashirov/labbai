@@ -10,7 +10,10 @@ import type {
 } from '@/local-copilot/lib/providers/types'
 import type { LocalCopilotConfig } from '@/local-copilot/lib/types'
 import { sendChatCompletionRequest } from '@/providers/cloudflare/anthropic-messages'
-import { toCloudflareUnifiedModelId } from '@/providers/cloudflare/model-ids'
+import {
+  CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
+  toCloudflareUnifiedModelId,
+} from '@/providers/cloudflare/model-ids'
 import { isKnownModelId, supportsTemperature } from '@/providers/models'
 import { getOpenAIBaseUrl } from '@/providers/openai/client-config'
 import { isOpenAIReasoningModelId } from '@/providers/openai/model-ids'
@@ -129,6 +132,26 @@ function acceptsTemperature(model: string): boolean {
   return !isKnownModelId(model) || supportsTemperature(model)
 }
 
+/**
+ * Claude effort when `COPILOT_THINKING_LEVEL` is unset. Sonnet 5 otherwise runs at `high`;
+ * `medium` is the documented level for agentic work that balances speed and quality, and
+ * `low` risks under-thinking on multi-step builds.
+ */
+export const DEFAULT_CLAUDE_EFFORT = 'medium'
+
+/** Claude models that take `output_config.effort`; Haiku 4.5 rejects it. */
+const CLAUDE_EFFORT_MODELS: ReadonlySet<string> = new Set([CLOUDFLARE_MODEL_CLAUDE_SONNET_5])
+
+/** The effort for a Claude request, or undefined for a model that does not take one. */
+export function resolveClaudeEffort(
+  config: LocalCopilotConfig,
+  wireModel: string
+): string | undefined {
+  if (config.provider !== 'cloudflare' || !CLAUDE_EFFORT_MODELS.has(wireModel)) return undefined
+  if (config.thinkingLevel === 'minimal') return 'low'
+  return config.thinkingLevel ?? DEFAULT_CLAUDE_EFFORT
+}
+
 export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): LocalCopilotProvider {
   const baseUrl = resolveBaseUrl(config)
 
@@ -137,6 +160,7 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
     async *chatCompletionStream(request: ChatCompletionRequest) {
       const url = `${baseUrl}/chat/completions`
       const model = resolveWireModelId(config, request.model || config.model)
+      const claudeEffort = resolveClaudeEffort(config, model)
       const body = {
         model,
         messages: request.messages.map((message) => {
@@ -176,6 +200,7 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
                 ? { temperature: request.temperature ?? 0.2 }
                 : {}),
               max_tokens: request.maxTokens ?? 4096,
+              ...(claudeEffort ? { reasoning_effort: claudeEffort } : {}),
             }),
         // OpenAI automatic prompt caching: the key names the static prefix (tools + rules),
         // so every account and chat with the same prefix is routed to the same cache.
@@ -348,6 +373,15 @@ export function createOpenAiCompatibleProvider(config: LocalCopilotConfig): Loca
             provider: config.provider,
             model,
             finishReason: lastFinishReason ?? null,
+          })
+        }
+
+        if (lastFinishReason === 'length') {
+          logger.warn('LLM round stopped at the output limit', {
+            provider: config.provider,
+            model,
+            outputTokens,
+            droppedToolCalls: [...toolCalls.values()].map((call) => call.name),
           })
         }
 

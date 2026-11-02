@@ -15,5 +15,8 @@ export const MAX_FORCED_FOLLOW_UP_ROUNDS = 3
 /** Cap for "I am applying…" prose with no tool call — avoid infinite nudge loops. */
 export const MAX_INTENT_CONTINUATION_ROUNDS = 2
 
+/** Retries after a model round stopped at the output limit, before any tool call came out. */
+export const MAX_TRUNCATED_ROUND_CONTINUATIONS = 2
+
 /** Successful create-then-edit_workflow calls before the post-build lock. */
 export const MAX_POPULATE_EDITS = 5

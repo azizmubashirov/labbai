@@ -13,6 +13,7 @@ import {
   MAX_FORCED_FOLLOW_UP_ROUNDS,
   MAX_INTENT_CONTINUATION_ROUNDS,
   MAX_POPULATE_EDITS,
+  MAX_TRUNCATED_ROUND_CONTINUATIONS,
 } from '@/local-copilot/lib/agent/limits'
 import { runToolWithStatus } from '@/local-copilot/lib/agent/run-tool-with-status'
 import { createSpecialistBudget } from '@/local-copilot/lib/agent/specialists/budget'
@@ -174,6 +175,7 @@ import {
   buildBlocksMetadataReuseSystemMessage,
   buildRoundCapPauseMessage,
   buildRoundCapResumeSystemMessage,
+  buildTruncatedRoundContinuationMessage,
   buildUnfulfilledIntentContinuationMessage,
   buildWorkflowBuildCompleteSystemMessage,
   createAssistantRoundTextStreamer,
@@ -1001,6 +1003,7 @@ async function* runLocalCopilotAgentTurn(
   let pendingFollowUps: MandatoryFollowUp[] = []
   let forcedFollowUpRounds = 0
   let forcedIntentContinuations = 0
+  let truncatedRoundContinuations = 0
   let turnInputTokens = 0
   let turnOutputTokens = 0
   const stagnationTracker = createToolStagnationTracker()
@@ -1065,6 +1068,7 @@ async function* runLocalCopilotAgentTurn(
     let roundOutputTokens = 0
     let roundCacheReadTokens: number | undefined
     let roundCacheCreationTokens: number | undefined
+    let roundFinishReason: string | undefined
 
     // Keep tools attached even for `final_only` — some OpenAI-compatible endpoints
     // reject requests that omit tools once history has tool calls.
@@ -1179,7 +1183,10 @@ async function* runLocalCopilotAgentTurn(
         pendingToolCalls.push(chunk.toolCall)
       }
       if (chunk.type === 'done') {
-        if (chunk.finishReason) lastFinishReason = chunk.finishReason
+        if (chunk.finishReason) {
+          lastFinishReason = chunk.finishReason
+          roundFinishReason = chunk.finishReason
+        }
         if (chunk.usage) {
           roundInputTokens = chunk.usage.inputTokens
           roundOutputTokens = chunk.usage.outputTokens
@@ -1229,6 +1236,21 @@ async function* runLocalCopilotAgentTurn(
     turnOutputTokens += roundOutputTokens
 
     if (pendingToolCalls.length === 0) {
+      if (
+        roundFinishReason === 'length' &&
+        truncatedRoundContinuations < MAX_TRUNCATED_ROUND_CONTINUATIONS &&
+        round < maxToolRounds - 1
+      ) {
+        truncatedRoundContinuations += 1
+        messages.push({ role: 'user', content: buildTruncatedRoundContinuationMessage() })
+        logger.warn('Arena Copilot round reached the output limit; continuing', {
+          round,
+          truncatedRoundContinuations,
+          outputTokens: roundOutputTokens,
+        })
+        continue
+      }
+
       const shouldForceOauthFollowUp =
         postBuildToolMode === 'oauth_only' && pendingFollowUpsAreOauthOnly(pendingFollowUps)
       const canForceFollowUp =

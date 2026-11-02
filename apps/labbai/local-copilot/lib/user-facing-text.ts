@@ -295,6 +295,14 @@ export function buildUnfulfilledIntentContinuationMessage(): string {
   )
 }
 
+export function buildTruncatedRoundContinuationMessage(): string {
+  return (
+    '[System] Your last response reached the output limit and was cut off. No tool ran and ' +
+    'any tool call in it was discarded. Do not start the analysis over. Call the next tool ' +
+    'now, and split a large edit_workflow into smaller calls.'
+  )
+}
+
 /**
  * Whether buffered model prose for this round should be streamed to the UI.
  * Tool rounds keep text in the LLM transcript only — streaming it between tool
