@@ -10,6 +10,7 @@
  */
 
 import { createLogger } from '@labbai/logger'
+import { isRecordLike } from '@labbai/utils/object'
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
 import type { CompletionUsage } from 'openai/resources/completions'
 import { captureProviderConversationStep } from '@/providers/conversation-history'
@@ -31,6 +32,21 @@ export interface OpenAICompatAssembledToolCall {
   id: string
   type: 'function'
   function: { name: string; arguments: string }
+  /**
+   * Vendor data attached to the call, replayed verbatim with it. Gemini 3 puts its
+   * `google.thought_signature` here and rejects the next turn when it is missing.
+   */
+  extra_content?: Record<string, unknown>
+}
+
+/**
+ * The `extra_content` of a Chat Completions tool call (message or delta), which the
+ * OpenAI SDK types do not declare.
+ */
+export function getToolCallExtraContent(toolCall: object): Record<string, unknown> | undefined {
+  return 'extra_content' in toolCall && isRecordLike(toolCall.extra_content)
+    ? toolCall.extra_content
+    : undefined
 }
 
 export interface OpenAICompatStreamComplete {
@@ -142,7 +158,13 @@ export function createOpenAICompatibleAgentEventStream(
       const seenToolIds = new Set<string>()
       const toolBuffers = new Map<
         number,
-        { id?: string; name?: string; args: string; started: boolean }
+        {
+          id?: string
+          name?: string
+          args: string
+          started: boolean
+          extraContent?: Record<string, unknown>
+        }
       >()
 
       let anthropicTranslator: AnthropicStreamTranslator | undefined
@@ -250,6 +272,7 @@ export function createOpenAICompatibleAgentEventStream(
               if (typeof tc.function?.arguments === 'string') {
                 buf.args += tc.function.arguments
               }
+              buf.extraContent = getToolCallExtraContent(tc) ?? buf.extraContent
               toolBuffers.set(index, buf)
 
               if (buf.id && buf.name && !buf.started && !seenToolIds.has(buf.id)) {
@@ -286,6 +309,7 @@ export function createOpenAICompatibleAgentEventStream(
                 id: buf.id,
                 type: 'function',
                 function: { name: buf.name, arguments: buf.args || '{}' },
+                ...(buf.extraContent ? { extra_content: buf.extraContent } : {}),
               })
             }
           }

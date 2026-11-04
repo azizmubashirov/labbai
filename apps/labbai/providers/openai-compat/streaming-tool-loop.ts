@@ -21,6 +21,7 @@ import { MAX_TOOL_ITERATIONS } from '@/providers'
 import {
   captureProviderConversationStep,
   recordProviderConversationToolError,
+  recordProviderConversationUsage,
 } from '@/providers/conversation-history'
 import {
   createAnthropicStreamTranslator,
@@ -71,6 +72,12 @@ export interface CreateOpenAICompatStreamingToolLoopOptions {
    * during the tool loop (required by DeepSeek thinking + tools).
    */
   preserveAssistantReasoning?: boolean
+  /**
+   * A `response_format` kept out of `basePayload` because the model writes its tool calls
+   * as text when both are sent. The answer turn is then replaced by one more turn without
+   * tools that carries this format.
+   */
+  deferredResponseFormat?: Record<string, unknown>
   onComplete: (result: StreamingToolLoopComplete) => void
 }
 
@@ -99,6 +106,7 @@ export function createOpenAICompatStreamingToolLoopStream(
     timeSegments,
     onComplete,
     preserveAssistantReasoning = false,
+    deferredResponseFormat,
   } = options
   const forcedTools = options.forcedTools ?? []
   const loopAbortController = new AbortController()
@@ -133,6 +141,7 @@ export function createOpenAICompatStreamingToolLoopStream(
       let currentToolChoice = basePayload.tool_choice
       let usedForcedTools: string[] = []
       let hasUsedForcedTool = false
+      let formatPending = false
       const reportProgress = () => {
         const toolCost = sumToolCosts(toolResults)
         onComplete({
@@ -162,14 +171,17 @@ export function createOpenAICompatStreamingToolLoopStream(
 
           const modelStart = Date.now()
           const finalSynthesis = iterationCount >= MAX_TOOL_ITERATIONS
+          const formatTurn = deferredResponseFormat !== undefined && (formatPending || finalSynthesis)
           const turnPayload = {
             ...basePayload,
             messages: currentMessages,
-            ...(finalSynthesis
-              ? { tools: undefined, tool_choice: 'none' }
-              : currentToolChoice !== undefined
-                ? { tool_choice: currentToolChoice }
-                : {}),
+            ...(formatTurn
+              ? { tools: undefined, tool_choice: undefined, response_format: deferredResponseFormat }
+              : finalSynthesis
+                ? { tools: undefined, tool_choice: 'none' }
+                : currentToolChoice !== undefined
+                  ? { tool_choice: currentToolChoice }
+                  : {}),
             stream: true as const,
           }
 
@@ -255,7 +267,7 @@ export function createOpenAICompatStreamingToolLoopStream(
             settleOpenTools(controller, openToolStarts, 'error')
             throw new Error(`${providerName} stream ended without finish_reason`)
           }
-          if (finalSynthesis && assembledPendingTools.length > 0) {
+          if ((finalSynthesis || formatTurn) && assembledPendingTools.length > 0) {
             settleOpenTools(controller, openToolStarts, 'error')
             throw new Error(`${providerName} returned tool calls during final synthesis`)
           }
@@ -278,21 +290,33 @@ export function createOpenAICompatStreamingToolLoopStream(
             throw new Error(`${providerName} stream ended with finish_reason ${turnFinishReason}`)
           }
           const pendingTools = assembledPendingTools
-          const turnTag = pendingTools.length > 0 ? 'intermediate' : 'final'
+          /** An unformatted answer that the deferred-format turn replaces. */
+          const replacedByFormatTurn =
+            pendingTools.length === 0 && deferredResponseFormat !== undefined && !formatTurn
+          const turnTag = pendingTools.length > 0 || replacedByFormatTurn ? 'intermediate' : 'final'
           const turnText = turnContent || liveText.join('')
-          await captureProviderConversationStep(
-            request,
-            'chat-completions',
-            {
-              role: 'assistant',
-              content: turnText,
-              ...(pendingTools.length ? { tool_calls: pendingTools } : {}),
-              ...(turnReasoningContent ? { reasoning_content: turnReasoningContent } : {}),
-              ...(turnReasoning ? { reasoning: turnReasoning } : {}),
-              ...(turnReasoningDetails?.length ? { reasoning_details: turnReasoningDetails } : {}),
-            },
-            getChatCompletionConversationUsage(turnUsage)
-          )
+          if (replacedByFormatTurn) {
+            await recordProviderConversationUsage(
+              request,
+              getChatCompletionConversationUsage(turnUsage)
+            )
+          } else {
+            await captureProviderConversationStep(
+              request,
+              'chat-completions',
+              {
+                role: 'assistant',
+                content: turnText,
+                ...(pendingTools.length ? { tool_calls: pendingTools } : {}),
+                ...(turnReasoningContent ? { reasoning_content: turnReasoningContent } : {}),
+                ...(turnReasoning ? { reasoning: turnReasoning } : {}),
+                ...(turnReasoningDetails?.length
+                  ? { reasoning_details: turnReasoningDetails }
+                  : {}),
+              },
+              getChatCompletionConversationUsage(turnUsage)
+            )
+          }
           // If the parser assembled text but we somehow missed deltas, still emit
           // it before the boundary so the turn_end classification covers it.
           if (turnText && liveText.length === 0) {
@@ -355,6 +379,10 @@ export function createOpenAICompatStreamingToolLoopStream(
           modelCost.output += turnCost.output
           modelCost.total += turnCost.total
 
+          if (replacedByFormatTurn) {
+            formatPending = true
+            continue
+          }
           if (pendingTools.length === 0) {
             sawFinalTurn = true
             break

@@ -84,6 +84,14 @@ export function resolveCloudflareModelId(model: string | undefined | null): stri
   return typeof model === 'string' ? CURATED.get(model.trim().toLowerCase()) : undefined
 }
 
+/**
+ * True for a Workers AI model (`@cf/…`). Most of them write their tool call as text when
+ * `response_format` is sent together with `tools`.
+ */
+export function isCloudflareWorkersAIModelId(model: string): boolean {
+  return model.startsWith('@cf/')
+}
+
 /** True for a curated Cloudflare (non-OpenAI) model id. */
 export function isCloudflareModelId(model: string | undefined | null): boolean {
   return resolveCloudflareModelId(model) !== undefined

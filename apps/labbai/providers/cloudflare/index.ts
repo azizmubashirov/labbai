@@ -11,6 +11,7 @@ import {
   getCloudflareAIConfig,
   getCloudflareUnifiedBaseUrl,
 } from '@/providers/cloudflare/config'
+import { isCloudflareWorkersAIModelId } from '@/providers/cloudflare/model-ids'
 import {
   isConversationContextError,
   prepareConversationGeneration,
@@ -24,7 +25,10 @@ import { LIST_PRICE_POLICY, priceModelUsage } from '@/providers/cost-policy'
 import { getProviderDefaultModel, getProviderModels } from '@/providers/models'
 import { getChatCompletionConversationUsage } from '@/providers/openai-compat/conversation-usage'
 import { readChatCompletionSse } from '@/providers/openai-compat/sse'
-import { createOpenAICompatibleAgentEventStream } from '@/providers/openai-compat/stream-events'
+import {
+  createOpenAICompatibleAgentEventStream,
+  getToolCallExtraContent,
+} from '@/providers/openai-compat/stream-events'
 import { createOpenAICompatStreamingToolLoopStream } from '@/providers/openai-compat/streaming-tool-loop'
 import { executeProviderTool } from '@/providers/runtime-context'
 import { createStreamingExecution } from '@/providers/streaming-execution'
@@ -51,6 +55,34 @@ const logger = createLogger('CloudflareProvider')
 const PROVIDER_NAME = 'Cloudflare'
 
 /**
+ * Rewrites a Cloudflare error body (`{ errors: [{ message, code }] }`) into OpenAI's
+ * `{ error: { message, code } }`. The OpenAI SDK reads only `error`, so the gateway's
+ * reason would otherwise surface as "400 status code (no body)".
+ */
+async function toOpenAIErrorResponse(response: Response): Promise<Response> {
+  if (response.ok) return response
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = JSON.parse(text)
+  } catch {
+    body = undefined
+  }
+  const first =
+    isRecordLike(body) && !('error' in body) && Array.isArray(body.errors)
+      ? body.errors[0]
+      : undefined
+  const headers = new Headers(response.headers)
+  headers.delete('content-length')
+  const init = { status: response.status, statusText: response.statusText, headers }
+  if (!isRecordLike(first) || typeof first.message !== 'string') return new Response(text, init)
+  return new Response(
+    JSON.stringify({ error: { message: first.message, code: first.code ?? null } }),
+    init
+  )
+}
+
+/**
  * OpenAI SDK client for Cloudflare's unified chat-completions endpoint
  * (`https://api.cloudflare.com/client/v4/accounts/<account>/ai/v1`). The Cloudflare API
  * token is the SDK `apiKey` (sent as `Authorization: Bearer`), and every request names the
@@ -75,13 +107,16 @@ export function createCloudflareClient(): OpenAI {
      * Resolved per call so a test (or runtime) fetch stub applies; init (incl. the abort
      * signal) passes through. Claude requests go to the Anthropic Messages endpoint for
      * prompt caching (see `anthropic-messages.ts`); everything else is sent unchanged.
+     * Error bodies are reshaped so the SDK error carries Cloudflare's message.
      */
-    fetch: (input: string | URL | Request, init?: RequestInit) =>
-      input instanceof Request
-        ? fetch(input, init)
-        : sendChatCompletionRequest(String(input), init ?? {}, (url, requestInit) =>
-            fetch(url, requestInit)
-          ),
+    fetch: async (input: string | URL | Request, init?: RequestInit) =>
+      toOpenAIErrorResponse(
+        input instanceof Request
+          ? await fetch(input, init)
+          : await sendChatCompletionRequest(String(input), init ?? {}, (url, requestInit) =>
+              fetch(url, requestInit)
+            )
+      ),
   })
 }
 
@@ -206,16 +241,16 @@ export const cloudflareProvider: ProviderConfig = {
       payload.reasoning_effort = request.reasoningEffort
     }
 
-    if (request.responseFormat) {
-      payload.response_format = {
-        type: 'json_schema',
-        json_schema: {
-          name: request.responseFormat.name || 'response_schema',
-          schema: request.responseFormat.schema || request.responseFormat,
-          strict: request.responseFormat.strict !== false,
-        },
-      }
-    }
+    const responseFormat = request.responseFormat
+      ? {
+          type: 'json_schema',
+          json_schema: {
+            name: request.responseFormat.name || 'response_schema',
+            schema: request.responseFormat.schema || request.responseFormat,
+            strict: request.responseFormat.strict !== false,
+          },
+        }
+      : undefined
 
     let originalToolChoice: any
     let forcedTools: string[] = []
@@ -238,6 +273,16 @@ export const cloudflareProvider: ProviderConfig = {
         })
       }
     }
+
+    /**
+     * Workers AI models answer `tools` + `response_format` with their tool call written as
+     * JSON text, so the format waits for one more turn without tools after the tool loop.
+     */
+    const deferredResponseFormat =
+      responseFormat && payload.tools?.length && isCloudflareWorkersAIModelId(request.model)
+        ? responseFormat
+        : undefined
+    if (responseFormat && !deferredResponseFormat) payload.response_format = responseFormat
 
     if (request.stream && payload.tools?.length) {
       logger.info('Using streaming tool loop for Cloudflare request')
@@ -283,6 +328,7 @@ export const cloudflareProvider: ProviderConfig = {
             logger,
             timeSegments,
             forcedTools,
+            deferredResponseFormat,
             onComplete: (result) => {
               output.content = result.content
               output.tokens = result.tokens
@@ -355,6 +401,25 @@ export const cloudflareProvider: ProviderConfig = {
     const providerStartTime = Date.now()
     const providerStartTimeISO = new Date(providerStartTime).toISOString()
 
+    /**
+     * Saves a turn without tool calls as the conversation step, or only its usage when the
+     * deferred-format turn replaces it.
+     */
+    const captureAnswerTurn = async (response: OpenAI.Chat.Completions.ChatCompletion) => {
+      if (response.choices[0]?.message?.tool_calls?.length) return
+      const usage = getChatCompletionConversationUsage(response.usage)
+      if (deferredResponseFormat) {
+        await recordProviderConversationUsage(request, usage)
+        return
+      }
+      await captureProviderConversationStep(
+        request,
+        'chat-completions',
+        response.choices[0]?.message,
+        usage
+      )
+    }
+
     try {
       const initialCallTime = Date.now()
 
@@ -362,14 +427,7 @@ export const cloudflareProvider: ProviderConfig = {
         await prepareConversationGeneration(request, 'chat-completions', payload),
         request.abortSignal ? { signal: request.abortSignal } : undefined
       )
-      if (!currentResponse.choices[0]?.message?.tool_calls?.length) {
-        await captureProviderConversationStep(
-          request,
-          'chat-completions',
-          currentResponse.choices[0]?.message,
-          getChatCompletionConversationUsage(currentResponse.usage)
-        )
-      }
+      await captureAnswerTurn(currentResponse)
       const firstResponseTime = Date.now() - initialCallTime
 
       let content = currentResponse.choices[0]?.message?.content || ''
@@ -509,14 +567,18 @@ export const cloudflareProvider: ProviderConfig = {
         currentMessages.push({
           role: 'assistant',
           content: currentResponse.choices[0]?.message?.content ?? '',
-          tool_calls: toolCallsInResponse.map((tc) => ({
-            id: tc.id,
-            type: 'function',
-            function: {
-              name: tc.function.name,
-              arguments: tc.function.arguments,
-            },
-          })),
+          tool_calls: toolCallsInResponse.map((tc) => {
+            const extraContent = getToolCallExtraContent(tc)
+            return {
+              id: tc.id,
+              type: 'function',
+              function: {
+                name: tc.function.name,
+                arguments: tc.function.arguments,
+              },
+              ...(extraContent ? { extra_content: extraContent } : {}),
+            }
+          }),
         })
 
         for (const executionResult of executionResults) {
@@ -601,14 +663,7 @@ export const cloudflareProvider: ProviderConfig = {
           }),
           request.abortSignal ? { signal: request.abortSignal } : undefined
         )
-        if (!currentResponse.choices[0]?.message?.tool_calls?.length) {
-          await captureProviderConversationStep(
-            request,
-            'chat-completions',
-            currentResponse.choices[0]?.message,
-            getChatCompletionConversationUsage(currentResponse.usage)
-          )
-        }
+        await captureAnswerTurn(currentResponse)
 
         const nextModelEndTime = Date.now()
         const thisModelTime = nextModelEndTime - nextModelStartTime
@@ -645,6 +700,42 @@ export const cloudflareProvider: ProviderConfig = {
           currentResponse.choices[0]?.message?.tool_calls?.filter(isFunctionToolCall),
           { model: request.model, provider: 'cloudflare' }
         )
+      }
+
+      if (deferredResponseFormat) {
+        const formatStartTime = Date.now()
+        currentResponse = await client.chat.completions.create(
+          await prepareConversationGeneration(request, 'chat-completions', {
+            ...payload,
+            messages: currentMessages,
+            tools: undefined,
+            tool_choice: undefined,
+            response_format: deferredResponseFormat,
+          }),
+          request.abortSignal ? { signal: request.abortSignal } : undefined
+        )
+        await captureProviderConversationStep(
+          request,
+          'chat-completions',
+          currentResponse.choices[0]?.message,
+          getChatCompletionConversationUsage(currentResponse.usage)
+        )
+        const formatEndTime = Date.now()
+        timeSegments.push({
+          type: 'model',
+          name: request.model,
+          startTime: formatStartTime,
+          endTime: formatEndTime,
+          duration: formatEndTime - formatStartTime,
+        })
+        enrichLastModelSegmentFromChatCompletions(timeSegments, currentResponse, undefined, {
+          model: request.model,
+          provider: 'cloudflare',
+        })
+        modelTime += formatEndTime - formatStartTime
+        content = currentResponse.choices[0]?.message?.content || content
+        addChatCompletionUsage(usage, request.model, currentResponse.usage)
+        iterationCount++
       }
 
       const providerEndTime = Date.now()
