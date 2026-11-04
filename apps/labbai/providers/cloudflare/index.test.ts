@@ -269,6 +269,65 @@ describe('cloudflareProvider', () => {
     ])
   })
 
+  it('replays the Gemini thought signature on the tool call it came with', async () => {
+    const extraContent = { google: { thought_signature: 'sig-1' } }
+    mockFetch
+      .mockResolvedValueOnce(
+        Response.json(
+          completion(
+            {
+              tool_calls: [
+                {
+                  extra_content: extraContent,
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+                },
+              ],
+            },
+            'tool_calls'
+          )
+        )
+      )
+      .mockResolvedValueOnce(Response.json(completion({ content: '18°C' }, 'stop')))
+
+    await cloudflareProvider.executeRequest({
+      model: 'google/gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'Weather in Paris?' }],
+      tools: [weatherTool],
+    })
+
+    expect(call(1).body.messages.at(-2).tool_calls).toEqual([
+      {
+        id: 'call_1',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+        extra_content: extraContent,
+      },
+    ])
+  })
+
+  it('reports the message of a Cloudflare errors[] body instead of "no body"', async () => {
+    mockFetch.mockResolvedValueOnce(
+      Response.json(
+        {
+          errors: [{ message: 'Model execution failed (User Input Error)', code: 7003 }],
+          success: false,
+          result: {},
+          messages: [],
+        },
+        { status: 400 }
+      )
+    )
+
+    await expect(
+      cloudflareProvider.executeRequest({
+        model: 'google/gemini-3.8-flash',
+        messages: [{ role: 'user', content: 'hi' }],
+      })
+    ).rejects.toThrow('400 Model execution failed (User Input Error)')
+  })
+
   it('streams text over SSE and records usage and cost', async () => {
     mockFetch.mockResolvedValueOnce(
       sse([
@@ -350,6 +409,47 @@ describe('cloudflareProvider', () => {
       tool_call_id: 'call_1',
       content: JSON.stringify({ temperature: 21 }),
     })
+  })
+
+  it('replays the Gemini thought signature streamed with a tool call', async () => {
+    const extraContent = { google: { thought_signature: 'sig-1' } }
+    mockFetch
+      .mockResolvedValueOnce(
+        sse([
+          chunk({
+            role: 'assistant',
+            tool_calls: [
+              {
+                extra_content: extraContent,
+                index: 0,
+                id: 'call_1',
+                type: 'function',
+                function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+              },
+            ],
+          }),
+          chunk({ content: '' }, 'tool_calls'),
+          usageChunk,
+        ])
+      )
+      .mockResolvedValueOnce(sse([chunk({ content: '18°C' }), chunk({}, 'stop'), usageChunk]))
+
+    const execution = (await cloudflareProvider.executeRequest({
+      model: 'google/gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'Weather in Paris?' }],
+      tools: [weatherTool],
+      stream: true,
+    })) as StreamingExecution
+    await drain(execution)
+
+    expect(call(1).body.messages.at(-2).tool_calls).toEqual([
+      {
+        id: 'call_1',
+        type: 'function',
+        function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+        extra_content: extraContent,
+      },
+    ])
   })
 
   describe('Anthropic Messages streams (anthropic/* models)', () => {

@@ -24,7 +24,10 @@ import { LIST_PRICE_POLICY, priceModelUsage } from '@/providers/cost-policy'
 import { getProviderDefaultModel, getProviderModels } from '@/providers/models'
 import { getChatCompletionConversationUsage } from '@/providers/openai-compat/conversation-usage'
 import { readChatCompletionSse } from '@/providers/openai-compat/sse'
-import { createOpenAICompatibleAgentEventStream } from '@/providers/openai-compat/stream-events'
+import {
+  createOpenAICompatibleAgentEventStream,
+  getToolCallExtraContent,
+} from '@/providers/openai-compat/stream-events'
 import { createOpenAICompatStreamingToolLoopStream } from '@/providers/openai-compat/streaming-tool-loop'
 import { executeProviderTool } from '@/providers/runtime-context'
 import { createStreamingExecution } from '@/providers/streaming-execution'
@@ -51,6 +54,34 @@ const logger = createLogger('CloudflareProvider')
 const PROVIDER_NAME = 'Cloudflare'
 
 /**
+ * Rewrites a Cloudflare error body (`{ errors: [{ message, code }] }`) into OpenAI's
+ * `{ error: { message, code } }`. The OpenAI SDK reads only `error`, so the gateway's
+ * reason would otherwise surface as "400 status code (no body)".
+ */
+async function toOpenAIErrorResponse(response: Response): Promise<Response> {
+  if (response.ok) return response
+  const text = await response.text()
+  let body: unknown
+  try {
+    body = JSON.parse(text)
+  } catch {
+    body = undefined
+  }
+  const first =
+    isRecordLike(body) && !('error' in body) && Array.isArray(body.errors)
+      ? body.errors[0]
+      : undefined
+  const headers = new Headers(response.headers)
+  headers.delete('content-length')
+  const init = { status: response.status, statusText: response.statusText, headers }
+  if (!isRecordLike(first) || typeof first.message !== 'string') return new Response(text, init)
+  return new Response(
+    JSON.stringify({ error: { message: first.message, code: first.code ?? null } }),
+    init
+  )
+}
+
+/**
  * OpenAI SDK client for Cloudflare's unified chat-completions endpoint
  * (`https://api.cloudflare.com/client/v4/accounts/<account>/ai/v1`). The Cloudflare API
  * token is the SDK `apiKey` (sent as `Authorization: Bearer`), and every request names the
@@ -75,13 +106,16 @@ export function createCloudflareClient(): OpenAI {
      * Resolved per call so a test (or runtime) fetch stub applies; init (incl. the abort
      * signal) passes through. Claude requests go to the Anthropic Messages endpoint for
      * prompt caching (see `anthropic-messages.ts`); everything else is sent unchanged.
+     * Error bodies are reshaped so the SDK error carries Cloudflare's message.
      */
-    fetch: (input: string | URL | Request, init?: RequestInit) =>
-      input instanceof Request
-        ? fetch(input, init)
-        : sendChatCompletionRequest(String(input), init ?? {}, (url, requestInit) =>
-            fetch(url, requestInit)
-          ),
+    fetch: async (input: string | URL | Request, init?: RequestInit) =>
+      toOpenAIErrorResponse(
+        input instanceof Request
+          ? await fetch(input, init)
+          : await sendChatCompletionRequest(String(input), init ?? {}, (url, requestInit) =>
+              fetch(url, requestInit)
+            )
+      ),
   })
 }
 
@@ -509,14 +543,18 @@ export const cloudflareProvider: ProviderConfig = {
         currentMessages.push({
           role: 'assistant',
           content: currentResponse.choices[0]?.message?.content ?? '',
-          tool_calls: toolCallsInResponse.map((tc) => ({
-            id: tc.id,
-            type: 'function',
-            function: {
-              name: tc.function.name,
-              arguments: tc.function.arguments,
-            },
-          })),
+          tool_calls: toolCallsInResponse.map((tc) => {
+            const extraContent = getToolCallExtraContent(tc)
+            return {
+              id: tc.id,
+              type: 'function',
+              function: {
+                name: tc.function.name,
+                arguments: tc.function.arguments,
+              },
+              ...(extraContent ? { extra_content: extraContent } : {}),
+            }
+          }),
         })
 
         for (const executionResult of executionResults) {
