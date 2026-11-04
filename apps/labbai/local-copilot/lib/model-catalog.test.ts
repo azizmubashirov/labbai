@@ -11,7 +11,7 @@ import {
 } from '@/local-copilot/lib/model-catalog'
 
 describe('LOCAL_COPILOT_CATALOG', () => {
-  it('offers every Opus and Sonnet but 4.5, then Gemini 3.5 and newer, Sonnet 5 by default', () => {
+  it('offers every Opus and Sonnet but 4.5, Gemini 3.5 and newer, DeepSeek V4 and GLM-5.3', () => {
     expect(LOCAL_COPILOT_CATALOG.map((entry) => entry.id)).toEqual([
       'anthropic/claude-opus-5.5',
       'anthropic/claude-opus-5',
@@ -26,6 +26,11 @@ describe('LOCAL_COPILOT_CATALOG', () => {
       'google/gemini-3.6-flash',
       'google/gemini-3.5-flash',
       'google/gemini-3.5-flash-lite',
+      '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+      '@cf/deepseek-ai/deepseek-v4-pro-0813',
+      '@cf/deepseek-ai/deepseek-v4-flash-0731',
+      '@cf/zai-org/glm-5.3',
+      '@cf/zai-org/glm-5.3-flash',
     ])
     expect(DEFAULT_LOCAL_COPILOT_CATALOG_ID).toBe('anthropic/claude-sonnet-5')
   })
@@ -40,6 +45,11 @@ describe('LOCAL_COPILOT_CATALOG', () => {
       id: 'google/gemini-3.8-flash',
       label: 'Gemini 3.8 Flash',
       group: 'Google',
+    })
+    expect(LOCAL_COPILOT_CATALOG[13]).toEqual({
+      id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+      label: 'DeepSeek V4.1 Flash',
+      group: 'Workers AI',
     })
   })
 })
@@ -56,6 +66,8 @@ describe('resolveLocalCopilotCatalogId', () => {
       'anthropic/claude-haiku-4.5',
       'anthropic/claude-sonnet-4.5',
       'google/gemini-3.1-pro',
+      '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+      '@cf/zai-org/glm-4.7-flash',
       '',
       null,
     ]) {

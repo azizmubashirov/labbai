@@ -5,7 +5,7 @@
  * run on the OpenAI Responses API — directly or, in Cloudflare mode, through the Cloudflare AI
  * Gateway): four curated ones everywhere, every other OpenAI chat model Cloudflare serves
  * only in Cloudflare mode (`cloudflareOnly`). `cloudflare` holds every Claude and Gemini chat
- * model in Cloudflare's catalog plus two Workers AI models; they only run in Cloudflare mode,
+ * model in Cloudflare's catalog plus seven Workers AI models; they only run in Cloudflare mode,
  * through Cloudflare's unified chat-completions endpoint. Outside Cloudflare mode the
  * Cloudflare-only models are hidden from pickers and a stored id runs on the closest curated
  * OpenAI model. List prices are kept so the internal cost ledger stays accurate.
@@ -1108,6 +1108,79 @@ export const PROVIDER_DEFINITIONS: Record<string, ProviderDefinition> = {
           maxOutputTokens: 65536,
         },
         contextWindow: 1000000,
+        speedOptimized: true,
+      },
+      {
+        id: '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+        name: 'DeepSeek V4.1 Flash',
+        pricing: {
+          input: 0.3,
+          cachedInput: 0.006,
+          output: 1.2,
+          updatedAt: '2026-11-04',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+        },
+        contextWindow: 1048576,
+        speedOptimized: true,
+      },
+      {
+        id: '@cf/deepseek-ai/deepseek-v4-pro-0813',
+        name: 'DeepSeek V4 Pro',
+        pricing: {
+          input: 1.32,
+          cachedInput: 0.044,
+          output: 3.96,
+          updatedAt: '2026-11-04',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+        },
+        contextWindow: 1048576,
+      },
+      {
+        id: '@cf/deepseek-ai/deepseek-v4-flash-0731',
+        name: 'DeepSeek V4 Flash',
+        pricing: {
+          input: 0.44,
+          cachedInput: 0.014,
+          output: 1.32,
+          updatedAt: '2026-11-04',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+        },
+        contextWindow: 1048576,
+        speedOptimized: true,
+      },
+      {
+        id: '@cf/zai-org/glm-5.3',
+        name: 'GLM-5.3',
+        pricing: {
+          input: 1.4,
+          cachedInput: 0.26,
+          output: 4.4,
+          updatedAt: '2026-11-04',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+        },
+        contextWindow: 1048576,
+      },
+      {
+        id: '@cf/zai-org/glm-5.3-flash',
+        name: 'GLM-5.3 Flash',
+        pricing: {
+          input: 0.15,
+          cachedInput: 0.03,
+          output: 0.5,
+          updatedAt: '2026-11-04',
+        },
+        capabilities: {
+          temperature: { min: 0, max: 2 },
+        },
+        contextWindow: 1048576,
         speedOptimized: true,
       },
       {

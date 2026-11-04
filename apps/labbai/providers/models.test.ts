@@ -233,6 +233,11 @@ describe('Cloudflare catalog', () => {
       'google/gemini-2.5-flash-lite',
     ])
     expect(CLOUDFLARE_WORKERS_AI_MODEL_IDS).toEqual([
+      '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+      '@cf/deepseek-ai/deepseek-v4-pro-0813',
+      '@cf/deepseek-ai/deepseek-v4-flash-0731',
+      '@cf/zai-org/glm-5.3',
+      '@cf/zai-org/glm-5.3-flash',
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       '@cf/zai-org/glm-4.7-flash',
     ])

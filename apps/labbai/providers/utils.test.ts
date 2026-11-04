@@ -16,9 +16,8 @@ import {
   CLOUDFLARE_MODEL_CLAUDE_HAIKU_4_5,
   CLOUDFLARE_MODEL_CLAUDE_SONNET_5,
   CLOUDFLARE_MODEL_GEMINI_2_5_FLASH,
-  CLOUDFLARE_MODEL_GLM_4_7_FLASH,
   CLOUDFLARE_MODEL_IDS,
-  CLOUDFLARE_MODEL_LLAMA_3_3_70B,
+  CLOUDFLARE_WORKERS_AI_MODEL_IDS,
 } from '@/providers/cloudflare/model-ids'
 import {
   OPENAI_CLOUDFLARE_MODEL_IDS,
@@ -207,8 +206,7 @@ describe('Model Capabilities', () => {
         'gpt-4o',
         'gpt-4o-mini',
         ...CLOUDFLARE_GOOGLE_MODEL_IDS,
-        CLOUDFLARE_MODEL_LLAMA_3_3_70B,
-        CLOUDFLARE_MODEL_GLM_4_7_FLASH,
+        ...CLOUDFLARE_WORKERS_AI_MODEL_IDS,
       ])
     })
 

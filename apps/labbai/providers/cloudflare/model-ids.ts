@@ -56,8 +56,16 @@ export const CLOUDFLARE_MODEL_LLAMA_3_3_70B = '@cf/meta/llama-3.3-70b-instruct-f
 /** Workers AI: cheap, fast open model with function calling and a 131k context. */
 export const CLOUDFLARE_MODEL_GLM_4_7_FLASH = '@cf/zai-org/glm-4.7-flash'
 
-/** Workers AI (`@cf/…`): the curated open models. */
+/**
+ * Workers AI (`@cf/…`): the curated open models. DeepSeek V4 and GLM-5.3 need the Workers
+ * Paid plan.
+ */
 export const CLOUDFLARE_WORKERS_AI_MODEL_IDS = [
+  '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+  '@cf/deepseek-ai/deepseek-v4-pro-0813',
+  '@cf/deepseek-ai/deepseek-v4-flash-0731',
+  '@cf/zai-org/glm-5.3',
+  '@cf/zai-org/glm-5.3-flash',
   CLOUDFLARE_MODEL_LLAMA_3_3_70B,
   CLOUDFLARE_MODEL_GLM_4_7_FLASH,
 ] as const

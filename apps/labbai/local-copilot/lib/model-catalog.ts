@@ -27,8 +27,10 @@ export interface LocalCopilotCatalogEntry {
 /**
  * The models selectable in chat, in the Agent block picker's order. Every entry runs through
  * Cloudflare and passed a multi-round tool loop there before it was listed: every Opus and
- * Sonnet but the sunset Sonnet 4.5 (Haiku and Fable are left out by choice), and Gemini 3.5
- * and newer.
+ * Sonnet but the sunset Sonnet 4.5 (Haiku and Fable are left out by choice), Gemini 3.5
+ * and newer, and on Workers AI DeepSeek V4 and GLM-5.3. Llama 4 Scout answers without
+ * calling tools, Llama 3.3 70B's 24k window cannot hold the tool definitions, and GLM-5.2
+ * and GLM-4.7 Flash break the tool rules, so they are left out.
  */
 export const LOCAL_COPILOT_CATALOG: readonly LocalCopilotCatalogEntry[] = [
   'anthropic/claude-opus-5.5',
@@ -44,6 +46,11 @@ export const LOCAL_COPILOT_CATALOG: readonly LocalCopilotCatalogEntry[] = [
   'google/gemini-3.6-flash',
   'google/gemini-3.5-flash',
   'google/gemini-3.5-flash-lite',
+  '@cf/deepseek-ai/deepseek-v4.1-flash-1017',
+  '@cf/deepseek-ai/deepseek-v4-pro-0813',
+  '@cf/deepseek-ai/deepseek-v4-flash-0731',
+  '@cf/zai-org/glm-5.3',
+  '@cf/zai-org/glm-5.3-flash',
 ].map((id) => {
   const group = getModelPickerGroup(id)
   return { id, label: getModelDisplayName(id), group: group ? getModelPickerGroupLabel(group) : '' }
