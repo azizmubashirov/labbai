@@ -2,6 +2,7 @@
  * @vitest-environment node
  */
 import { resetEnvMock, setEnv } from '@labbai/testing'
+import { isRecordLike } from '@labbai/utils/object'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockExecuteTool } = vi.hoisted(() => ({
@@ -88,6 +89,19 @@ const weatherTool: ProviderToolConfig = {
     properties: { city: { type: 'string' } },
     required: ['city'],
   },
+}
+
+const answerSchema = {
+  type: 'object',
+  properties: { javob: { type: 'string' } },
+  required: ['javob'],
+}
+
+const answerFormat: ProviderRequest['responseFormat'] = { name: 'answer', schema: answerSchema }
+
+const answerResponseFormat = {
+  type: 'json_schema',
+  json_schema: { name: 'answer', schema: answerSchema, strict: true },
 }
 
 async function drain(execution: StreamingExecution): Promise<unknown[]> {
@@ -307,6 +321,71 @@ describe('cloudflareProvider', () => {
     ])
   })
 
+  it('defers a Workers AI response format to a final no-tools turn', async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        Response.json(
+          completion(
+            {
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+                },
+              ],
+            },
+            'tool_calls'
+          )
+        )
+      )
+      .mockResolvedValueOnce(Response.json(completion({ content: 'It is 21°C.' }, 'stop')))
+      .mockResolvedValueOnce(Response.json(completion({ content: '{"javob":"21°C"}' }, 'stop')))
+
+    const response = (await cloudflareProvider.executeRequest({
+      model: '@cf/zai-org/glm-5.3',
+      messages: [{ role: 'user', content: 'Weather in Paris?' }],
+      tools: [weatherTool],
+      responseFormat: answerFormat,
+    })) as ProviderResponse
+
+    expect(response.content).toBe('{"javob":"21°C"}')
+    expect(mockExecuteTool).toHaveBeenCalledTimes(1)
+    expect(response.tokens).toEqual({ input: 30, output: 15, total: 45 })
+    expect(response.timing?.iterations).toBe(3)
+
+    for (const index of [0, 1]) {
+      expect(call(index).body.tools).toHaveLength(1)
+      expect(call(index).body.response_format).toBeUndefined()
+    }
+    const final = call(2).body
+    expect(final.tools).toBeUndefined()
+    expect(final.tool_choice).toBeUndefined()
+    expect(final.response_format).toEqual(answerResponseFormat)
+    expect(final.messages.at(-1)).toEqual({
+      role: 'tool',
+      tool_call_id: 'call_1',
+      content: JSON.stringify({ temperature: 21 }),
+    })
+  })
+
+  it('sends tools and a response format together to models that handle both', async () => {
+    mockFetch.mockResolvedValueOnce(
+      Response.json(completion({ content: '{"javob":"hi"}' }, 'stop'))
+    )
+
+    await cloudflareProvider.executeRequest({
+      model: 'google/gemini-3.8-flash',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [weatherTool],
+      responseFormat: answerFormat,
+    })
+
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(call(0).body.tools).toHaveLength(1)
+    expect(call(0).body.response_format).toEqual(answerResponseFormat)
+  })
+
   it('reports the message of a Cloudflare errors[] body instead of "no body"', async () => {
     mockFetch.mockResolvedValueOnce(
       Response.json(
@@ -409,6 +488,62 @@ describe('cloudflareProvider', () => {
       tool_call_id: 'call_1',
       content: JSON.stringify({ temperature: 21 }),
     })
+  })
+
+  it('streams a deferred Workers AI response format as the final turn', async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        sse([
+          chunk({
+            role: 'assistant',
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_1',
+                type: 'function',
+                function: { name: 'get_weather', arguments: '{"city":"Paris"}' },
+              },
+            ],
+          }),
+          chunk({}, 'tool_calls'),
+          usageChunk,
+        ])
+      )
+      .mockResolvedValueOnce(
+        sse([chunk({ content: 'It is 21°C.' }), chunk({}, 'stop'), usageChunk])
+      )
+      .mockResolvedValueOnce(
+        sse([chunk({ content: '{"javob":"21°C"}' }), chunk({}, 'stop'), usageChunk])
+      )
+
+    const execution = (await cloudflareProvider.executeRequest({
+      model: '@cf/zai-org/glm-5.3',
+      messages: [{ role: 'user', content: 'Weather in Paris?' }],
+      tools: [weatherTool],
+      responseFormat: answerFormat,
+      stream: true,
+    })) as StreamingExecution
+
+    const events = await drain(execution)
+
+    expect(events.filter((event) => isRecordLike(event) && event.type === 'turn_end')).toEqual([
+      { type: 'turn_end', turn: 'intermediate' },
+      { type: 'turn_end', turn: 'intermediate' },
+      { type: 'turn_end', turn: 'final' },
+    ])
+    expect(execution.execution.output.content).toBe('{"javob":"21°C"}')
+    expect(execution.execution.output.tokens).toEqual({ input: 36, output: 9, total: 45 })
+    expect(mockExecuteTool).toHaveBeenCalledTimes(1)
+
+    for (const index of [0, 1]) {
+      expect(call(index).body.tools).toHaveLength(1)
+      expect(call(index).body.response_format).toBeUndefined()
+    }
+    const final = call(2).body
+    expect(final.tools).toBeUndefined()
+    expect(final.tool_choice).toBeUndefined()
+    expect(final.response_format).toEqual(answerResponseFormat)
+    expect(final.messages.at(-1)).toMatchObject({ role: 'tool', tool_call_id: 'call_1' })
   })
 
   it('replays the Gemini thought signature streamed with a tool call', async () => {
