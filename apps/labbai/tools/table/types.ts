@@ -5,6 +5,7 @@ import type {
   Sort,
   SortSpec,
   TableDefinition,
+  TablePredicate,
   TablePredicateInput,
   TableRow,
   TableSchema,
@@ -139,7 +140,8 @@ export interface TableBatchInsertResponse extends ToolResponse {
 
 export interface TableUpdateByFilterParams {
   tableId: string
-  filter: Filter
+  /** A root `all`/`any` predicate group, or the legacy `$`-operator object. */
+  filter: Filter | TablePredicate
   data: RowData
   limit?: number
   _context?: WorkflowToolExecutionContext
@@ -147,7 +149,8 @@ export interface TableUpdateByFilterParams {
 
 export interface TableDeleteByFilterParams {
   tableId: string
-  filter: Filter
+  /** A root `all`/`any` predicate group, or the legacy `$`-operator object. */
+  filter: Filter | TablePredicate
   limit?: number
   _context?: WorkflowToolExecutionContext
 }

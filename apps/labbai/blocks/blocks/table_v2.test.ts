@@ -11,7 +11,12 @@ vi.mock('@/triggers', () => ({
   getTrigger: vi.fn(() => ({ subBlocks: [] })),
 }))
 
+import { prepareToolExecution, transformBlockTool } from '@/providers/utils'
 import { TableV2Block } from '@/blocks/blocks/table_v2'
+import { tableDeleteRowsByFilterTool } from '@/tools/table/delete_rows_by_filter'
+import { tableQueryRowsV2Tool } from '@/tools/table/query_rows_v2'
+import { tableUpdateRowsByFilterTool } from '@/tools/table/update_rows_by_filter'
+import { tableUpsertRowTool } from '@/tools/table/upsert_row'
 
 function params(input: Record<string, unknown>): Record<string, unknown> {
   return TableV2Block.tools.config?.params?.(input as never) as Record<string, unknown>
@@ -224,5 +229,120 @@ describe('table_v2 blank and malformed editor inputs', () => {
     expect(() => params({ ...base, filterInput: '{"status":"active"}' })).toThrow(
       /group.*condition/i
     )
+  })
+})
+
+/**
+ * The Agent tool path. An Agent stores the chosen operation on its tool entry,
+ * not in `params`, so the block's `params` function runs without one; and the
+ * model's `filter`/`order` share their ids with the advanced members of the
+ * canonical pairs, so the collapse moves them onto `filterInput`/`sortInput`.
+ * Before the fix the tool received `{ tableId, filterInput, limit }` and every
+ * bulk call failed with "Filter is required" (a query silently matched every row).
+ */
+describe('table_v2 as an Agent tool', () => {
+  const TOOLS: Record<string, unknown> = {
+    table_delete_rows_by_filter: tableDeleteRowsByFilterTool,
+    table_update_rows_by_filter: tableUpdateRowsByFilterTool,
+    table_query_rows_v2: tableQueryRowsV2Tool,
+    table_upsert_row: tableUpsertRowTool,
+  }
+
+  /** Enrichment needs the table schema from the database, so the stub drops it. */
+  const getTool = (toolId: string) => ({
+    ...(TOOLS[toolId] as Record<string, unknown>),
+    toolEnrichment: undefined,
+  })
+
+  async function runAgentTool(
+    operation: string,
+    storedParams: Record<string, unknown>,
+    llmArgs: Record<string, unknown>
+  ) {
+    const tool = await transformBlockTool(
+      { type: 'table_v2', operation, params: storedParams },
+      { selectedOperation: operation, getAllBlocks: () => [TableV2Block], getTool }
+    )
+    if (!tool) throw new Error('transformBlockTool returned null')
+    const { toolParams } = prepareToolExecution(tool, llmArgs, {}, undefined)
+    return { schema: tool.parameters, toolParams }
+  }
+
+  it('offers the model `filter`, never the canonical `filterInput`', async () => {
+    const { schema } = await runAgentTool('delete_rows_by_filter', { tableSelector: 'tbl_1' }, {})
+    expect(Object.keys(schema.properties)).toContain('filter')
+    expect(Object.keys(schema.properties)).not.toContain('filterInput')
+    expect(schema.required).toContain('filter')
+  })
+
+  it.each(['delete_rows_by_filter', 'update_rows_by_filter'])(
+    'hands %s the model filter as a grouped predicate',
+    async (operation) => {
+      const { toolParams } = await runAgentTool(
+        operation,
+        { tableSelector: 'tbl_1' },
+        {
+          filter: { field: 'kalit', op: 'in', value: ['ish', 'uy'] },
+          limit: 1000,
+          ...(operation === 'update_rows_by_filter' ? { data: { holat: 'tugadi' } } : {}),
+        }
+      )
+      expect(toolParams.tableId).toBe('tbl_1')
+      expect(toolParams.filter).toEqual({
+        all: [{ field: 'kalit', op: 'in', value: ['ish', 'uy'] }],
+      })
+      expect(toolParams.limit).toBe(1000)
+    }
+  )
+
+  it('keeps a grouped predicate from the model as-is', async () => {
+    const filter = {
+      any: [
+        { field: 'kalit', op: 'eq', value: 'ish' },
+        { field: 'kalit', op: 'eq', value: 'uy' },
+      ],
+    }
+    const { toolParams } = await runAgentTool(
+      'delete_rows_by_filter',
+      { tableSelector: 'tbl_1' },
+      { filter }
+    )
+    expect(toolParams.filter).toEqual(filter)
+  })
+
+  it('a filter fixed on the tool wins over the model', async () => {
+    const { schema, toolParams } = await runAgentTool(
+      'delete_rows_by_filter',
+      { tableSelector: 'tbl_1', filter: '{"field":"kalit","op":"eq","value":"ish"}' },
+      {}
+    )
+    expect(Object.keys(schema.properties)).not.toContain('filter')
+    expect(toolParams.filter).toEqual({ all: [{ field: 'kalit', op: 'eq', value: 'ish' }] })
+  })
+
+  it('hands query_rows the model filter and order instead of dropping them', async () => {
+    const { toolParams } = await runAgentTool(
+      'query_rows',
+      { tableSelector: 'tbl_1' },
+      {
+        filter: { field: 'wins', op: 'gte', value: 10 },
+        order: [{ field: 'wins', direction: 'desc' }],
+        columns: ['wins'],
+        limit: 5,
+      }
+    )
+    expect(toolParams.filter).toEqual({ all: [{ field: 'wins', op: 'gte', value: 10 }] })
+    expect(toolParams.order).toEqual([{ field: 'wins', direction: 'desc' }])
+    expect(toolParams.columns).toEqual(['wins'])
+  })
+
+  it('maps the conflict column configured on the tool onto conflictTarget', async () => {
+    const { toolParams } = await runAgentTool(
+      'upsert_row',
+      { tableSelector: 'tbl_1', conflictColumnSelector: 'kalit' },
+      { data: { kalit: 'ish' } }
+    )
+    expect(toolParams.conflictTarget).toBe('kalit')
+    expect(toolParams.data).toEqual({ kalit: 'ish' })
   })
 })

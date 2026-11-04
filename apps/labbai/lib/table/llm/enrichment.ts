@@ -2,18 +2,22 @@ import { columnTypeById, MULTI_SELECT_OPS, SINGLE_SELECT_OPS } from '@/lib/table
 import type { TableSummary } from '@/lib/table/types'
 
 /**
- * Operations that take a v1 MongoDB-style filter (`{"col": {"$eq": v}}`) and
- * need filter-specific enrichment.
- *
- * The two bulk operations stay here even though the v2 Table block also exposes
- * them: `resolveBulkFilter` in the rows route accepts either grammar, and
- * enrichment is keyed on tool id alone — it cannot see which block invoked it —
- * so one grammar has to be taught, and `$eq` is the one that works for both.
- * Only the query tool has a v2-exclusive id, which is why it is the only one
- * that gets a predicate-grammar branch.
+ * The v1 row query, which takes a MongoDB-style filter (`{"col": {"$eq": v}}`)
+ * and needs filter-specific enrichment.
  */
-export const FILTER_OPERATIONS = new Set([
-  'table_query_rows',
+export const FILTER_OPERATIONS = new Set(['table_query_rows'])
+
+/**
+ * The bulk write-by-filter tools, exposed by both Table blocks. They are taught
+ * the predicate grammar with a group at the root, the one shape that works
+ * through either block: the v2 block resolves its filter through the same
+ * predicate validator as its canvas (which rejects the `$` grammar), and the v1
+ * block hands its filter to the rows route, whose bulk schema reads a root group
+ * as a predicate but a bare `{field, op, value}` as a legacy filter on columns
+ * literally named `field`, `op`, and `value`. Enrichment is keyed on tool id
+ * alone, so it cannot tell the blocks apart and must teach the shared shape.
+ */
+export const BULK_FILTER_OPERATIONS = new Set([
   'table_update_rows_by_filter',
   'table_delete_rows_by_filter',
 ])
@@ -102,6 +106,25 @@ Example filter: {"field":"${stringCol.name}","op":"eq","value":"active"}`
 }
 
 /**
+ * Builds a grouped predicate example from a real column for the bulk tools, or
+ * an empty string when the table has no column to name.
+ */
+function bulkPredicateExample(table: TableSummary): string {
+  const stringCol = table.columns.find((c) => c.type === 'string')
+  const numberCol = table.columns.find((c) => c.type === 'number')
+  const leaf = stringCol
+    ? `{"field":"${stringCol.name}","op":"eq","value":"active"}`
+    : numberCol
+      ? `{"field":"${numberCol.name}","op":"gte","value":10}`
+      : undefined
+  return leaf
+    ? `
+
+Example filter: {"all":[${leaf}]}`
+    : ''
+}
+
+/**
  * Operations that need column info for data construction.
  */
 export const DATA_OPERATIONS = new Set([
@@ -162,6 +185,25 @@ ${v2ColumnList}
 ${v2PredicateExample(table)}${orderExample}`
   }
 
+  if (BULK_FILTER_OPERATIONS.has(toolId)) {
+    const v2ColumnList = table.columns.map(v2ColumnLine).join('\n')
+
+    return `${originalDescription}
+
+INSTRUCTIONS:
+1. ALWAYS include a filter built from the user's question - do NOT ask for confirmation. The filter is required: it is what limits the operation to the rows the user means
+2. The filter is always a group at the root, even for one condition: {"all":[...]} for AND or {"any":[...]} for OR; groups nest
+3. Each condition is {"field":"<column>","op":"<operator>","value":<value>}; use an array value for in/nin and omit value for isNull, isNotNull, isEmpty, and isNotEmpty
+4. Operators: eq, ne, gt, gte, lt, lte, in, nin, like, ilike, nlike, nilike, contains, ncontains, startsWith, endsWith, isNull, isNotNull, isEmpty, isNotEmpty
+5. like, ilike, nlike and nilike use * as the wildcard - never %
+6. Never use the {"column": {"$eq": value}} operator-object form - it is rejected
+7. Any column listed below with a restricted operator set accepts ONLY those operators
+
+Table "${table.name}" columns:
+${v2ColumnList}
+${bulkPredicateExample(table)}`
+  }
+
   if (FILTER_OPERATIONS.has(toolId)) {
     const stringCols = table.columns.filter((c) => c.type === 'string')
     const numberCols = table.columns.filter((c) => c.type === 'number')
@@ -178,14 +220,13 @@ Example filter: {"${stringCols[0].name}": {"$eq": "value"}}`
     }
 
     let sortExample = ''
-    if (toolId === 'table_query_rows' && numberCols.length > 0) {
+    if (numberCols.length > 0) {
       sortExample = `
 Example sort: {"${numberCols[0].name}": "desc"} for highest first, {"${numberCols[0].name}": "asc"} for lowest first`
     }
 
-    const queryInstructions =
-      toolId === 'table_query_rows'
-        ? `
+    return `${originalDescription}
+
 INSTRUCTIONS:
 1. ALWAYS include a filter based on the user's question - queries without filters will fail
 2. Construct the filter yourself from the user's question - do NOT ask for confirmation
@@ -194,15 +235,7 @@ INSTRUCTIONS:
    - ALWAYS use sort with the relevant column (e.g., {"salary": "desc"} for highest salary)
    - Use limit to get only the needed rows (e.g., limit=1 for highest, limit=2 for second highest)
    - For "second highest X", use sort: {"X": "desc"} with limit: 2, then take the second result
-5. Only use limit=1000 when you need ALL matching rows`
-        : `
-INSTRUCTIONS:
-1. ALWAYS include a filter based on the user's question - queries without filters will fail
-2. Construct the filter yourself from the user's question - do NOT ask for confirmation
-3. Use exact match ($eq) by default unless the user specifies otherwise`
-
-    return `${originalDescription}
-${queryInstructions}
+5. Only use limit=1000 when you need ALL matching rows
 
 Table "${table.name}" columns:
 ${columnList}
@@ -303,6 +336,16 @@ export function enrichTableToolParameters(
      * invent a filter for "list everything".
      */
     return { properties: enrichedProperties, required: enrichedRequired }
+  }
+
+  if (BULK_FILTER_OPERATIONS.has(toolId)) {
+    if (enrichedProperties.filter) {
+      enrichedProperties.filter = {
+        ...enrichedProperties.filter,
+        description: `REQUIRED predicate group built from the user's question using columns: ${columnNames}. Always a group at the root, even for one condition: {"all":[{"field":"<column>","op":"<operator>","value":<value>}]} for AND, or {"any":[...]} for OR. Operators: eq, ne, gt, gte, lt, lte, in, nin, like, ilike, nlike, nilike, contains, ncontains, startsWith, endsWith, isNull, isNotNull, isEmpty, isNotEmpty.${hasSelectColumn(table) ? selectRestrictionNote(table) : ''} Never use the {"column": {"$eq": value}} form.`,
+      }
+    }
+    if (!enrichedRequired.includes('filter')) enrichedRequired.push('filter')
   }
 
   if (enrichedProperties.filter && FILTER_OPERATIONS.has(toolId)) {

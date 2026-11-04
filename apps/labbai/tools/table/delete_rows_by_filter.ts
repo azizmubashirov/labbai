@@ -30,7 +30,7 @@ export const tableDeleteRowsByFilterTool: InternalToolConfig<
       type: 'object',
       required: true,
       description:
-        'Filter criteria using operators like $eq, $ne, $gt, $lt, $contains, $ncontains, $startsWith, $endsWith, $in, $nin, $empty, etc.',
+        'Predicate selecting the rows to delete, always a group at the root: `{"all":[{"field":"status","op":"eq","value":"done"}]}` (AND) or `{"any":[...]}` (OR). Operators: eq, ne, gt, gte, lt, lte, in, nin, like, ilike, contains, startsWith, endsWith, isNull, isNotNull, isEmpty, isNotEmpty.',
       visibility: 'user-or-llm',
     },
     limit: {

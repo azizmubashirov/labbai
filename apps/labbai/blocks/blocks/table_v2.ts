@@ -1,5 +1,6 @@
 import { Table } from '@labbai/emcn/icons'
 import { toError } from '@labbai/utils/errors'
+import { filterUndefined, isRecordLike } from '@labbai/utils/object'
 import { TABLE_LIMITS } from '@/lib/table/constants'
 import { filterRulesToPredicate, sortRulesToSortSpec } from '@/lib/table/query-builder/converters'
 import { normalizeTablePredicate } from '@/lib/table/query-builder/predicate'
@@ -81,10 +82,17 @@ function resolveFilter(params: TableBlockParams): TablePredicate | undefined {
   return normalizeTablePredicate(predicate)
 }
 
+/**
+ * Resolves the effective sort spec from the `sortInput` canonical param. An array
+ * is usually builder rules (keyed by `column`), but a model calling the block as an
+ * Agent tool sends the sort spec itself (keyed by `field`), already in final shape.
+ */
 function resolveOrder(params: TableBlockParams): SortSpec | undefined {
   const raw = params.sortInput
   if (Array.isArray(raw)) {
-    return raw.length > 0 ? (sortRulesToSortSpec(raw as SortRule[]) ?? undefined) : undefined
+    if (raw.length === 0) return undefined
+    if (raw.every((entry) => isRecordLike(entry) && 'field' in entry)) return raw as SortSpec
+    return sortRulesToSortSpec(raw as SortRule[]) ?? undefined
   }
   const parsed = parseJSON(raw, 'Sort')
   return (parsed as SortSpec | undefined) || undefined
@@ -210,6 +218,26 @@ const paramTransformers: Record<string, (params: TableBlockParams) => ParsedPara
     limit: parseOptionalLimit(params.limit),
     cursor: resolveCursor(params.cursor),
   }),
+}
+
+/**
+ * Maps the canonical selections onto the tools' own params when the call carries
+ * no `operation`. That is the Agent tool path: an Agent keeps the operation on its
+ * tool entry rather than in `params`, so no transformer above can be chosen, and
+ * the canonical-pair collapse has already moved the model's `filter`/`order` onto
+ * `filterInput`/`sortInput`, ids no table tool declares. The filter takes the same
+ * `resolveFilter` route as the canvas, so a bare condition reaches the bulk tools
+ * as a group the route reads as a predicate rather than as a legacy filter on
+ * columns named `field`/`op`/`value`. Only keys that resolve are returned, so a
+ * model-supplied `columns` survives when nothing is picked on the tool.
+ */
+function resolveOperationlessParams(params: TableBlockParams): Partial<ParsedParams> {
+  return filterUndefined({
+    filter: resolveFilter(params),
+    order: resolveOrder(params),
+    columns: resolveOutputColumns(params.outputColumns),
+    conflictTarget: params.conflictColumn || undefined,
+  })
 }
 
 /*
@@ -575,7 +603,7 @@ Return ONLY the JSON object:`,
         if (transformer) {
           return transformer(rest as TableBlockParams)
         }
-        return rest
+        return { ...rest, ...resolveOperationlessParams(rest as TableBlockParams) }
       },
     },
   },

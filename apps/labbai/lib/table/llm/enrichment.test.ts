@@ -241,18 +241,47 @@ describe('v1 enrichment is unchanged', () => {
     expect(required).toContain('filter')
     expect(properties.filter.description).toContain('$eq')
   })
+})
 
-  /**
-   * Both Table blocks expose the bulk tools and the rows route accepts either
-   * grammar, so these keep teaching $eq — enrichment cannot tell which block
-   * called it.
-   */
-  it('keeps the shared bulk tools on the v1 grammar', () => {
+/**
+ * Both Table blocks expose the bulk tools and enrichment cannot tell which one
+ * called it, so it teaches the one shape both accept: a predicate with a group at
+ * the root. The v2 block rejects the `$` grammar, and the rows route reads a bare
+ * `{field, op, value}` from the v1 block as a legacy filter on columns named
+ * `field`/`op`/`value`.
+ */
+describe('bulk tools teach a grouped predicate', () => {
+  it.each(['table_update_rows_by_filter', 'table_delete_rows_by_filter'])(
+    'describes %s with a root group and no $ operators',
+    (toolId) => {
+      const description = enrichTableToolDescription('Delete rows.', TABLE, toolId)
+      expect(description).toContain(
+        'Example filter: {"all":[{"field":"status","op":"eq","value":"active"}]}'
+      )
+      expect(description).toContain('always a group at the root')
+      expect(description).not.toContain('{"status": {"$eq"')
+
+      const { properties, required } = enrichTableToolParameters(
+        { properties: { filter: { type: 'object' } }, required: [] },
+        TABLE,
+        toolId
+      )
+      expect(required).toContain('filter')
+      expect(properties.filter.description).toContain('{"all":[{"field":"<column>"')
+      expect(properties.filter.description).not.toContain('Syntax: {"column": {"$eq"')
+    }
+  )
+
+  it('names the select-column operator restrictions', () => {
+    const selectTable: TableSummary = {
+      name: 'Tasks',
+      columns: [{ name: 'stage', type: 'select' }],
+    }
     const { properties } = enrichTableToolParameters(
       { properties: { filter: { type: 'object' } }, required: [] },
-      TABLE,
-      'table_update_rows_by_filter'
+      selectTable,
+      'table_delete_rows_by_filter'
     )
-    expect(properties.filter.description).toContain('$eq')
+    expect(properties.filter.description).toContain('rejected outright')
   })
 })
