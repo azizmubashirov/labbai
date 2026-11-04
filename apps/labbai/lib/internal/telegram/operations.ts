@@ -19,7 +19,7 @@ import {
 import { downloadServableFileFromStorage } from '@/lib/uploads/utils/file-utils.server'
 import { assertToolFileAccess } from '@/app/api/files/authorization'
 import type { TelegramSendDocumentResponse } from '@/tools/telegram/types'
-import { convertMarkdownToHTML } from '@/tools/telegram/utils'
+import { telegramCaptionFields } from '@/tools/telegram/utils'
 
 const logger = createLogger('TelegramSendDocumentOperation')
 const MAX_TELEGRAM_DOCUMENT_BYTES = 50 * 1024 * 1024
@@ -32,6 +32,8 @@ export interface TelegramSendDocumentInput {
   chatId: string
   files?: RawFileInput[] | null
   caption?: string | null
+  /** `HTML` (default), `MarkdownV2` or `plain`; see `TELEGRAM_PARSE_MODES`. */
+  parseMode?: string
   /** Telegram Business connection to send on; absent sends as the bot. */
   businessConnectionId?: string
 }
@@ -141,6 +143,13 @@ export async function sendTelegramDocument(
       400
     )
   }
+  let captionFields: ReturnType<typeof telegramCaptionFields>
+  try {
+    captionFields = telegramCaptionFields(input.caption, input.parseMode)
+  } catch (error) {
+    throw new TelegramOperationError(getErrorMessage(error, 'Invalid parse mode'), 400)
+  }
+  const { caption, parse_mode } = captionFields
   const userFiles = processFilesToUserFiles(input.files, context.requestId, logger)
   if (!userFiles.length) throw new TelegramOperationError('No valid files provided for upload', 400)
   const tooLarge = userFiles.filter((file) => file.size > MAX_TELEGRAM_DOCUMENT_BYTES)
@@ -191,10 +200,8 @@ export async function sendTelegramDocument(
   const businessConnectionId = input.businessConnectionId?.trim()
   if (businessConnectionId) form.append('business_connection_id', businessConnectionId)
   form.append('document', new Blob([new Uint8Array(buffer)], { type: mimeType }), userFile.name)
-  if (input.caption) {
-    form.append('caption', convertMarkdownToHTML(input.caption))
-    form.append('parse_mode', 'HTML')
-  }
+  if (caption) form.append('caption', caption)
+  if (parse_mode) form.append('parse_mode', parse_mode)
 
   const response = await fetch(
     `https://api.telegram.org/bot${encodeURIComponent(input.botToken)}/sendDocument`,

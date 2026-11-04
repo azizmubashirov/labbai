@@ -14,6 +14,7 @@ const sendDocumentInputSchema = z.object({
   chatId: z.string().min(1, 'Chat ID is required'),
   files: RawFileInputArraySchema.optional().nullable(),
   caption: z.string().optional().nullable(),
+  parseMode: z.string().max(32).optional(),
   businessConnectionId: z.string().max(256).optional(),
 })
 

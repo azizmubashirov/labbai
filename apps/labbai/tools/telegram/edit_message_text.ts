@@ -6,8 +6,9 @@ import type {
 } from '@/tools/telegram/types'
 import {
   businessConnectionField,
-  convertMarkdownToHTML,
+  formatTelegramText,
   TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_PARSE_MODE_PARAM,
   TELEGRAM_REQUEST_RETRY,
   telegramApiUrl,
 } from '@/tools/telegram/utils'
@@ -49,6 +50,7 @@ export const telegramEditMessageTextTool: ToolConfig<
       visibility: 'user-or-llm',
       description: 'New text of the message',
     },
+    parseMode: TELEGRAM_PARSE_MODE_PARAM,
     businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
@@ -63,8 +65,7 @@ export const telegramEditMessageTextTool: ToolConfig<
       chat_id: params.chatId,
       ...businessConnectionField(params.businessConnectionId),
       message_id: params.messageId,
-      text: convertMarkdownToHTML(params.text),
-      parse_mode: 'HTML',
+      ...formatTelegramText(params.text, params.parseMode),
     }),
   },
 

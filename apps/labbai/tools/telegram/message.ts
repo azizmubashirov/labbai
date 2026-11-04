@@ -6,8 +6,9 @@ import type {
 } from '@/tools/telegram/types'
 import {
   businessConnectionField,
-  convertMarkdownToHTML,
+  formatTelegramText,
   TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_PARSE_MODE_PARAM,
   TELEGRAM_REQUEST_RETRY,
 } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
@@ -42,6 +43,7 @@ export const telegramMessageTool: ToolConfig<
       visibility: 'user-or-llm',
       description: 'Message text to send',
     },
+    parseMode: TELEGRAM_PARSE_MODE_PARAM,
     businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
@@ -56,8 +58,7 @@ export const telegramMessageTool: ToolConfig<
     body: (params: TelegramSendMessageParams) => ({
       chat_id: params.chatId,
       ...businessConnectionField(params.businessConnectionId),
-      text: convertMarkdownToHTML(params.text),
-      parse_mode: 'HTML',
+      ...formatTelegramText(params.text, params.parseMode),
     }),
   },
 

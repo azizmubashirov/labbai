@@ -4,6 +4,7 @@ import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { AuthMode, IntegrationType } from '@/blocks/types'
 import { normalizeFileInput } from '@/blocks/utils'
 import type { TelegramResponse } from '@/tools/telegram/types'
+import { resolveTelegramParseMode } from '@/tools/telegram/utils'
 import { getTrigger } from '@/triggers'
 
 /**
@@ -44,6 +45,17 @@ const VIDEO_FIELD = ['videoFile', 'videoRef', 'video'] as const
 const AUDIO_FIELD = ['audioFile', 'audioRef', 'audio'] as const
 const ANIMATION_FIELD = ['animationFile', 'animationRef', 'animation'] as const
 const DOCUMENT_FIELD = ['attachmentFiles', 'files'] as const
+
+/** Operations whose message text or caption Telegram formats with a parse mode. */
+const PARSE_MODE_OPERATIONS = [
+  'telegram_message',
+  'telegram_edit_message_text',
+  'telegram_send_photo',
+  'telegram_send_video',
+  'telegram_send_audio',
+  'telegram_send_animation',
+  'telegram_send_document',
+]
 
 /** Operations the Bot API can run on behalf of a Telegram Business account. */
 const BUSINESS_CONNECTION_OPERATIONS = [
@@ -426,6 +438,21 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
       },
     },
     {
+      id: 'parseMode',
+      title: 'Formatting',
+      type: 'dropdown',
+      options: [
+        { label: 'HTML', id: 'HTML' },
+        { label: 'MarkdownV2', id: 'MarkdownV2' },
+        { label: 'Plain text', id: 'plain' },
+      ],
+      value: () => 'HTML',
+      description:
+        'HTML turns **bold**, *italic*, `code` and [links](url) into Telegram formatting. Choose Plain text when the text can contain <, > or &, such as email addresses or model output.',
+      mode: 'advanced',
+      condition: { field: 'operation', value: PARSE_MODE_OPERATIONS },
+    },
+    {
       id: 'messageId',
       title: 'Message ID',
       type: 'short-input',
@@ -668,6 +695,9 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
 
         const businessConnectionId =
           typeof params.businessConnectionId === 'string' ? params.businessConnectionId.trim() : ''
+        const formattingParams = PARSE_MODE_OPERATIONS.includes(params.operation)
+          ? { parseMode: resolveTelegramParseMode(params.parseMode) }
+          : {}
         const commonParams = {
           botToken: params.botToken,
           chatId,
@@ -697,6 +727,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
             return {
               ...commonParams,
               text: params.text,
+              ...formattingParams,
             }
           case 'telegram_delete_message':
             return {
@@ -708,6 +739,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
               ...commonParams,
               photo: resolveTelegramMedia(params.photoSource, params.photo, 'Photo'),
               caption: params.caption,
+              ...formattingParams,
             }
           }
           case 'telegram_send_video': {
@@ -715,6 +747,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
               ...commonParams,
               video: resolveTelegramMedia(params.videoSource, params.video, 'Video'),
               caption: params.caption,
+              ...formattingParams,
             }
           }
           case 'telegram_send_audio': {
@@ -722,6 +755,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
               ...commonParams,
               audio: resolveTelegramMedia(params.audioSource, params.audio, 'Audio'),
               caption: params.caption,
+              ...formattingParams,
             }
           }
           case 'telegram_send_animation': {
@@ -733,6 +767,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
                 'Animation'
               ),
               caption: params.caption,
+              ...formattingParams,
             }
           }
           case 'telegram_send_document': {
@@ -741,6 +776,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
               ...commonParams,
               files: normalizeFileInput(params.files),
               caption: params.caption,
+              ...formattingParams,
             }
           }
           case 'telegram_edit_message_text':
@@ -751,6 +787,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
               ...commonParams,
               messageId: requireNumber(params.messageId, 'Message ID'),
               text: params.text,
+              ...formattingParams,
             }
           case 'telegram_forward_message': {
             const fromChatId = (params.fromChatId || '').trim()
@@ -879,6 +916,10 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
     },
     files: { type: 'array', description: 'Files to attach (UserFile array)' },
     caption: { type: 'string', description: 'Caption for media' },
+    parseMode: {
+      type: 'string',
+      description: 'Text formatting: HTML (default), MarkdownV2, or plain',
+    },
     messageId: { type: 'string', description: 'Target message ID' },
     fromChatId: { type: 'string', description: 'Source chat ID for forward/copy' },
     latitude: { type: 'string', description: 'Latitude of the location' },

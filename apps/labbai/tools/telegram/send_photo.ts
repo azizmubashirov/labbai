@@ -6,9 +6,10 @@ import type {
 } from '@/tools/telegram/types'
 import {
   businessConnectionField,
-  convertMarkdownToHTML,
   TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_PARSE_MODE_PARAM,
   TELEGRAM_REQUEST_RETRY,
+  telegramCaptionFields,
 } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
@@ -45,6 +46,7 @@ export const telegramSendPhotoTool: ToolConfig<TelegramSendPhotoParams, Telegram
         visibility: 'user-or-llm',
         description: 'Photo caption (optional)',
       },
+      parseMode: TELEGRAM_PARSE_MODE_PARAM,
       businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
     },
 
@@ -52,24 +54,16 @@ export const telegramSendPhotoTool: ToolConfig<TelegramSendPhotoParams, Telegram
       url: (params: TelegramSendPhotoParams) =>
         `https://api.telegram.org/bot${params.botToken}/sendPhoto`,
       method: 'POST',
-    retry: TELEGRAM_REQUEST_RETRY,
+      retry: TELEGRAM_REQUEST_RETRY,
       headers: () => ({
         'Content-Type': 'application/json',
       }),
-      body: (params: TelegramSendPhotoParams) => {
-        const body: Record<string, any> = {
-          chat_id: params.chatId,
-          ...businessConnectionField(params.businessConnectionId),
-          photo: params.photo,
-        }
-
-        if (params.caption) {
-          body.caption = convertMarkdownToHTML(params.caption)
-          body.parse_mode = 'HTML'
-        }
-
-        return body
-      },
+      body: (params: TelegramSendPhotoParams) => ({
+        chat_id: params.chatId,
+        ...businessConnectionField(params.businessConnectionId),
+        photo: params.photo,
+        ...telegramCaptionFields(params.caption, params.parseMode),
+      }),
     },
 
     transformResponse: async (response: Response) => {

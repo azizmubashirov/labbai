@@ -98,31 +98,55 @@ interface TelegramBusinessParams {
   businessConnectionId?: string
 }
 
-export interface TelegramSendMessageParams extends TelegramAuthParams, TelegramBusinessParams {
+/** Sends whose text or caption Telegram can format. */
+interface TelegramFormattingParams {
+  /** `HTML` (default), `MarkdownV2` or `plain`; see `TELEGRAM_PARSE_MODES`. */
+  parseMode?: string
+}
+
+export interface TelegramSendMessageParams
+  extends TelegramAuthParams,
+    TelegramBusinessParams,
+    TelegramFormattingParams {
   text: string
 }
 
-export interface TelegramSendPhotoParams extends TelegramAuthParams, TelegramBusinessParams {
+export interface TelegramSendPhotoParams
+  extends TelegramAuthParams,
+    TelegramBusinessParams,
+    TelegramFormattingParams {
   photo: string
   caption?: string
 }
 
-export interface TelegramSendVideoParams extends TelegramAuthParams, TelegramBusinessParams {
+export interface TelegramSendVideoParams
+  extends TelegramAuthParams,
+    TelegramBusinessParams,
+    TelegramFormattingParams {
   video: string
   caption?: string
 }
 
-export interface TelegramSendAudioParams extends TelegramAuthParams, TelegramBusinessParams {
+export interface TelegramSendAudioParams
+  extends TelegramAuthParams,
+    TelegramBusinessParams,
+    TelegramFormattingParams {
   audio: string
   caption?: string
 }
 
-export interface TelegramSendAnimationParams extends TelegramAuthParams, TelegramBusinessParams {
+export interface TelegramSendAnimationParams
+  extends TelegramAuthParams,
+    TelegramBusinessParams,
+    TelegramFormattingParams {
   animation: string
   caption?: string
 }
 
-export interface TelegramSendDocumentParams extends TelegramAuthParams, TelegramBusinessParams {
+export interface TelegramSendDocumentParams
+  extends TelegramAuthParams,
+    TelegramBusinessParams,
+    TelegramFormattingParams {
   files?: UserFile[]
   caption?: string
 }
@@ -131,7 +155,10 @@ export interface TelegramDeleteMessageParams extends TelegramAuthParams {
   messageId: number
 }
 
-export interface TelegramEditMessageTextParams extends TelegramAuthParams, TelegramBusinessParams {
+export interface TelegramEditMessageTextParams
+  extends TelegramAuthParams,
+    TelegramBusinessParams,
+    TelegramFormattingParams {
   messageId: number
   text: string
 }

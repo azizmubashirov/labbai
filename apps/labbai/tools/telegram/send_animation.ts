@@ -6,9 +6,10 @@ import type {
 } from '@/tools/telegram/types'
 import {
   businessConnectionField,
-  convertMarkdownToHTML,
   TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_PARSE_MODE_PARAM,
   TELEGRAM_REQUEST_RETRY,
+  telegramCaptionFields,
 } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
@@ -47,6 +48,7 @@ export const telegramSendAnimationTool: ToolConfig<
       visibility: 'user-or-llm',
       description: 'Animation caption (optional)',
     },
+    parseMode: TELEGRAM_PARSE_MODE_PARAM,
     businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
   },
 
@@ -58,20 +60,12 @@ export const telegramSendAnimationTool: ToolConfig<
     headers: () => ({
       'Content-Type': 'application/json',
     }),
-    body: (params: TelegramSendAnimationParams) => {
-      const body: Record<string, any> = {
-        chat_id: params.chatId,
-        ...businessConnectionField(params.businessConnectionId),
-        animation: params.animation,
-      }
-
-      if (params.caption) {
-        body.caption = convertMarkdownToHTML(params.caption)
-        body.parse_mode = 'HTML'
-      }
-
-      return body
-    },
+    body: (params: TelegramSendAnimationParams) => ({
+      chat_id: params.chatId,
+      ...businessConnectionField(params.businessConnectionId),
+      animation: params.animation,
+      ...telegramCaptionFields(params.caption, params.parseMode),
+    }),
   },
 
   transformResponse: async (response: Response) => {

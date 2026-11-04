@@ -6,9 +6,10 @@ import type {
 } from '@/tools/telegram/types'
 import {
   businessConnectionField,
-  convertMarkdownToHTML,
   TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_PARSE_MODE_PARAM,
   TELEGRAM_REQUEST_RETRY,
+  telegramCaptionFields,
 } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
@@ -45,6 +46,7 @@ export const telegramSendAudioTool: ToolConfig<TelegramSendAudioParams, Telegram
         visibility: 'user-or-llm',
         description: 'Audio caption (optional)',
       },
+      parseMode: TELEGRAM_PARSE_MODE_PARAM,
       businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
     },
 
@@ -52,24 +54,16 @@ export const telegramSendAudioTool: ToolConfig<TelegramSendAudioParams, Telegram
       url: (params: TelegramSendAudioParams) =>
         `https://api.telegram.org/bot${params.botToken}/sendAudio`,
       method: 'POST',
-    retry: TELEGRAM_REQUEST_RETRY,
+      retry: TELEGRAM_REQUEST_RETRY,
       headers: () => ({
         'Content-Type': 'application/json',
       }),
-      body: (params: TelegramSendAudioParams) => {
-        const body: Record<string, any> = {
-          chat_id: params.chatId,
-          ...businessConnectionField(params.businessConnectionId),
-          audio: params.audio,
-        }
-
-        if (params.caption) {
-          body.caption = convertMarkdownToHTML(params.caption)
-          body.parse_mode = 'HTML'
-        }
-
-        return body
-      },
+      body: (params: TelegramSendAudioParams) => ({
+        chat_id: params.chatId,
+        ...businessConnectionField(params.businessConnectionId),
+        audio: params.audio,
+        ...telegramCaptionFields(params.caption, params.parseMode),
+      }),
     },
 
     transformResponse: async (response: Response) => {

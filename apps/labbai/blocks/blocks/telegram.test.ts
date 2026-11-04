@@ -92,6 +92,7 @@ describe('Telegram Business connection param', () => {
       botToken: 'bot-token',
       chatId: '12345',
       text: 'Salom',
+      parseMode: 'HTML',
       businessConnectionId: 'BC1',
     })
     expect(
@@ -144,5 +145,52 @@ describe('Telegram Download File params', () => {
 
   it('rejects a missing file ID', () => {
     expect(() => mapParams({ operation: 'telegram_get_file' })).toThrow('File ID is required.')
+  })
+})
+
+describe('Telegram parse mode param', () => {
+  const TEXT_OPERATIONS = [
+    { operation: 'telegram_message', text: 'Salom' },
+    { operation: 'telegram_edit_message_text', text: 'Yangi', messageId: '7' },
+    { operation: 'telegram_send_photo', photo: 'AgAC', caption: 'Rasm' },
+    { operation: 'telegram_send_document', files: [userFile], caption: 'Hisobot' },
+  ]
+
+  it('defaults to HTML for a stored block that never set a parse mode', () => {
+    for (const params of TEXT_OPERATIONS) {
+      expect(mapParams(params).parseMode).toBe('HTML')
+    }
+  })
+
+  it('passes the chosen mode through to text and caption operations', () => {
+    for (const params of TEXT_OPERATIONS) {
+      expect(mapParams({ ...params, parseMode: 'plain' }).parseMode).toBe('plain')
+      expect(mapParams({ ...params, parseMode: 'MarkdownV2' }).parseMode).toBe('MarkdownV2')
+    }
+  })
+
+  it('never passes it to operations without text formatting', () => {
+    const mapped = mapParams({
+      operation: 'telegram_copy_message',
+      fromChatId: '1',
+      messageId: '2',
+      parseMode: 'plain',
+    })
+    expect(mapped).not.toHaveProperty('parseMode')
+  })
+
+  it('rejects an unknown mode before the send', () => {
+    expect(() =>
+      mapParams({ operation: 'telegram_message', text: 'Salom', parseMode: 'Markdown' })
+    ).toThrow('Unsupported Telegram parse mode "Markdown"')
+  })
+
+  it('offers the field as an advanced dropdown defaulting to HTML', () => {
+    const subBlock = TelegramBlock.subBlocks.find((sb) => sb.id === 'parseMode')
+    expect(subBlock).toMatchObject({ type: 'dropdown', mode: 'advanced' })
+    expect(subBlock?.value?.({})).toBe('HTML')
+    expect(subBlock?.options).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'plain' })])
+    )
   })
 })

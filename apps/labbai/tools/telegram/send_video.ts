@@ -6,9 +6,10 @@ import type {
 } from '@/tools/telegram/types'
 import {
   businessConnectionField,
-  convertMarkdownToHTML,
   TELEGRAM_BUSINESS_CONNECTION_PARAM,
+  TELEGRAM_PARSE_MODE_PARAM,
   TELEGRAM_REQUEST_RETRY,
+  telegramCaptionFields,
 } from '@/tools/telegram/utils'
 import type { ToolConfig } from '@/tools/types'
 
@@ -45,6 +46,7 @@ export const telegramSendVideoTool: ToolConfig<TelegramSendVideoParams, Telegram
         visibility: 'user-or-llm',
         description: 'Video caption (optional)',
       },
+      parseMode: TELEGRAM_PARSE_MODE_PARAM,
       businessConnectionId: TELEGRAM_BUSINESS_CONNECTION_PARAM,
     },
 
@@ -52,24 +54,16 @@ export const telegramSendVideoTool: ToolConfig<TelegramSendVideoParams, Telegram
       url: (params: TelegramSendVideoParams) =>
         `https://api.telegram.org/bot${params.botToken}/sendVideo`,
       method: 'POST',
-    retry: TELEGRAM_REQUEST_RETRY,
+      retry: TELEGRAM_REQUEST_RETRY,
       headers: () => ({
         'Content-Type': 'application/json',
       }),
-      body: (params: TelegramSendVideoParams) => {
-        const body: Record<string, any> = {
-          chat_id: params.chatId,
-          ...businessConnectionField(params.businessConnectionId),
-          video: params.video,
-        }
-
-        if (params.caption) {
-          body.caption = convertMarkdownToHTML(params.caption)
-          body.parse_mode = 'HTML'
-        }
-
-        return body
-      },
+      body: (params: TelegramSendVideoParams) => ({
+        chat_id: params.chatId,
+        ...businessConnectionField(params.businessConnectionId),
+        video: params.video,
+        ...telegramCaptionFields(params.caption, params.parseMode),
+      }),
     },
 
     transformResponse: async (response: Response) => {

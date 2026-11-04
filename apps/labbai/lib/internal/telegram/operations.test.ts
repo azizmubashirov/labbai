@@ -102,6 +102,46 @@ describe('sendTelegramDocument', () => {
     expect(plain.has('business_connection_id')).toBe(false)
   })
 
+  it('keeps HTML captions by default and sends a plain caption unmodified', async () => {
+    mocks.fetch.mockImplementation(async () =>
+      Response.json({ ok: true, result: { message_id: 1 } })
+    )
+    const file = { key: 'workspace/file.pdf', name: 'file.pdf', size: 3 }
+    const raw = 'From: Google <no-reply@accounts.google.com> & a < b'
+    await sendTelegramDocument(
+      { botToken: 'token', chatId: 'chat-1', files: [file], caption: '**report**' },
+      { userId: 'user-1', requestId: 'request-1' }
+    )
+    await sendTelegramDocument(
+      { botToken: 'token', chatId: 'chat-1', files: [file], caption: raw, parseMode: 'plain' },
+      { userId: 'user-1', requestId: 'request-1' }
+    )
+
+    const html = mocks.fetch.mock.calls[0][1].body as FormData
+    const plain = mocks.fetch.mock.calls[1][1].body as FormData
+    expect(html.get('caption')).toBe('<b>report</b>')
+    expect(html.get('parse_mode')).toBe('HTML')
+    expect(plain.get('caption')).toBe(raw)
+    expect(plain.has('parse_mode')).toBe(false)
+  })
+
+  it('rejects an unknown parse mode before reading the file', async () => {
+    await expect(
+      sendTelegramDocument(
+        {
+          botToken: 'token',
+          chatId: 'chat-1',
+          files: [{ key: 'workspace/file.pdf', name: 'file.pdf', size: 3 }],
+          caption: 'report',
+          parseMode: 'Markdown',
+        },
+        { userId: 'user-1', requestId: 'request-1' }
+      )
+    ).rejects.toMatchObject({ status: 400 })
+    expect(mocks.assertToolFileAccess).not.toHaveBeenCalled()
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
   it('fails closed before materialization when file access is denied', async () => {
     mocks.assertToolFileAccess.mockResolvedValue(new Response(null, { status: 404 }))
 
