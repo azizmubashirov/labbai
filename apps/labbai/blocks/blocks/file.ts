@@ -169,7 +169,21 @@ function toFileIdList(value: string | string[] | null | undefined): string[] {
 interface FileFamilyParams {
   folderScopeRef?: unknown
   folderIncludeSubfolders?: unknown
+  folderRef?: unknown
+  folderPaths?: unknown
   _context?: { workspaceId?: string }
+}
+
+/**
+ * The folder an Agent named through the tool's own `folderPath` param.
+ *
+ * `folderPath` is also the basic member of the `folderRef` canonical pair, so on
+ * the Agent path a model-sent `folderPath` arrives collapsed onto `folderRef`.
+ * That pair is shown only for list, update folder and delete folder, so for
+ * every other operation the canvas never sends it and this stays empty there.
+ */
+function modelFolderPath(params: FileFamilyParams): string | undefined {
+  return optionalText(params.folderRef)
 }
 
 /**
@@ -194,7 +208,7 @@ function fileFamilyInput(
   const normalized = pickerValue ? normalizeFileInput(pickerValue) : null
   if (normalized && normalized.length > 0) return { fileInput: normalized, workspaceId }
 
-  const folderPaths = folderScopePaths(params.folderScopeRef)
+  const folderPaths = folderScopePaths(params.folderScopeRef ?? params.folderPaths)
   if (!folderPaths) {
     throw new Error(`File or folder is required for ${label}`)
   }
@@ -268,7 +282,10 @@ function namedFileTarget(
    *   candidates named; with no scope the workspace-wide lookup silently takes
    *   the oldest match. The refusal is the whole point of naming a folder.
    */
-  if (scopes.length === 0) return { fileName }
+  if (scopes.length === 0) {
+    const folderPath = modelFolderPath(params)
+    return folderPath ? { fileName, folderPath } : { fileName }
+  }
   return {
     fileName,
     ...(scopes.length === 1 ? { folderPath: scopes[0] } : { folderPaths: scopes }),
@@ -675,7 +692,7 @@ export const FileV3Block: BlockConfig<FileParserV3Output> = {
         }
 
         if (operation === 'file_append') {
-          const appendInput = params.appendFileInput
+          const appendInput = params.appendFileInput ?? params.fileName
           if (!appendInput) {
             throw new Error('File is required for append')
           }
@@ -695,13 +712,13 @@ export const FileV3Block: BlockConfig<FileParserV3Output> = {
 
           return {
             fileName,
-            content: params.appendContent,
+            content: params.appendContent ?? params.content,
             workspaceId: params._context?.workspaceId,
           }
         }
 
         if (operation === 'file_get') {
-          const getInput = params.getFileInput
+          const getInput = params.getFileInput ?? params.fileId
           if (!getInput) {
             throw new Error('File is required for get')
           }
@@ -986,7 +1003,7 @@ export const FileV4Block: BlockConfig<FileParserV3Output> = {
         }
 
         if (operation === 'file_append') {
-          const appendInput = params.appendFileInput
+          const appendInput = params.appendFileInput ?? params.fileName
           if (!appendInput) {
             throw new Error('File is required for append')
           }
@@ -1006,13 +1023,13 @@ export const FileV4Block: BlockConfig<FileParserV3Output> = {
 
           return {
             fileName,
-            content: params.appendContent,
+            content: params.appendContent ?? params.content,
             workspaceId: params._context?.workspaceId,
           }
         }
 
         if (operation === 'file_read') {
-          const readInput = params.readFileInput
+          const readInput = params.readFileInput ?? params.fileId
           if (!readInput) {
             throw new Error('File is required for read')
           }
@@ -1965,7 +1982,7 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
             Boolean(fileInput) && (params.content == null || params.content === '')
           return {
             fileName: params.fileName,
-            folderPath: optionalText(params.writeFolderRef),
+            folderPath: optionalText(params.writeFolderRef) ?? modelFolderPath(params),
             content: omitContent ? undefined : params.content,
             ...(fileInput ? { fileInput } : {}),
             contentType: params.contentType,
@@ -1976,17 +1993,17 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
 
         if (operation === 'file_list') {
           return {
-            path: optionalText(params.folderRef),
-            recursive: switchValue(params.folderRecursive),
+            path: optionalText(params.folderRef) ?? optionalText(params.path),
+            recursive: switchValue(params.folderRecursive ?? params.recursive),
             /* Bounded here as well as at the contract, so a typo fails while
                configuring rather than on the first run. */
-            depth: parseOptionalNumberInput(params.folderDepth, 'Max Depth', {
+            depth: parseOptionalNumberInput(params.folderDepth ?? params.depth, 'Max Depth', {
               integer: true,
               min: 1,
               max: MAX_FOLDER_PATH_SEGMENTS,
             }),
-            search: optionalText(params.folderSearch),
-            limit: parseOptionalNumberInput(params.folderLimit, 'Limit', {
+            search: optionalText(params.folderSearch) ?? optionalText(params.search),
+            limit: parseOptionalNumberInput(params.folderLimit ?? params.limit, 'Limit', {
               integer: true,
               min: 1,
               max: MAX_FILE_LIST_LIMIT,
@@ -2005,7 +2022,9 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
           const name = optionalText(params.folderName)
           const parentPrefix = folderPathPrefix(optionalText(params.createParentRef))
           return {
-            path: name ? `${parentPrefix}/${encodeFolderPathSegment(name)}` : undefined,
+            path: name
+              ? `${parentPrefix}/${encodeFolderPathSegment(name)}`
+              : optionalText(params.path),
             workspaceId: params._context?.workspaceId,
           }
         }
@@ -2018,20 +2037,24 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
            * carried from the source path's last segment. An unset parent means
            * the workspace root. Renaming is not a move and is not offered here.
            */
-          const sourcePath = optionalText(params.folderRef)
+          const sourcePath = optionalText(params.folderRef) ?? optionalText(params.path)
           const segment = sourcePath?.split('/').pop()
-          const parentPrefix = folderPathPrefix(optionalText(params.destinationParentRef))
+          const destinationParent = optionalText(params.destinationParentRef)
+          const parentPrefix = folderPathPrefix(destinationParent)
 
           return {
             path: sourcePath,
-            destinationPath: segment ? `${parentPrefix}/${segment}` : undefined,
+            destinationPath:
+              (destinationParent === undefined
+                ? optionalText(params.destinationPath)
+                : undefined) ?? (segment ? `${parentPrefix}/${segment}` : undefined),
             workspaceId: params._context?.workspaceId,
           }
         }
 
         if (operation === 'file_delete_folder') {
           return {
-            path: optionalText(params.folderRef),
+            path: optionalText(params.folderRef) ?? optionalText(params.path),
             recursive: switchValue(params.deleteFolderRecursive),
             workspaceId: params._context?.workspaceId,
           }
@@ -2039,59 +2062,61 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
 
         if (operation === 'file_move') {
           return {
-            fileId: optionalText(params.moveFileId),
-            folderPath: optionalText(params.moveTargetRef),
+            fileId: optionalText(params.moveFileId) ?? optionalText(params.fileId),
+            folderPath: optionalText(params.moveTargetRef) ?? modelFolderPath(params),
             workspaceId: params._context?.workspaceId,
           }
         }
 
         if (operation === 'file_restore_folder') {
           return {
-            folderId: optionalText(params.restoreFolderId),
+            folderId: optionalText(params.restoreFolderId) ?? optionalText(params.folderId),
             workspaceId: params._context?.workspaceId,
           }
         }
 
         if (operation === 'file_append') {
           return {
-            ...namedFileTarget(params, params.appendFileInput, 'append'),
-            content: params.appendContent,
+            ...namedFileTarget(params, params.appendFileInput ?? params.fileName, 'append'),
+            content: params.appendContent ?? params.content,
             workspaceId: params._context?.workspaceId,
           }
         }
 
         if (operation === 'file_edit') {
-          const mode = optionalText(params.editMode) ?? 'search_replace'
+          const mode =
+            optionalText(params.editMode) ?? optionalText(params.mode) ?? 'search_replace'
           if (!FILE_EDIT_MODES.has(mode)) throw new Error('Edit Type is invalid')
 
           return {
-            ...namedFileTarget(params, params.editFileInput, 'edit'),
+            ...namedFileTarget(params, params.editFileInput ?? params.fileName, 'edit'),
             mode,
-            search: params.editSearch,
-            content: params.editContent ?? '',
+            search: params.editSearch ?? params.search,
+            content: params.editContent ?? params.content ?? '',
             replaceAll: switchValue(params.replaceAll),
             beforeAnchor: params.beforeAnchor,
             afterAnchor: params.afterAnchor,
             anchor: params.anchor,
             startAnchor: params.startAnchor,
             endAnchor: params.endAnchor,
-            occurrence: parseOptionalNumberInput(params.editOccurrence, 'Anchor Occurrence', {
-              integer: true,
-              min: 1,
-            }),
+            occurrence: parseOptionalNumberInput(
+              params.editOccurrence ?? params.occurrence,
+              'Anchor Occurrence',
+              { integer: true, min: 1 }
+            ),
             workspaceId: params._context?.workspaceId,
           }
         }
 
         if (operation === 'file_compress') {
           return {
-            ...fileFamilyInput(params, 'compress', params.compressInput),
+            ...fileFamilyInput(params, 'compress', params.compressInput ?? params.fileId),
             archiveName: optionalText(params.archiveName),
           }
         }
 
         if (operation === 'file_decompress') {
-          const decompressInput = params.decompressInput
+          const decompressInput = params.decompressInput ?? params.fileId
           if (!decompressInput) {
             throw new Error('File is required for decompress')
           }
@@ -2123,7 +2148,7 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
         }
 
         if (operation === 'file_manage_sharing') {
-          const shareInput = params.shareInput
+          const shareInput = params.shareInput ?? params.fileId
           if (!shareInput) {
             throw new Error('File is required to manage sharing')
           }
@@ -2134,9 +2159,12 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
                   .split(/[\n,]/)
                   .map((email) => email.trim())
                   .filter(Boolean)
-              : undefined
+              : params.allowedEmails
 
-          const visibility = (params.shareVisibility as string) || 'public'
+          const visibility =
+            (params.shareVisibility as string) ||
+            (switchValue(params.isActive, true) ? params.authType : 'private') ||
+            'public'
           const isActive = visibility !== 'private'
           const shareParams = {
             isActive,
@@ -2183,16 +2211,16 @@ export const FileV5Block: BlockConfig<FileParserV3Output> = {
         }
 
         if (operation === 'file_get_content') {
-          const range = optionalPositiveInt(params.contentOffset, 'Start Line')
-          const count = optionalPositiveInt(params.contentLimit, 'Line Count')
+          const range = optionalPositiveInt(params.contentOffset ?? params.offset, 'Start Line')
+          const count = optionalPositiveInt(params.contentLimit ?? params.limit, 'Line Count')
           return {
-            ...fileFamilyInput(params, 'get content', params.getContentInput),
+            ...fileFamilyInput(params, 'get content', params.getContentInput ?? params.fileId),
             ...(range === undefined ? {} : { offset: range }),
             ...(count === undefined ? {} : { limit: count }),
           }
         }
 
-        return fileFamilyInput(params, 'read', params.readFileInput)
+        return fileFamilyInput(params, 'read', params.readFileInput ?? params.fileId)
       },
     },
   },

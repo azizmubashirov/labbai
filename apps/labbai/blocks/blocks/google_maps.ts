@@ -616,6 +616,8 @@ export const GoogleMapsBlock: BlockConfig = {
         let destinations: string[] | undefined
         if (params.destinations && typeof params.destinations === 'string') {
           destinations = params.destinations.split('|').map((d: string) => d.trim())
+        } else if (Array.isArray(params.destinations)) {
+          destinations = params.destinations
         }
 
         let waypoints: string[] | undefined
@@ -624,6 +626,8 @@ export const GoogleMapsBlock: BlockConfig = {
             .split('|')
             .map((w: string) => w.trim())
             .filter(Boolean)
+        } else if (Array.isArray(params.waypoints)) {
+          waypoints = params.waypoints
         }
 
         let radius: number | undefined
@@ -638,6 +642,8 @@ export const GoogleMapsBlock: BlockConfig = {
             .split('|')
             .map((p: string) => p.trim())
             .filter(Boolean)
+        } else if (Array.isArray(params.placeIds)) {
+          placeIds = params.placeIds
         }
 
         let wifiAccessPoints: unknown[] | undefined
@@ -647,6 +653,8 @@ export const GoogleMapsBlock: BlockConfig = {
           } catch {
             // Ignore parse errors
           }
+        } else if (Array.isArray(params.wifiAccessPoints)) {
+          wifiAccessPoints = params.wifiAccessPoints
         }
 
         let cellTowers: unknown[] | undefined
@@ -656,9 +664,12 @@ export const GoogleMapsBlock: BlockConfig = {
           } catch {
             // Ignore parse errors
           }
+        } else if (Array.isArray(params.cellTowers)) {
+          cellTowers = params.cellTowers
         }
 
-        const address = operation === 'validate_address' ? addressToValidate : params.address
+        const address =
+          operation === 'validate_address' ? addressToValidate || params.address : params.address
 
         // Parse boolean switches (can come as string or boolean from form)
         let interpolate: boolean | undefined
@@ -709,9 +720,9 @@ export const GoogleMapsBlock: BlockConfig = {
         return {
           ...rest,
           address,
-          location,
-          lat,
-          lng,
+          location: location ?? params.location,
+          lat: lat ?? params.lat,
+          lng: lng ?? params.lng,
           timestamp,
           destinations,
           waypoints,
@@ -728,11 +739,14 @@ export const GoogleMapsBlock: BlockConfig = {
           homeMobileCountryCode,
           homeMobileNetworkCode,
           requiredQuality: params.requiredQuality || undefined,
-          type: params.placeType || undefined,
-          includedTypes: params.placeType ? [params.placeType] : undefined,
+          type: params.placeType || params.type || undefined,
+          includedTypes: params.placeType ? [params.placeType] : params.includedTypes,
           avoid: params.avoid || undefined,
           radioType: params.radioType || undefined,
-          units: operation === 'speed_limits' ? params.speedUnits || undefined : params.units,
+          units:
+            operation === 'speed_limits'
+              ? params.speedUnits || params.units || undefined
+              : params.units,
         }
       },
     },

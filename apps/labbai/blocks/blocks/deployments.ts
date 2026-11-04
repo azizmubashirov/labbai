@@ -126,8 +126,8 @@ export const DeploymentsBlock: BlockConfig = {
         if (operation === 'deployments_deploy') {
           return {
             workflowId,
-            name: params.versionName?.trim() || undefined,
-            description: params.versionDescription?.trim() || undefined,
+            name: params.versionName?.trim() || params.name || undefined,
+            description: params.versionDescription?.trim() || params.description || undefined,
           }
         }
 

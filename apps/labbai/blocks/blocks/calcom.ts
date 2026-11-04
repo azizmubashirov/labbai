@@ -1,3 +1,4 @@
+import { isRecordLike } from '@labbai/utils/object'
 import { CalComIcon } from '@/components/icons'
 import type { BlockConfig, BlockMeta } from '@/blocks/types'
 import { AuthMode, IntegrationType } from '@/blocks/types'
@@ -760,11 +761,19 @@ Return ONLY valid JSON - no explanations.`,
 
         switch (operation) {
           case 'calcom_create_booking':
-            result.attendee = {
-              name: attendeeName,
-              ...(attendeeEmail && { email: attendeeEmail }),
-              timeZone: attendeeTimeZone,
-              ...(attendeePhone && { phoneNumber: attendeePhone }),
+            if (
+              attendeeName ||
+              attendeeEmail ||
+              attendeeTimeZone ||
+              attendeePhone ||
+              !isRecordLike(params.attendee)
+            ) {
+              result.attendee = {
+                name: attendeeName,
+                ...(attendeeEmail && { email: attendeeEmail }),
+                timeZone: attendeeTimeZone,
+                ...(attendeePhone && { phoneNumber: attendeePhone }),
+              }
             }
             {
               const eventTypeIdNum = toNumber(eventTypeId)
@@ -772,7 +781,11 @@ Return ONLY valid JSON - no explanations.`,
             }
             if (start) result.start = start
             if (end) result.end = end
-            if (guests) result.guests = guests.split(',').map((g: string) => g.trim())
+            if (guests) {
+              result.guests = Array.isArray(guests)
+                ? guests
+                : guests.split(',').map((g: string) => g.trim())
+            }
             {
               const lengthNum = toNumber(lengthInMinutes)
               if (lengthNum !== undefined) result.lengthInMinutes = lengthNum

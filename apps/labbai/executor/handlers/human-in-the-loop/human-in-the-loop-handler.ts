@@ -425,6 +425,7 @@ export class HumanInTheLoopBlockHandler implements BlockHandler {
     const { paramsTransform } = buildBlockToolParamsTransform({
       blockSubBlocks: subBlocks,
       blockParamsFn: notificationBlock?.tools?.config?.params,
+      operation: toolConfig.operation,
       blockInputDefs: notificationBlock?.inputs,
       toolParams: getTool(toolId)?.params,
       canonicalGroups,
@@ -440,8 +441,9 @@ export class HumanInTheLoopBlockHandler implements BlockHandler {
     try {
       return paramsTransform(storedParams)
     } catch (error) {
-      // Mirrors `prepareToolExecution`: a transform that throws must not take the
-      // notification down with it, so the raw params still go out.
+      // A transform that throws must not take the notification down with it, so the
+      // raw params still go out. No model reads this result, unlike `prepareToolExecution`,
+      // which reports the rejection back to the model instead.
       logger.warn('Notification tool params transform failed, using raw params', {
         toolId,
         error,

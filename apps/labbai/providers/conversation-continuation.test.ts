@@ -105,6 +105,19 @@ describe('durable conversation restoration and continuation', () => {
     expect(executeProviderTool).toHaveBeenCalledOnce()
   })
 
+  it('records tool arguments the block rejected as the call outcome without dispatching', async () => {
+    const session = await pendingSession()
+    vi.mocked(prepareToolExecution).mockImplementationOnce(() => {
+      throw Object.assign(new Error('Log ID is required'), { toolArgumentsRejected: true })
+    })
+    await continuePendingConversationCalls(toolRequest, session)
+    expect(session.getPendingCalls()).toEqual([])
+    expect(session.getMessages('openai', 'model-a', 'binding-a')[1].content).toContain(
+      'Log ID is required'
+    )
+    expect(executeProviderTool).not.toHaveBeenCalled()
+  })
+
   it('never dispatches a pending call whose recorded configuration cannot be verified', async () => {
     for (const configuredToolBinding of [undefined, 'obsolete-binding']) {
       const session = await pendingSession({ configuredToolBinding })

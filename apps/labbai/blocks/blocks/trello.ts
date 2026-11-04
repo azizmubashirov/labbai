@@ -906,7 +906,7 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
             return {
               ...baseParams,
               boardId,
-              filter: getTrimmedString(params.listFilter),
+              filter: getTrimmedString(params.listFilter) ?? getTrimmedString(params.filter),
             }
           }
 
@@ -926,12 +926,12 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
               ...baseParams,
               boardId,
               listId,
-              filter: getTrimmedString(params.cardFilter),
+              filter: getTrimmedString(params.cardFilter) ?? getTrimmedString(params.filter),
             }
           }
 
           case 'trello_search': {
-            const query = getTrimmedString(params.searchQuery)
+            const query = getTrimmedString(params.searchQuery) ?? getTrimmedString(params.query)
 
             if (!query) {
               throw new Error('Search query is required.')
@@ -940,9 +940,13 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
             return {
               ...baseParams,
               query,
-              idBoards: parseStringArray(params.searchBoardIds),
-              modelTypes: getTrimmedString(params.searchModelTypes),
-              cardsLimit: parseOptionalNumberInput(params.searchCardsLimit, 'cardsLimit'),
+              idBoards:
+                parseStringArray(params.searchBoardIds) ?? parseStringArray(params.idBoards),
+              modelTypes:
+                getTrimmedString(params.searchModelTypes) ?? getTrimmedString(params.modelTypes),
+              cardsLimit:
+                parseOptionalNumberInput(params.searchCardsLimit, 'cardsLimit') ??
+                parseOptionalNumberInput(params.cardsLimit, 'cardsLimit'),
             }
           }
 
@@ -1047,7 +1051,7 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
           }
 
           case 'trello_create_board': {
-            const name = getTrimmedString(params.boardName)
+            const name = getTrimmedString(params.boardName) ?? getTrimmedString(params.name)
 
             if (!name) {
               throw new Error('Board name is required.')
@@ -1056,7 +1060,7 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
             return {
               ...baseParams,
               name,
-              desc: getTrimmedString(params.boardDesc),
+              desc: getTrimmedString(params.boardDesc) ?? getTrimmedString(params.desc),
               idOrganization: getTrimmedString(params.idOrganization),
               defaultLists: parseOptionalBooleanInput(params.defaultLists),
             }
@@ -1077,7 +1081,7 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
 
           case 'trello_create_list': {
             const boardId = getTrimmedString(params.boardId)
-            const name = getTrimmedString(params.listName)
+            const name = getTrimmedString(params.listName) ?? getTrimmedString(params.name)
 
             if (!boardId) {
               throw new Error('Board ID is required.')
@@ -1091,7 +1095,7 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
               ...baseParams,
               boardId,
               name,
-              pos: getTrimmedString(params.listPos),
+              pos: getTrimmedString(params.listPos) ?? getTrimmedString(params.pos),
             }
           }
 
@@ -1105,10 +1109,13 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
             return {
               ...baseParams,
               listId,
-              name: getTrimmedString(params.listName),
-              closed: parseOptionalBooleanInput(params.listClosed),
-              idBoard: getTrimmedString(params.moveListToBoardId),
-              pos: getTrimmedString(params.listPos),
+              name: getTrimmedString(params.listName) ?? getTrimmedString(params.name),
+              closed:
+                parseOptionalBooleanInput(params.listClosed) ??
+                parseOptionalBooleanInput(params.closed),
+              idBoard:
+                getTrimmedString(params.moveListToBoardId) ?? getTrimmedString(params.idBoard),
+              pos: getTrimmedString(params.listPos) ?? getTrimmedString(params.pos),
             }
           }
 
@@ -1127,7 +1134,7 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
 
           case 'trello_add_checklist': {
             const cardId = getTrimmedString(params.cardId)
-            const name = getTrimmedString(params.checklistName)
+            const name = getTrimmedString(params.checklistName) ?? getTrimmedString(params.name)
 
             if (!cardId) {
               throw new Error('Card ID is required.')
@@ -1141,13 +1148,13 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
               ...baseParams,
               cardId,
               name,
-              pos: getTrimmedString(params.checklistPos),
+              pos: getTrimmedString(params.checklistPos) ?? getTrimmedString(params.pos),
             }
           }
 
           case 'trello_add_checklist_item': {
             const checklistId = getTrimmedString(params.checklistId)
-            const name = getTrimmedString(params.itemName)
+            const name = getTrimmedString(params.itemName) ?? getTrimmedString(params.name)
 
             if (!checklistId) {
               throw new Error('Checklist ID is required.')
@@ -1161,8 +1168,10 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
               ...baseParams,
               checklistId,
               name,
-              pos: getTrimmedString(params.itemPos),
-              checked: parseOptionalBooleanInput(params.itemChecked),
+              pos: getTrimmedString(params.itemPos) ?? getTrimmedString(params.pos),
+              checked:
+                parseOptionalBooleanInput(params.itemChecked) ??
+                parseOptionalBooleanInput(params.checked),
             }
           }
 
@@ -1178,10 +1187,10 @@ Return ONLY the date/timestamp string - no explanations, no extra text.`,
               throw new Error('Checklist item ID is required.')
             }
 
-            const state = getTrimmedString(params.checkItemState)
+            const state = getTrimmedString(params.checkItemState) ?? getTrimmedString(params.state)
             const normalizedState =
               state === 'complete' || state === 'incomplete' ? state : undefined
-            const name = getTrimmedString(params.checkItemName)
+            const name = getTrimmedString(params.checkItemName) ?? getTrimmedString(params.name)
 
             if (!normalizedState && !name) {
               throw new Error('Provide a State or a New Item Name to update.')

@@ -5,6 +5,14 @@ import { AuthMode, IntegrationType } from '@/blocks/types'
 import type { AirtableResponse } from '@/tools/airtable/types'
 import { getTrigger } from '@/triggers'
 
+/**
+ * Parses a JSON sub-block string; a value that is already parsed (an Agent's tool argument)
+ * passes through unchanged.
+ */
+function parseJsonInput(value: unknown): unknown {
+  return typeof value === 'string' ? JSON.parse(value) : value
+}
+
 /** Canonical account pair — an advanced-mode card only fills `manualCredential`. */
 const ACCOUNT_FIELD = ['credential', 'manualCredential'] as const
 /** Canonical base pair — the picker in basic mode, the raw base id in advanced. */
@@ -398,16 +406,16 @@ Return ONLY the valid JSON array of record ID strings - no explanations, no mark
               params.operation === 'updateMultiple' ||
               params.operation === 'upsert')
           ) {
-            parsedRecords = JSON.parse(records)
+            parsedRecords = parseJsonInput(records)
           }
           if (fields && params.operation === 'update') {
-            parsedFields = JSON.parse(fields)
+            parsedFields = parseJsonInput(fields)
           }
           if (fieldsToMergeOn && params.operation === 'upsert') {
-            parsedFieldsToMergeOn = JSON.parse(fieldsToMergeOn)
+            parsedFieldsToMergeOn = parseJsonInput(fieldsToMergeOn)
           }
           if (recordIds && params.operation === 'delete') {
-            parsedRecordIds = JSON.parse(recordIds)
+            parsedRecordIds = parseJsonInput(recordIds)
           }
         } catch (error: any) {
           throw new Error(`Invalid JSON input for ${params.operation} operation: ${error.message}`)

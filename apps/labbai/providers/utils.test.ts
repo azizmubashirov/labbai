@@ -1022,6 +1022,34 @@ describe('prepareToolExecution', () => {
     })
   })
 
+  describe('rejected arguments', () => {
+    it('reports a transform rejection instead of running the tool on raw params', () => {
+      const rejection = new Error('Log ID is required for get_log operation')
+      const paramsTransform = vi.fn(() => {
+        throw rejection
+      })
+
+      let thrown: unknown
+      try {
+        prepareToolExecution(
+          { id: 'logs_get', params: { logSelector: 'log-1' }, paramsTransform },
+          {},
+          {},
+          undefined
+        )
+      } catch (error) {
+        thrown = error
+      }
+
+      expect(thrown).toBeInstanceOf(Error)
+      expect(thrown).toMatchObject({
+        message: 'Log ID is required for get_log operation',
+        toolArgumentsRejected: true,
+        cause: rejection,
+      })
+    })
+  })
+
   describe('execution params context', () => {
     it('should include workflow context in executionParams', () => {
       const tool = { params: { message: 'test' } }
@@ -1756,6 +1784,32 @@ describe('transformBlockTool param decoding', () => {
     })
 
     expect(result).toEqual({ gatherLinks: true, noCache: false })
+  })
+
+  it("hands the tool entry's operation to the params function without adding it to the args", async () => {
+    const paramsFn = vi.fn((params: Record<string, any>) =>
+      params.operation === 'read' ? { ...params, folder: params.folder || 'INBOX' } : params
+    )
+    const harness = buildHarness([], { folder: { type: 'string' } }, paramsFn)
+
+    const result = await transformBlockTool(
+      { type: 'fixture', params: {} },
+      { ...harness, selectedOperation: 'read' }
+    )
+
+    expect(result?.paramsTransform?.({ maxResults: 5 })).toEqual({ maxResults: 5, folder: 'INBOX' })
+    expect(paramsFn).toHaveBeenCalledWith({ maxResults: 5, operation: 'read' })
+  })
+
+  it('keeps an operation the tool entry stored among its params', async () => {
+    const harness = buildHarness([], {}, (params) => params)
+
+    const result = await transformBlockTool(
+      { type: 'fixture', params: {} },
+      { ...harness, selectedOperation: 'read' }
+    )
+
+    expect(result?.paramsTransform?.({ operation: 'stale' })).toEqual({ operation: 'read' })
   })
 
   it('reports the json-shaped keys so the secret projection keeps the same shape', async () => {

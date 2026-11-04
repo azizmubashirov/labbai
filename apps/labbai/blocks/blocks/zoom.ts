@@ -565,7 +565,7 @@ Return ONLY the date string - no explanations, no quotes, no extra text.`,
             return {
               ...baseParams,
               userId: params.userId.trim(),
-              type: params.listType,
+              type: params.listType ?? params.type,
               pageSize: params.pageSize ? Number(params.pageSize) : undefined,
               nextPageToken: params.nextPageToken,
             }
@@ -587,7 +587,7 @@ Return ONLY the date string - no explanations, no quotes, no extra text.`,
             return {
               ...baseParams,
               meetingId: params.meetingId.trim(),
-              topic: params.topicUpdate,
+              topic: params.topicUpdate ?? params.topic,
               type: params.type ? Number(params.type) : undefined,
               startTime: params.startTime,
               duration: params.duration ? Number(params.duration) : undefined,
@@ -629,8 +629,8 @@ Return ONLY the date string - no explanations, no quotes, no extra text.`,
             return {
               ...baseParams,
               userId: params.userId.trim(),
-              from: params.fromDate,
-              to: params.toDate,
+              from: params.fromDate ?? params.from,
+              to: params.toDate ?? params.to,
               pageSize: params.pageSize ? Number(params.pageSize) : undefined,
               nextPageToken: params.nextPageToken,
             }
@@ -652,7 +652,7 @@ Return ONLY the date string - no explanations, no quotes, no extra text.`,
               ...baseParams,
               meetingId: params.meetingId.trim(),
               recordingId: params.recordingId,
-              action: params.deleteAction,
+              action: params.deleteAction ?? params.action,
             }
 
           case 'zoom_list_past_participants':

@@ -76,15 +76,27 @@ export async function continuePendingConversationCalls(
       })
       continue
     }
-    const { executionParams } = prepareToolExecution(
-      tool,
-      args,
-      {
-        ...request,
-        resolveToolInvocationId: () => call.invocationId,
-      },
-      call.providerCallId
-    )
+    let executionParams: Record<string, unknown>
+    try {
+      executionParams = prepareToolExecution(
+        tool,
+        args,
+        {
+          ...request,
+          resolveToolInvocationId: () => call.invocationId,
+        },
+        call.providerCallId
+      ).executionParams
+    } catch (error) {
+      if (!isRecordLike(error) || error.toolArgumentsRejected !== true) throw error
+      const result = { success: false, output: {}, error: getErrorMessage(error) }
+      await session.recordToolResult({
+        invocationId: call.invocationId,
+        rawResponse: result,
+        modelResponse: result,
+      })
+      continue
+    }
     try {
       logger.info('Retrying an Agent tool with an unrecorded outcome')
       await executeProviderTool(tool.id, executionParams)
