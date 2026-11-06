@@ -2,6 +2,7 @@
  * @vitest-environment node
  */
 import { describe, expect, it } from 'vitest'
+import { sttOperationInputSchema } from '@/lib/internal/stt/schema'
 import { assemblyaiSttTool, assemblyaiSttV2Tool } from '@/tools/stt/assemblyai'
 import { deepgramSttTool, deepgramSttV2Tool } from '@/tools/stt/deepgram'
 import { elevenLabsSttTool, elevenLabsSttV2Tool } from '@/tools/stt/elevenlabs'
@@ -74,5 +75,40 @@ describe('STT internal operations', () => {
     })
 
     expect(input).not.toHaveProperty('audioUrl')
+  })
+
+  it('passes a legacy file-only run with an empty URL field through validation', () => {
+    const voiceFile = {
+      id: 'voice-1',
+      name: 'voice.oga',
+      size: 2048,
+      type: 'audio/ogg',
+      key: 'workspace/ws-1/voice.oga',
+    }
+    const legacyTools = [
+      assemblyaiSttTool,
+      deepgramSttTool,
+      elevenLabsSttTool,
+      geminiSttTool,
+      rubaiSttTool,
+      whisperSttTool,
+    ]
+
+    for (const tool of legacyTools) {
+      const input = tool.operation.input({
+        provider: tool.id.replace('stt_', ''),
+        apiKey: 'key',
+        audioFileReference: voiceFile,
+        audioUrl: null,
+        model: null,
+        language: null,
+        prompt: null,
+        temperature: null,
+      } as unknown as Parameters<typeof tool.operation.input>[0])
+
+      const parsed = sttOperationInputSchema.safeParse(input)
+      expect(parsed.success, tool.id).toBe(true)
+      expect(parsed.data?.audioUrl).toBeUndefined()
+    }
   })
 })
