@@ -18,6 +18,15 @@ export const sttUserFileSchema = userFileSchema.extend({
 
 export const sttUserFileInputSchema = z.union([sttUserFileSchema, z.array(sttUserFileSchema)])
 
+/**
+ * Accepts `null` for an optional field and normalizes it to `undefined`. Blocks pass an empty
+ * sub-block through as `null`, so a run that leaves an optional field blank (an empty audio URL,
+ * no model, no prompt) must not fail validation.
+ */
+function optionalNullable<T extends z.ZodType>(schema: T) {
+  return schema.nullish().transform((value) => value ?? undefined)
+}
+
 export const sttOperationInputSchema = z
   .object({
     provider: z
@@ -27,20 +36,20 @@ export const sttOperationInputSchema = z
         message: `Invalid provider. Must be one of: ${sttProviders.join(', ')}`,
       }),
     apiKey: z.string({ error: MISSING_STT_FIELDS_ERROR }).optional(),
-    model: z.string().optional(),
-    audioFile: sttUserFileInputSchema.optional(),
-    audioFileReference: sttUserFileInputSchema.optional(),
-    audioUrl: z.string().optional(),
-    language: z.string().optional(),
-    timestamps: z.enum(['none', 'sentence', 'word']).optional(),
-    diarization: z.boolean().optional(),
-    translateToEnglish: z.boolean().optional(),
-    prompt: z.string().optional(),
-    temperature: z.coerce.number().optional(),
-    sentiment: z.boolean().optional(),
-    entityDetection: z.boolean().optional(),
-    piiRedaction: z.boolean().optional(),
-    summarization: z.boolean().optional(),
+    model: optionalNullable(z.string()),
+    audioFile: optionalNullable(sttUserFileInputSchema),
+    audioFileReference: optionalNullable(sttUserFileInputSchema),
+    audioUrl: optionalNullable(z.string()),
+    language: optionalNullable(z.string()),
+    timestamps: optionalNullable(z.enum(['none', 'sentence', 'word'])),
+    diarization: optionalNullable(z.boolean()),
+    translateToEnglish: optionalNullable(z.boolean()),
+    prompt: optionalNullable(z.string()),
+    temperature: optionalNullable(z.coerce.number()),
+    sentiment: optionalNullable(z.boolean()),
+    entityDetection: optionalNullable(z.boolean()),
+    piiRedaction: optionalNullable(z.boolean()),
+    summarization: optionalNullable(z.boolean()),
     [RESOLVED_SECRET_PROVENANCE_FIELD]: resolvedSecretTraceProvenanceSchema.optional(),
   })
   .passthrough()
