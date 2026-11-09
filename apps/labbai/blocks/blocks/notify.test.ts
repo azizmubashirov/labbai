@@ -53,6 +53,15 @@ describe('Notify block', () => {
     )
   })
 
+  it('backs every required user-only tool param with a sub-block, so the block serializes', () => {
+    const subBlockIds = new Set(NotifyBlock.subBlocks.map((subBlock) => subBlock.id))
+    const unbacked = Object.entries(notifySendTool.params)
+      .filter(([, param]) => param.required && param.visibility === 'user-only')
+      .map(([paramId]) => paramId)
+      .filter((paramId) => !subBlockIds.has(paramId))
+    expect(unbacked).toEqual([])
+  })
+
   it('keeps block outputs aligned with the tool outputs', () => {
     expect(Object.keys(NotifyBlock.outputs)).toEqual(Object.keys(notifySendTool.outputs ?? {}))
   })
