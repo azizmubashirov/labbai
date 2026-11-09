@@ -81,6 +81,19 @@ function toProviderModelResponse(
   }
 }
 
+/**
+ * Removes a child workflow's trace from a tool result before the model sees it. The trace carries
+ * every child block's output, so a child that reads rows or files would send all of them to the
+ * model on top of the workflow's own result. Logs and trace spans read it from `rawResponse`.
+ */
+function withoutChildTraceSpans(response: ToolResponse): ToolResponse {
+  if (!isRecordLike(response.output) || !Object.hasOwn(response.output, 'childTraceSpans')) {
+    return response
+  }
+  const { childTraceSpans: _childTraceSpans, ...output } = response.output
+  return { ...response, output }
+}
+
 function accumulateFailedFunctionToolCost(
   toolId: string,
   result: ToolResponse,
@@ -147,8 +160,9 @@ export async function executeProviderTool(
       : recorded.rawResponse
     return {
       rawResponse,
-      modelResponse:
-        session?.getRecordedResult?.(invocationId!)?.modelResponse ?? recorded.modelResponse,
+      modelResponse: withoutChildTraceSpans(
+        session?.getRecordedResult?.(invocationId!)?.modelResponse ?? recorded.modelResponse
+      ),
     }
   }
   const recordResult = async (
@@ -210,12 +224,11 @@ export async function executeProviderTool(
       runtimeContext?.failedFunctionToolCost
     )
     if (!registry || !toolCallRegistry) {
-      return recordResult({ rawResponse: result, modelResponse: result })
+      return recordResult({ rawResponse: result, modelResponse: withoutChildTraceSpans(result) })
     }
 
-    const modelResponse = toProviderModelResponse(
-      result,
-      projectToolResultForCopilot(result, toolCallRegistry)
+    const modelResponse = withoutChildTraceSpans(
+      toProviderModelResponse(result, projectToolResultForCopilot(result, toolCallRegistry))
     )
     registry.mergeToolCallRegistry(toolCallRegistry)
     return recordResult({ rawResponse: result, modelResponse })
