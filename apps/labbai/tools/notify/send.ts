@@ -14,10 +14,14 @@ export const notifySendTool: InternalToolConfig<NotifySendParams, NotifySendResp
   version: '1.0.0',
 
   params: {
+    /**
+     * Derived from the Notify block's Operation by its params transform, so no sub-block holds
+     * it. `hidden` keeps the serializer's pre-run user-only check from demanding it.
+     */
     kind: {
       type: 'string',
       required: true,
-      visibility: 'user-only',
+      visibility: 'hidden',
       description: 'event fires the event triggers; message sends the text to the recipients',
     },
     eventKey: {
