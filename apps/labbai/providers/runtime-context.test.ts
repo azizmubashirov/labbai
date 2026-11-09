@@ -938,6 +938,44 @@ describe('provider runtime context', () => {
     await expect(executeProviderTool('standalone-tool', {})).resolves.toBe(rawResult)
   })
 
+  it('keeps a child workflow trace out of the model response when no projection context exists', async () => {
+    const childTraceSpans = [{ id: 'span-1', output: { rows: ['row-1', 'row-2'] } }]
+    const rawResult = {
+      success: true,
+      output: { success: true, result: { answer: 'found' }, childTraceSpans },
+    }
+    mockExecuteTool.mockResolvedValueOnce(rawResult)
+
+    const execution = await executeProviderToolWithInput('workflow_executor', {})
+
+    expect(execution.rawResponse).toBe(rawResult)
+    expect(execution.rawResponse.output.childTraceSpans).toBe(childTraceSpans)
+    expect(execution.modelResponse).toEqual({
+      success: true,
+      output: { success: true, result: { answer: 'found' } },
+    })
+  })
+
+  it('keeps a child workflow trace out of the projected model response', async () => {
+    const registry = new ResolvedSecretTraceRegistry()
+    const childTraceSpans = [{ id: 'span-1', output: { contents: ['file text'] } }]
+    const rawResult = {
+      success: true,
+      output: { success: true, result: { answer: 'found' }, childTraceSpans },
+    }
+    mockExecuteTool.mockResolvedValueOnce(rawResult)
+
+    const execution = await runWithProviderRuntimeContext(
+      { resolvedSecretTraceRegistry: registry },
+      () => executeProviderToolWithInput('workflow_executor', {})
+    )
+
+    expect(execution.rawResponse).toBe(rawResult)
+    expect(execution.rawResponse.output.childTraceSpans).toBe(childTraceSpans)
+    expect(execution.modelResponse.output).toEqual({ success: true, result: { answer: 'found' } })
+    expect(Object.hasOwn(execution.modelResponse.output, 'childTraceSpans')).toBe(false)
+  })
+
   it('clears an inherited workflow context for an explicitly context-free provider call', async () => {
     const registry = new ResolvedSecretTraceRegistry([
       { name: 'TOKEN', plaintext: 'secret-value', encryptedValue: 'ciphertext' },
