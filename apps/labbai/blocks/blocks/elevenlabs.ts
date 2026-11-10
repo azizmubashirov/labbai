@@ -342,16 +342,18 @@ export const ElevenLabsBlock: BlockConfig<ElevenLabsBlockResponse> = {
           nextPageToken: params.nextPageToken || undefined,
           pageSize: toNumber(params.pageSize),
           stability: toNumber(
-            params.operation === 'edit_voice_settings' ? params.editStability : params.stability
+            params.operation === 'edit_voice_settings'
+              ? (params.editStability ?? params.stability)
+              : params.stability
           ),
           similarityBoost: toNumber(
             params.operation === 'edit_voice_settings'
-              ? params.editSimilarityBoost
+              ? (params.editSimilarityBoost ?? params.similarityBoost)
               : params.similarityBoost
           ),
-          style: toNumber(params.editStyle),
-          speed: toNumber(params.editSpeed),
-          useSpeakerBoost: toBoolean(params.editUseSpeakerBoost),
+          style: toNumber(params.editStyle ?? params.style),
+          speed: toNumber(params.editSpeed ?? params.speed),
+          useSpeakerBoost: toBoolean(params.editUseSpeakerBoost ?? params.useSpeakerBoost),
           durationSeconds: toNumber(params.durationSeconds),
           promptInfluence: toNumber(params.promptInfluence),
           loop: toBoolean(params.loop),

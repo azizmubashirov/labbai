@@ -456,7 +456,11 @@ type BlockToolParamsFn = (params: Record<string, any>) => Record<string, any>
  *    once under its canonical id, and BEFORE the block's `params` function because
  *    several blocks consume the value inside it — `if (includeAttachments)` on the
  *    string `'false'` is the bug this closes.
- * 3. Run the block's own `tools.config.params` mapping.
+ * 3. Run the block's own `tools.config.params` mapping, handed the tool row's
+ *    `operation`. A tool row keeps its operation beside its params rather than in them,
+ *    and most blocks pick their per-operation mapping by it, so without it the mapping
+ *    silently falls through. It is an input only: it reaches the tool's params only if
+ *    the row already stored one, matching the canvas, where it is a sub-block value.
  * 4. Parse `json`/`array` block inputs, the same loop `GenericBlockHandler` runs on the
  *    canvas; it covers keys the tool itself does not declare.
  *
@@ -467,6 +471,8 @@ type BlockToolParamsFn = (params: Record<string, any>) => Record<string, any>
 export function buildBlockToolParamsTransform(config: {
   blockSubBlocks: SubBlockConfig[] | undefined
   blockParamsFn: BlockToolParamsFn | undefined
+  /** The operation the tool row selected — see step 3. */
+  operation: string | undefined
   blockInputDefs: Record<string, unknown> | undefined
   toolParams: Record<string, { type?: string }> | undefined
   canonicalGroups: CanonicalGroup[]
@@ -478,6 +484,7 @@ export function buildBlockToolParamsTransform(config: {
   const {
     blockSubBlocks,
     blockParamsFn,
+    operation,
     blockInputDefs,
     toolParams,
     canonicalGroups,
@@ -520,8 +527,12 @@ export function buildBlockToolParamsTransform(config: {
         result = decodeToolParams(result, paramShapes, blockSubBlocks ?? [])
 
         if (blockParamsFn) {
-          const transformed = blockParamsFn(result)
-          result = { ...result, ...transformed }
+          const storesOperation = 'operation' in result
+          const transformed = blockParamsFn(operation ? { ...result, operation } : result)
+          result = {
+            ...result,
+            ...(storesOperation ? transformed : omit(transformed, ['operation'])),
+          }
         }
 
         if (blockInputDefs) {
@@ -747,6 +758,7 @@ export async function transformBlockTool(
   const { paramsTransform, jsonShapedParamKeys } = buildBlockToolParamsTransform({
     blockSubBlocks: blockDef?.subBlocks,
     blockParamsFn: blockDef?.tools?.config?.params as BlockToolParamsFn | undefined,
+    operation: selectedOperation,
     blockInputDefs: blockDef?.inputs as Record<string, unknown> | undefined,
     toolParams: toolConfig.params,
     canonicalGroups,
@@ -1356,7 +1368,11 @@ export function getMaxOutputTokensForModel(model: string): number {
 }
 
 /**
- * Prepare tool execution parameters, separating tool parameters from system parameters
+ * Prepare tool execution parameters, separating tool parameters from system parameters.
+ *
+ * Throws when the tool's `paramsTransform` rejects the arguments; that error carries
+ * `toolArgumentsRejected: true` so a caller can report it to the model as the call's result
+ * rather than treat it as a refusal to run.
  */
 export function prepareToolExecution(
   tool: {
@@ -1442,15 +1458,20 @@ export function prepareToolExecution(
     : undefined
 
   if (tool.paramsTransform) {
-    let transformed = false
+    // A transform that throws is the block rejecting the call, so the model has to see why.
+    // Running on with the untransformed params instead fails later with an unrelated
+    // message, because they still lack the ids the canonical collapse would have set.
     try {
       toolParams = tool.paramsTransform(toolParams)
-      transformed = true
     } catch (err) {
-      logger.warn('paramsTransform failed, using raw params', { error: err })
+      logger.warn('paramsTransform rejected the tool arguments', { toolId: tool.id, error: err })
+      throw Object.assign(
+        new Error(getErrorMessage(err, 'Tool arguments could not be prepared'), { cause: err }),
+        { toolArgumentsRejected: true }
+      )
     }
 
-    if (transformed && projectedToolParams && inputRegistry) {
+    if (projectedToolParams && inputRegistry) {
       try {
         projectedToolParams = tool.paramsTransform(projectedToolParams)
       } catch {

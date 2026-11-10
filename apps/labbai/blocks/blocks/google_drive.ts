@@ -1608,41 +1608,77 @@ Return ONLY the comment text - no explanations, no quotes, no extra formatting.`
         }
 
         // Convert starred dropdown to boolean
-        const starredValue = starred === 'true' ? true : starred === 'false' ? false : undefined
+        const starredValue =
+          typeof starred === 'boolean'
+            ? starred
+            : starred === 'true'
+              ? true
+              : starred === 'false'
+                ? false
+                : undefined
 
         // Convert sendNotification dropdown to boolean
         const sendNotificationValue =
-          sendNotification === 'true' ? true : sendNotification === 'false' ? false : undefined
+          typeof sendNotification === 'boolean'
+            ? sendNotification
+            : sendNotification === 'true'
+              ? true
+              : sendNotification === 'false'
+                ? false
+                : undefined
 
         // Convert removeFromCurrent dropdown to boolean
         const removeFromCurrentValue =
-          removeFromCurrent === 'true' ? true : removeFromCurrent === 'false' ? false : undefined
+          typeof removeFromCurrent === 'boolean'
+            ? removeFromCurrent
+            : removeFromCurrent === 'true'
+              ? true
+              : removeFromCurrent === 'false'
+                ? false
+                : undefined
 
         // Convert includeRevisions dropdown to boolean
         const includeRevisionsValue =
-          includeRevisions === 'true' ? true : includeRevisions === 'false' ? false : undefined
+          typeof includeRevisions === 'boolean'
+            ? includeRevisions
+            : includeRevisions === 'true'
+              ? true
+              : includeRevisions === 'false'
+                ? false
+                : undefined
 
         const includeDeletedValue =
-          includeDeleted === 'true' ? true : includeDeleted === 'false' ? false : undefined
+          typeof includeDeleted === 'boolean'
+            ? includeDeleted
+            : includeDeleted === 'true'
+              ? true
+              : includeDeleted === 'false'
+                ? false
+                : undefined
 
         let effectivePageSize: string | undefined = pageSize
-        if (params.operation === 'search') effectivePageSize = searchPageSize
-        else if (params.operation === 'list_revisions') effectivePageSize = revisionsPageSize
-        else if (params.operation === 'list_comments') effectivePageSize = commentsPageSize
+        if (params.operation === 'search') effectivePageSize = searchPageSize || pageSize
+        else if (params.operation === 'list_revisions')
+          effectivePageSize = revisionsPageSize || pageSize
+        else if (params.operation === 'list_comments')
+          effectivePageSize = commentsPageSize || pageSize
 
         let effectivePageToken: string | undefined = pageToken
-        if (params.operation === 'search') effectivePageToken = searchPageToken
-        else if (params.operation === 'list_permissions') effectivePageToken = permissionsPageToken
-        else if (params.operation === 'list_revisions') effectivePageToken = revisionsPageToken
-        else if (params.operation === 'list_comments') effectivePageToken = commentsPageToken
+        if (params.operation === 'search') effectivePageToken = searchPageToken || pageToken
+        else if (params.operation === 'list_permissions')
+          effectivePageToken = permissionsPageToken || pageToken
+        else if (params.operation === 'list_revisions')
+          effectivePageToken = revisionsPageToken || pageToken
+        else if (params.operation === 'list_comments')
+          effectivePageToken = commentsPageToken || pageToken
         else if (params.operation !== 'list') effectivePageToken = undefined
 
-        const effectiveQuery = params.operation === 'search' ? searchQuery : query
+        const effectiveQuery = params.operation === 'search' ? searchQuery || query : query
         const effectiveMimeType =
           params.operation === 'get_content'
             ? getContentExportMimeType
             : params.operation === 'export'
-              ? exportMimeType
+              ? exportMimeType || mimeType
               : mimeType
 
         return {

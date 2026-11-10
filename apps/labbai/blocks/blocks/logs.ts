@@ -194,19 +194,21 @@ export const LogsBlock: BlockConfig = {
         const operation = params.operation || 'query'
 
         if (operation === 'get_log') {
-          if (!params.logId) {
+          const logId = params.logId || params.id
+          if (!logId) {
             throw new Error('Logs Block Error: Log ID is required for get_log operation')
           }
-          return { id: params.logId }
+          return { id: logId }
         }
 
         if (operation === 'get_execution') {
-          if (!params.executionIdLookup) {
+          const executionId = params.executionIdLookup || params.executionId
+          if (!executionId) {
             throw new Error(
               'Logs Block Error: Execution ID is required for get_execution operation'
             )
           }
-          return { executionId: params.executionIdLookup }
+          return { executionId }
         }
 
         const rawLimit =

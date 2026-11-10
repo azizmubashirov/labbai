@@ -662,7 +662,7 @@ export const NotionBlock: BlockConfig<NotionResponse> = {
         let parsedFilter
         if (operation === 'notion_query_database' && filter) {
           try {
-            parsedFilter = JSON.parse(filter)
+            parsedFilter = typeof filter === 'string' ? JSON.parse(filter) : filter
           } catch (error) {
             throw new Error(`Invalid JSON for filter: ${toError(error).message}`)
           }
@@ -672,7 +672,7 @@ export const NotionBlock: BlockConfig<NotionResponse> = {
         let parsedSorts
         if (operation === 'notion_query_database' && sorts) {
           try {
-            parsedSorts = JSON.parse(sorts)
+            parsedSorts = typeof sorts === 'string' ? JSON.parse(sorts) : sorts
           } catch (error) {
             throw new Error(`Invalid JSON for sorts: ${toError(error).message}`)
           }

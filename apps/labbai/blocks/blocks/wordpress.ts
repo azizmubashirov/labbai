@@ -987,7 +987,7 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
               ...baseParams,
               perPage: params.perPage ? Number(params.perPage) : undefined,
               page: params.page ? Number(params.page) : undefined,
-              status: params.listStatus || undefined,
+              status: params.listStatus || params.status || undefined,
               search: params.search,
               orderBy: params.orderBy,
               order: params.order,
@@ -996,7 +996,7 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
               author:
                 params.listAuthor !== undefined && params.listAuthor !== ''
                   ? Number(params.listAuthor)
-                  : undefined,
+                  : params.author,
             }
           case 'wordpress_create_page':
             return {
@@ -1057,7 +1057,7 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
               ...baseParams,
               perPage: params.perPage ? Number(params.perPage) : undefined,
               page: params.page ? Number(params.page) : undefined,
-              status: params.listStatus || undefined,
+              status: params.listStatus || params.status || undefined,
               search: params.search,
               orderBy: params.orderBy,
               order: params.order,
@@ -1072,10 +1072,10 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
               ...baseParams,
               file: normalizeFileInput(params.file, { single: true }),
               filename: params.filename,
-              title: params.mediaTitle,
+              title: params.mediaTitle ?? params.title,
               caption: params.caption,
               altText: params.altText,
-              description: params.mediaDescription || undefined,
+              description: params.mediaDescription || params.description || undefined,
             }
           case 'wordpress_get_media':
             return {
@@ -1100,8 +1100,8 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
           case 'wordpress_create_comment':
             return {
               ...baseParams,
-              postId: Number(params.commentPostId),
-              content: params.commentContent,
+              postId: Number(params.commentPostId ?? params.postId),
+              content: params.commentContent ?? params.content,
               parent:
                 params.commentParent !== undefined && params.commentParent !== ''
                   ? Number(params.commentParent)
@@ -1115,7 +1115,7 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
               ...baseParams,
               perPage: params.perPage ? Number(params.perPage) : undefined,
               page: params.page ? Number(params.page) : undefined,
-              postId: params.commentPostId ? Number(params.commentPostId) : undefined,
+              postId: params.commentPostId ? Number(params.commentPostId) : params.postId,
               search: params.search,
               orderBy: params.orderBy,
               order: params.order,
@@ -1124,8 +1124,8 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
             return {
               ...baseParams,
               commentId: Number(params.commentId),
-              content: params.commentContent,
-              status: params.commentStatus,
+              content: params.commentContent ?? params.content,
+              status: params.commentStatus ?? params.status,
             }
           case 'wordpress_delete_comment':
             return {
@@ -1136,13 +1136,13 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
           case 'wordpress_create_category':
             return {
               ...baseParams,
-              name: params.categoryName,
-              description: params.categoryDescription,
+              name: params.categoryName ?? params.name,
+              description: params.categoryDescription ?? params.description,
               parent:
                 params.categoryParent !== undefined && params.categoryParent !== ''
                   ? Number(params.categoryParent)
                   : undefined,
-              slug: params.categorySlug,
+              slug: params.categorySlug ?? params.slug,
             }
           case 'wordpress_list_categories':
             return {
@@ -1161,13 +1161,13 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
             return {
               ...baseParams,
               categoryId: Number(params.categoryId),
-              name: params.categoryName,
-              description: params.categoryDescription,
+              name: params.categoryName ?? params.name,
+              description: params.categoryDescription ?? params.description,
               parent:
                 params.categoryParent !== undefined && params.categoryParent !== ''
                   ? Number(params.categoryParent)
                   : undefined,
-              slug: params.categorySlug,
+              slug: params.categorySlug ?? params.slug,
             }
           case 'wordpress_delete_category':
             return {
@@ -1177,9 +1177,9 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
           case 'wordpress_create_tag':
             return {
               ...baseParams,
-              name: params.tagName,
-              description: params.tagDescription,
-              slug: params.tagSlug,
+              name: params.tagName ?? params.name,
+              description: params.tagDescription ?? params.description,
+              slug: params.tagSlug ?? params.slug,
             }
           case 'wordpress_list_tags':
             return {
@@ -1198,9 +1198,9 @@ export const WordPressBlock: BlockConfig<WordPressResponse> = {
             return {
               ...baseParams,
               tagId: Number(params.tagId),
-              name: params.tagName,
-              description: params.tagDescription,
-              slug: params.tagSlug,
+              name: params.tagName ?? params.name,
+              description: params.tagDescription ?? params.description,
+              slug: params.tagSlug ?? params.slug,
             }
           case 'wordpress_delete_tag':
             return {

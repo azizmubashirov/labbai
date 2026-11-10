@@ -222,8 +222,8 @@ const paramTransformers: Record<string, (params: TableBlockParams) => ParsedPara
 
 /**
  * Maps the canonical selections onto the tools' own params when the call carries
- * no `operation`. That is the Agent tool path: an Agent keeps the operation on its
- * tool entry rather than in `params`, so no transformer above can be chosen, and
+ * no `operation`. The Agent path hands the tool entry's operation in, so this is the
+ * safety net for an entry saved without one: no transformer above can be chosen, and
  * the canonical-pair collapse has already moved the model's `filter`/`order` onto
  * `filterInput`/`sortInput`, ids no table tool declares. The filter takes the same
  * `resolveFilter` route as the canvas, so a bare condition reaches the bulk tools

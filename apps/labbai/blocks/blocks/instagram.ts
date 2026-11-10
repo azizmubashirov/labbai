@@ -808,12 +808,12 @@ Return ONLY the timestamp or date - no explanations, no extra text.`,
           const resolved = normalizeFileInput(params.media, { single: true })
           if (resolved) result.media = resolved
         } else if (operation === 'instagram_publish_carousel') {
-          const resolved = normalizeFileInput(params.carouselMedia)
+          const resolved = normalizeFileInput(params.carouselMedia ?? params.media)
           if (resolved) result.media = resolved
         }
 
         for (const key of OPERATION_PARAM_KEYS[operation] ?? []) {
-          const value = params[key]
+          const value = key === 'insightMetrics' ? params[key] || params.metrics : params[key]
           if (value === undefined || value === null || value === '') continue
 
           if (key === 'insightMetrics') {

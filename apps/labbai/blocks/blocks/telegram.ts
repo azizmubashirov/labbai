@@ -836,7 +836,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
             const pollParams: Record<string, unknown> = {
               ...commonParams,
               question: params.question,
-              options: params.pollOptions,
+              options: params.pollOptions || params.options,
             }
             if (params.isAnonymous !== undefined && params.isAnonymous !== '') {
               pollParams.isAnonymous = toBoolean(params.isAnonymous)
@@ -867,7 +867,7 @@ export const TelegramBlock: BlockConfig<TelegramResponse> = {
             const reactionParams: Record<string, unknown> = {
               ...commonParams,
               messageId: requireNumber(params.messageId, 'Message ID'),
-              reaction: params.reactionEmoji,
+              reaction: params.reactionEmoji || params.reaction,
             }
             if (params.isBig !== undefined && params.isBig !== '') {
               reactionParams.isBig = toBoolean(params.isBig)

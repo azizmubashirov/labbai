@@ -541,7 +541,9 @@ Return ONLY the valid JSON array - no explanations, no extra text.`,
           previewUrl: toOptionalBoolean(params.previewUrl),
           showTypingIndicator: toOptionalBoolean(params.showTypingIndicator),
           ...(file ? { file } : {}),
-          ...(params.operation === 'get_media' ? { mediaId: downloadMediaId } : {}),
+          ...(params.operation === 'get_media'
+            ? { mediaId: downloadMediaId ?? params.mediaId }
+            : {}),
         }
       },
     },

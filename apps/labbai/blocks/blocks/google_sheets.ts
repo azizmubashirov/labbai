@@ -291,7 +291,11 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
       params: (params) => {
         const { oauthCredential, values, spreadsheetId, ...rest } = params
 
-        const parsedValues = values ? JSON.parse(values as string) : undefined
+        const parsedValues = values
+          ? typeof values === 'string'
+            ? JSON.parse(values)
+            : values
+          : undefined
 
         const effectiveSpreadsheetId = spreadsheetId ? String(spreadsheetId).trim() : ''
 
@@ -926,7 +930,9 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
         // Handle create operation
         if (operation === 'create') {
           const sheetTitlesArray = sheetTitles
-            ? (sheetTitles as string).split(',').map((s: string) => s.trim())
+            ? typeof sheetTitles === 'string'
+              ? sheetTitles.split(',').map((s: string) => s.trim())
+              : sheetTitles
             : undefined
           return {
             title: (title as string)?.trim(),
@@ -935,7 +941,8 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
           }
         }
 
-        const effectiveSpreadsheetId = spreadsheetId ? String(spreadsheetId).trim() : ''
+        const rawSpreadsheetId = spreadsheetId || rest.sourceSpreadsheetId
+        const effectiveSpreadsheetId = rawSpreadsheetId ? String(rawSpreadsheetId).trim() : ''
 
         if (!effectiveSpreadsheetId) {
           throw new Error('Spreadsheet ID is required.')
@@ -951,7 +958,11 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
 
         // Handle batch_get operation
         if (operation === 'batch_get') {
-          const parsedRanges = ranges ? JSON.parse(ranges as string) : []
+          const parsedRanges = ranges
+            ? typeof ranges === 'string'
+              ? JSON.parse(ranges)
+              : ranges
+            : []
           return {
             spreadsheetId: effectiveSpreadsheetId,
             ranges: parsedRanges,
@@ -961,7 +972,11 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
 
         // Handle batch_update operation
         if (operation === 'batch_update') {
-          const parsedData = batchData ? JSON.parse(batchData as string) : []
+          const parsedData = batchData
+            ? typeof batchData === 'string'
+              ? JSON.parse(batchData)
+              : batchData
+            : (rest.data ?? [])
           return {
             ...rest,
             spreadsheetId: effectiveSpreadsheetId,
@@ -972,7 +987,11 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
 
         // Handle batch_clear operation
         if (operation === 'batch_clear') {
-          const parsedRanges = ranges ? JSON.parse(ranges as string) : []
+          const parsedRanges = ranges
+            ? typeof ranges === 'string'
+              ? JSON.parse(ranges)
+              : ranges
+            : []
           return {
             spreadsheetId: effectiveSpreadsheetId,
             ranges: parsedRanges,
@@ -1000,7 +1019,12 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
 
         // Handle delete_sheet operation
         if (operation === 'delete_sheet') {
-          const parsedSheetId = Number.parseInt(deleteSheetId as string, 10)
+          const parsedSheetId = Number.parseInt(
+            (deleteSheetId !== undefined && deleteSheetId !== ''
+              ? deleteSheetId
+              : sheetId) as string,
+            10
+          )
           if (Number.isNaN(parsedSheetId)) {
             throw new Error('Sheet ID must be a valid number')
           }
@@ -1013,7 +1037,12 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
 
         // Handle delete_rows operation
         if (operation === 'delete_rows') {
-          const parsedSheetId = Number.parseInt(deleteSheetId as string, 10)
+          const parsedSheetId = Number.parseInt(
+            (deleteSheetId !== undefined && deleteSheetId !== ''
+              ? deleteSheetId
+              : sheetId) as string,
+            10
+          )
           const parsedStartIndex = Number.parseInt(startIndex as string, 10)
           const parsedEndIndex = Number.parseInt(endIndex as string, 10)
           if (
@@ -1039,7 +1068,11 @@ Return ONLY the JSON array - no explanations, no markdown, no extra text.`,
           throw new Error('Sheet name is required. Please select or enter a sheet name.')
         }
 
-        const parsedValues = values ? JSON.parse(values as string) : undefined
+        const parsedValues = values
+          ? typeof values === 'string'
+            ? JSON.parse(values)
+            : values
+          : undefined
 
         return {
           ...rest,
