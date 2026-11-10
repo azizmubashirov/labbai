@@ -660,7 +660,7 @@ describe('v2 list pagination split', () => {
 
       expect(
         unclassified,
-        'A new v2 list must be classified in PAGED_LISTS or FULL_SET_LISTS. See .agents/skills/v2-api-conventions/SKILL.md.'
+        'A new v2 list must be classified in PAGED_LISTS or FULL_SET_LISTS. See .claude/skills/v2-api-conventions/SKILL.md.'
       ).toEqual([])
       expect(contracts.map((c) => c.key).sort()).toEqual([...classified].sort())
     },
@@ -674,7 +674,7 @@ describe('v2 list pagination split', () => {
     for (const key of PAGED_LISTS) {
       expect(
         byKey.get(key)?.params.all,
-        `${key} is declared paged, so every input shape it accepts must offer limit and cursor. See .agents/skills/v2-api-conventions/SKILL.md.`
+        `${key} is declared paged, so every input shape it accepts must offer limit and cursor. See .claude/skills/v2-api-conventions/SKILL.md.`
       ).toEqual(['limit', 'cursor'])
     }
   })
@@ -686,7 +686,7 @@ describe('v2 list pagination split', () => {
     for (const key of FULL_SET_LISTS) {
       expect(
         byKey.get(key)?.params.any,
-        `${key} returns the full set; adding a defaulted limit to any accepted input shape would truncate existing callers. See .agents/skills/v2-api-conventions/SKILL.md.`
+        `${key} returns the full set; adding a defaulted limit to any accepted input shape would truncate existing callers. See .claude/skills/v2-api-conventions/SKILL.md.`
       ).toEqual([])
     }
   })
@@ -731,7 +731,7 @@ describe('v2 list pagination split', () => {
       if (strictQuery === undefined) continue
       expect(
         strictQuery,
-        `${key} must declare its query \`.strict()\`. Zod strips unknown keys by default, so a non-strict list answers ?limit=1 with 200 and the whole set — the caller believes it bounded the response and it did not. See .agents/skills/v2-api-conventions/SKILL.md.`
+        `${key} must declare its query \`.strict()\`. Zod strips unknown keys by default, so a non-strict list answers ?limit=1 with 200 and the whole set — the caller believes it bounded the response and it did not. See .claude/skills/v2-api-conventions/SKILL.md.`
       ).toBe(true)
     }
   })
@@ -744,7 +744,7 @@ describe('v2 list pagination split', () => {
       if (CLAMPED_LIMIT_LISTS.has(key)) continue
       expect(
         byKey.get(key)?.rejectsFractionalLimit,
-        `${key} accepts a fractional limit, which reaches Postgres as \`LIMIT 2.5\` and answers 500. Build the param from v2PaginationFields. See .agents/skills/v2-api-conventions/SKILL.md.`
+        `${key} accepts a fractional limit, which reaches Postgres as \`LIMIT 2.5\` and answers 500. Build the param from v2PaginationFields. See .claude/skills/v2-api-conventions/SKILL.md.`
       ).toBe(true)
     }
   })

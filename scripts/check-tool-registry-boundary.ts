@@ -11,7 +11,7 @@
  *
  * Client-reachable code reads `@/tools/metadata`, `@/tools/metadata-outputs` or
  * `@/tools/tool-ids` instead. See
- * `.agents/skills/tool-registry-boundary/SKILL.md`.
+ * `.claude/skills/tool-registry-boundary/SKILL.md`.
  *
  * This regresses silently and cheaply: any file under a route can import one
  * helper from a module that happens to import `getTool`, and the whole registry
@@ -748,7 +748,7 @@ function main() {
     console.error(
       '(outputs), or `@/tools/tool-ids` (existence/resolution). Only code that executes a tool'
     )
-    console.error('may import `getTool`. See .agents/skills/tool-registry-boundary/SKILL.md.')
+    console.error('may import `getTool`. See .claude/skills/tool-registry-boundary/SKILL.md.')
   }
 
   if (failures.length > 0 || ratchetFailures > 0) process.exit(1)

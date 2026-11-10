@@ -58,7 +58,7 @@ describe('v2 query declaration', () => {
 
       expect(
         undeclared,
-        'A v2 contract without a `query` schema accepts any query param silently: parseRequest skips the slice entirely when the contract declares none. Use `noInputSchema` from @/lib/api/contracts/primitives when the endpoint takes no query params. See .agents/skills/v2-api-conventions/SKILL.md.'
+        'A v2 contract without a `query` schema accepts any query param silently: parseRequest skips the slice entirely when the contract declares none. Use `noInputSchema` from @/lib/api/contracts/primitives when the endpoint takes no query params. See .claude/skills/v2-api-conventions/SKILL.md.'
       ).toEqual([])
     },
     SWEEP_TIMEOUT_MS

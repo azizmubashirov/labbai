@@ -12,7 +12,7 @@ import rawToolIds from '@/tools/generated/tool-ids'
  *
  * Semantics mirror `resolveToolId`/`getTool` in `@/tools/utils` exactly,
  * including returning the input unchanged when nothing matches. See
- * `.agents/skills/tool-registry-boundary/SKILL.md`.
+ * `.claude/skills/tool-registry-boundary/SKILL.md`.
  */
 /**
  * Frozen because {@link getToolIds} hands it out directly. Returning a copy
