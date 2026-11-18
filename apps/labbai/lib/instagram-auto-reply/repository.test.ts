@@ -16,9 +16,11 @@ import {
   getEventById,
   getEventOutcomeBySource,
   getInstagramAccountUserId,
+  getMediaAccountIds,
   hasPriorReply,
   hasRecentAnswer,
   listLiveRulesForAccount,
+  listWorkspaceContactEvents,
   recordClick,
   retryFailedEvent,
   setEventDmStage,
@@ -336,6 +338,59 @@ describe('Instagram auto-reply repository', () => {
 
       await expect(deleteEventsFromUser('user-9')).resolves.toBe(2)
       expect(hasEq(lastWhere(), EVENT.fromId, 'user-9')).toBe(true)
+    })
+  })
+
+  describe('getMediaAccountIds', () => {
+    it('maps each post to the first account it was matched on, in the workspace', async () => {
+      queueTableRows(EVENT, [
+        { mediaId: 'media-1', igAccountId: 'ig-a' },
+        { mediaId: 'media-1', igAccountId: 'ig-b' },
+        { mediaId: 'media-2', igAccountId: 'ig-b' },
+        { mediaId: null, igAccountId: 'ig-c' },
+      ])
+
+      const accounts = await getMediaAccountIds('ws-1', ['media-1', 'media-2'])
+
+      expect([...accounts]).toEqual([
+        ['media-1', 'ig-a'],
+        ['media-2', 'ig-b'],
+      ])
+      expect(hasEq(lastWhere(), EVENT.workspaceId, 'ws-1')).toBe(true)
+    })
+
+    it('reads nothing for no posts', async () => {
+      await expect(getMediaAccountIds('ws-1', [])).resolves.toEqual(new Map())
+      expect(dbChainMockFns.where).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('listWorkspaceContactEvents', () => {
+    it('pages one user’s events in the workspace, newest first, one row past the limit', async () => {
+      const rows = [{ id: 'event-2' }, { id: 'event-1' }]
+      queueTableRows(EVENT, rows)
+
+      await expect(
+        listWorkspaceContactEvents({ workspaceId: 'ws-1', fromId: 'igsid-1', limit: 20 })
+      ).resolves.toEqual(rows)
+
+      const where = lastWhere()
+      expect(hasEq(where, EVENT.workspaceId, 'ws-1')).toBe(true)
+      expect(hasEq(where, EVENT.fromId, 'igsid-1')).toBe(true)
+      expect(dbChainMockFns.limit).toHaveBeenCalledWith(21)
+    })
+
+    it('narrows to one rule when asked', async () => {
+      queueTableRows(EVENT, [])
+
+      await listWorkspaceContactEvents({
+        workspaceId: 'ws-1',
+        fromId: 'igsid-1',
+        ruleId: 'rule-1',
+        limit: 5,
+      })
+
+      expect(hasEq(lastWhere(), EVENT.ruleId, 'rule-1')).toBe(true)
     })
   })
 })

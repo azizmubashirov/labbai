@@ -7,21 +7,29 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InstagramAutoReplyRuleListItem } from '@/lib/api/contracts/instagram-auto-reply'
 
-const { setStatusMutate, createMutate, deleteMutate, useInstagramMediaByIds } = vi.hoisted(() => ({
+const {
+  setStatusMutate,
+  createMutate,
+  deleteMutate,
+  useInstagramMediaLookup,
+  useInstagramAutoReplyStats,
+} = vi.hoisted(() => ({
   setStatusMutate: vi.fn(),
   createMutate: vi.fn(),
   deleteMutate: vi.fn(),
-  useInstagramMediaByIds: vi.fn(),
+  useInstagramMediaLookup: vi.fn(),
+  useInstagramAutoReplyStats: vi.fn(),
 }))
 
 vi.mock('@/hooks/queries/instagram-auto-reply', () => ({
   useSetInstagramAutoReplyRuleStatus: () => ({ mutate: setStatusMutate, isPending: false }),
   useCreateInstagramAutoReplyRule: () => ({ mutate: createMutate, isPending: false }),
   useDeleteInstagramAutoReplyRule: () => ({ mutate: deleteMutate, isPending: false }),
+  useInstagramAutoReplyStats,
 }))
 
 vi.mock('@/app/workspace/[workspaceId]/instagram/components/media-picker', () => ({
-  useInstagramMediaByIds,
+  useInstagramMediaLookup,
 }))
 
 vi.mock('@/components/icons', () => ({
@@ -191,14 +199,16 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver
-  useInstagramMediaByIds.mockImplementation(({ mediaIds }: { mediaIds: string[] }) => ({
-    items: mediaIds.map((id) => ({
-      id,
-      label: `Post ${id}`,
-      thumbnailUrl: `https://cdn.example/${id}.jpg`,
-    })),
+  useInstagramMediaLookup.mockImplementation(({ mediaIds }: { mediaIds: string[] }) => ({
+    byId: new Map(
+      mediaIds.map((id) => [
+        id,
+        { id, label: `Post ${id}`, thumbnailUrl: `https://cdn.example/${id}.jpg` },
+      ])
+    ),
     isLoading: false,
   }))
+  useInstagramAutoReplyStats.mockReturnValue({ data: undefined })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -226,11 +236,68 @@ describe('RuleList rows', () => {
   it('loads at most four thumbnails and shows the rest as +N', () => {
     render({ rules: [DRAFT_RULE] })
 
-    expect(useInstagramMediaByIds).toHaveBeenCalledWith(
+    expect(useInstagramMediaLookup).toHaveBeenCalledTimes(1)
+    expect(useInstagramMediaLookup).toHaveBeenCalledWith(
       expect.objectContaining({ credentialId: 'credential-1', mediaIds: ['m1', 'm2', 'm3', 'm4'] })
     )
     expect(container.querySelectorAll('img')).toHaveLength(4)
     expect(byLabel('6 posts').textContent).toContain('+2')
+  })
+
+  it('looks thumbnails up once per account for the whole list', () => {
+    render({
+      rules: [
+        DRAFT_RULE,
+        listItem({ id: 'rule-3', name: 'Second', mediaIds: ['m2', 'm9'] }),
+        listItem({ id: 'rule-4', name: 'Other account', credentialId: 'credential-2' }),
+      ],
+    })
+
+    expect(useInstagramMediaLookup).toHaveBeenCalledTimes(2)
+    expect(useInstagramMediaLookup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        credentialId: 'credential-1',
+        mediaIds: ['m1', 'm2', 'm3', 'm4', 'm9'],
+      })
+    )
+    expect(useInstagramMediaLookup).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId: 'credential-2' })
+    )
+  })
+
+  it('shows the top posts with clicks and click-through rate', () => {
+    useInstagramAutoReplyStats.mockReturnValue({
+      data: {
+        matched: 30,
+        outcomes: {},
+        dmSent: 20,
+        clicks: 5,
+        media: [
+          { mediaId: 'top-1', credentialId: 'credential-1', matched: 20, dmSent: 10, clicks: 4 },
+          { mediaId: 'top-2', credentialId: 'credential-1', matched: 10, dmSent: 0, clicks: 0 },
+        ],
+      },
+    })
+    render({ rules: [LIVE_RULE] })
+
+    const table = byLabel('Top posts')
+    const rows = [...table.querySelectorAll('tbody tr')].map((row) =>
+      [...row.querySelectorAll('td')].slice(1).map((cell) => cell.textContent)
+    )
+    expect(rows).toEqual([
+      ['20', '10', '4', '40%'],
+      ['10', '0', '0', '—'],
+    ])
+    expect(table.querySelectorAll('img')).toHaveLength(2)
+    expect(useInstagramMediaLookup).toHaveBeenCalledWith(
+      expect.objectContaining({ credentialId: 'credential-1', mediaIds: ['top-1', 'top-2'] })
+    )
+  })
+
+  it('hides top posts before anything matched', () => {
+    render()
+
+    expect(document.body.querySelector('[aria-label="Top posts"]')).toBeNull()
   })
 
   it('opens the editor from the row', () => {

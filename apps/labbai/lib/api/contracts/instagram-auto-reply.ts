@@ -355,13 +355,20 @@ export const getInstagramAutoReplyRuleContract = defineRouteContract({
   },
 })
 
+/** Status a new rule is created with: a draft, or live at once. */
+export const instagramAutoReplyCreateStatusSchema = z.enum(['draft', 'live'], {
+  error: 'A new rule starts as a draft or live',
+})
+
 /**
- * A new rule, always saved as a draft. Content completeness (keywords for include/exclude, posts
- * for `specific`, a reply to send) is checked when the rule goes live, so a half-written draft
- * can be saved.
+ * A new rule, saved as a draft by default. Content completeness (keywords for include/exclude,
+ * posts for `specific`, a reply to send) is checked only when the rule goes live, so a
+ * half-written draft can be saved. `status: 'live'` creates it live in one step, after the same
+ * completeness check going live runs.
  */
 export const createInstagramAutoReplyRuleBodySchema = z
   .object({
+    status: instagramAutoReplyCreateStatusSchema.default('draft'),
     name: ruleNameSchema,
     credentialId: idSchema('Instagram account'),
     triggerType: instagramAutoReplyTriggerTypeSchema.default('comment'),
@@ -386,6 +393,7 @@ export type CreateInstagramAutoReplyRuleBody = z.input<
 export type CreateInstagramAutoReplyRuleValues = z.output<
   typeof createInstagramAutoReplyRuleBodySchema
 >
+export type InstagramAutoReplyCreateStatus = z.output<typeof instagramAutoReplyCreateStatusSchema>
 
 export const createInstagramAutoReplyRuleContract = defineRouteContract({
   method: 'POST',
@@ -517,6 +525,11 @@ export const instagramAutoReplyOutcomeCountsSchema = z.object({
 
 export const instagramAutoReplyMediaStatsSchema = z.object({
   mediaId: z.string(),
+  /**
+   * A credential of the account that owns the post, for loading its thumbnail; null when no rule
+   * of the workspace uses that account any more.
+   */
+  credentialId: z.string().nullable(),
   matched: z.number().int().min(0),
   replied: z.number().int().min(0),
   dmSent: z.number().int().min(0),
@@ -580,6 +593,8 @@ export type InstagramAutoReplyEvent = z.output<typeof instagramAutoReplyEventSch
 
 export const listInstagramAutoReplyEventsQuerySchema = z.object({
   ruleId: idSchema('Rule ID').optional(),
+  /** Only events from this Instagram-scoped user id, e.g. one Inbox contact. */
+  fromId: idSchema('Instagram user ID').optional(),
   /** Id of the last event already loaded; returns the older page after it. */
   cursor: idSchema('Cursor').optional(),
   limit: z.coerce

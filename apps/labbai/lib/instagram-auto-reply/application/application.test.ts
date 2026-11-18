@@ -12,10 +12,12 @@ const mocks = vi.hoisted(() => ({
   getInstagramAccountUserId: vi.fn(),
   countWorkspaceRules: vi.fn(),
   deleteWorkspaceRule: vi.fn(),
+  getMediaAccountIds: vi.fn(),
   getRuleCounters: vi.fn(),
   getStatsRows: vi.fn(),
   getWorkspaceRule: vi.fn(),
   insertRule: vi.fn(),
+  listWorkspaceContactEvents: vi.fn(),
   listWorkspaceEvents: vi.fn(),
   listWorkspaceRules: vi.fn(),
   nextWorkspaceRuleSortOrder: vi.fn(),
@@ -44,10 +46,12 @@ vi.mock('@/lib/instagram-auto-reply/repository', () => ({
   countWorkspaceRules: mocks.countWorkspaceRules,
   deleteWorkspaceRule: mocks.deleteWorkspaceRule,
   getInstagramAccountUserId: mocks.getInstagramAccountUserId,
+  getMediaAccountIds: mocks.getMediaAccountIds,
   getRuleCounters: mocks.getRuleCounters,
   getStatsRows: mocks.getStatsRows,
   getWorkspaceRule: mocks.getWorkspaceRule,
   insertRule: mocks.insertRule,
+  listWorkspaceContactEvents: mocks.listWorkspaceContactEvents,
   listWorkspaceEvents: mocks.listWorkspaceEvents,
   listWorkspaceRules: mocks.listWorkspaceRules,
   nextWorkspaceRuleSortOrder: mocks.nextWorkspaceRuleSortOrder,
@@ -170,6 +174,8 @@ describe('Instagram auto-reply application', () => {
       })
     )
     mocks.getRuleCounters.mockResolvedValue(new Map())
+    mocks.getMediaAccountIds.mockResolvedValue(new Map())
+    mocks.listWorkspaceRules.mockResolvedValue([])
     grantInstagramCredential()
   })
 
@@ -259,6 +265,66 @@ describe('Instagram auto-reply application', () => {
           actorId: 'user-1',
         })
       )
+    })
+
+    it('creates a complete rule live in one step, arming a "next" rule', async () => {
+      const before = Date.now()
+      const { rule } = await createInstagramAutoReplyRule.execute({
+        principal: MEMBER,
+        input: {
+          workspaceId: WORKSPACE_ID,
+          status: 'live',
+          values: { ...CREATE_VALUES, mediaScope: 'next', mediaIds: [] },
+        },
+      })
+      const values = mocks.insertRule.mock.calls[0][0]
+      expect(values).toMatchObject({ status: 'live', nextMediaId: null })
+      expect(values.nextMediaArmedAt.getTime()).toBeGreaterThanOrEqual(before)
+      expect(rule.status).toBe('live')
+      expect(auditMockFns.mockRecordAudit).toHaveBeenCalledTimes(1)
+      expect(auditMockFns.mockRecordAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'instagram_auto_reply_rule.created',
+          description: expect.stringContaining('turned it on'),
+        })
+      )
+    })
+
+    it('does not arm a live rule that is not "next"', async () => {
+      await createInstagramAutoReplyRule.execute({
+        principal: MEMBER,
+        input: { workspaceId: WORKSPACE_ID, status: 'live', values: CREATE_VALUES },
+      })
+      expect(mocks.insertRule.mock.calls[0][0]).not.toHaveProperty('nextMediaArmedAt')
+    })
+
+    it('refuses to create live while incomplete, saving nothing', async () => {
+      const error = await expectOrchestrationError(
+        createInstagramAutoReplyRule.execute({
+          principal: MEMBER,
+          input: {
+            workspaceId: WORKSPACE_ID,
+            status: 'live',
+            values: { ...CREATE_VALUES, keywords: [], mediaIds: [] },
+          },
+        }),
+        'validation'
+      )
+      expect(error.message).toContain('Choose at least one post')
+      expect(error.message).toContain('Add at least one keyword')
+      expect(mocks.insertRule).not.toHaveBeenCalled()
+      expect(auditMockFns.mockRecordAudit).not.toHaveBeenCalled()
+    })
+
+    it('saves the same incomplete rule as a draft', async () => {
+      await createInstagramAutoReplyRule.execute({
+        principal: MEMBER,
+        input: {
+          workspaceId: WORKSPACE_ID,
+          values: { ...CREATE_VALUES, keywords: [], mediaIds: [] },
+        },
+      })
+      expect(mocks.insertRule).toHaveBeenCalledWith(expect.objectContaining({ status: 'draft' }))
     })
 
     it('refuses a credential of another workspace', async () => {
@@ -588,6 +654,76 @@ describe('Instagram auto-reply application', () => {
         failed: 1,
       })
       expect(mocks.getStatsRows).toHaveBeenCalledWith(WORKSPACE_ID, 'rule-1')
+    })
+
+    it('names the credential that can load each post, from the first rule of its account', async () => {
+      mocks.getStatsRows.mockResolvedValue({
+        outcomes: { replied: 3 },
+        dmSent: 3,
+        clicks: 1,
+        media: [
+          { mediaId: 'media-1', matched: 2, replied: 2, dmSent: 2, clicks: 1 },
+          { mediaId: 'media-2', matched: 1, replied: 1, dmSent: 1, clicks: 0 },
+          { mediaId: 'media-3', matched: 0, replied: 0, dmSent: 0, clicks: 0 },
+        ],
+      })
+      mocks.getMediaAccountIds.mockResolvedValue(
+        new Map([
+          ['media-1', 'ig-a'],
+          ['media-2', 'ig-gone'],
+        ])
+      )
+      mocks.listWorkspaceRules.mockResolvedValue([
+        { ...RULE_ROW, id: 'r1', igAccountId: 'ig-a', credentialId: null },
+        { ...RULE_ROW, id: 'r2', igAccountId: 'ig-a', credentialId: 'cred-a' },
+        { ...RULE_ROW, id: 'r3', igAccountId: 'ig-a', credentialId: 'cred-b' },
+      ])
+      const { stats } = await getInstagramAutoReplyRuleStats.execute({
+        principal: MEMBER,
+        input: { workspaceId: WORKSPACE_ID },
+      })
+      expect(mocks.getMediaAccountIds).toHaveBeenCalledWith(WORKSPACE_ID, [
+        'media-1',
+        'media-2',
+        'media-3',
+      ])
+      expect(stats.media.map((row) => row.credentialId)).toEqual(['cred-a', null, null])
+    })
+
+    it('skips the account lookup when no post matched', async () => {
+      mocks.getStatsRows.mockResolvedValue({ outcomes: {}, dmSent: 0, clicks: 0, media: [] })
+      const { stats } = await getInstagramAutoReplyRuleStats.execute({
+        principal: MEMBER,
+        input: { workspaceId: WORKSPACE_ID },
+      })
+      expect(stats.media).toEqual([])
+      expect(mocks.getMediaAccountIds).not.toHaveBeenCalled()
+    })
+
+    it("lists one Instagram user's events for the Inbox", async () => {
+      mocks.listWorkspaceContactEvents.mockResolvedValue([])
+      const page = await listInstagramAutoReplyEvents.execute({
+        principal: MEMBER,
+        input: { workspaceId: WORKSPACE_ID, fromId: 'igsid-1', limit: 20 },
+      })
+      expect(mocks.listWorkspaceContactEvents).toHaveBeenCalledWith({
+        workspaceId: WORKSPACE_ID,
+        fromId: 'igsid-1',
+        limit: 20,
+      })
+      expect(mocks.listWorkspaceEvents).not.toHaveBeenCalled()
+      expect(page).toEqual({ events: [], nextCursor: null })
+    })
+
+    it("lets read members list a contact's events", async () => {
+      mocks.resolvePermission.mockResolvedValue('read')
+      mocks.listWorkspaceContactEvents.mockResolvedValue([])
+      await expect(
+        listInstagramAutoReplyEvents.execute({
+          principal: MEMBER,
+          input: { workspaceId: WORKSPACE_ID, fromId: 'igsid-1', limit: 20 },
+        })
+      ).resolves.toEqual({ events: [], nextCursor: null })
     })
 
     it('conceals stats of a rule outside the workspace', async () => {

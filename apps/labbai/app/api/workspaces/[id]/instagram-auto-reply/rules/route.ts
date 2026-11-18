@@ -36,7 +36,11 @@ export const POST = defineInternalJsonRoute({
   operation: instagramAutoReplyOperations.createRule,
   rateLimit: internalRateLimits.user({ bucketName: 'instagram-auto-reply-write' }),
   errorPolicy: internalOrchestrationErrorPolicy,
-  mapInput: ({ params, body }) => ({ workspaceId: params.id, values: body }),
+  mapInput: ({ params, body: { status, ...values } }) => ({
+    workspaceId: params.id,
+    status,
+    values,
+  }),
   useCase: createInstagramAutoReplyRule,
   present: ({ rule }) => ({ success: true as const, rule }),
 })

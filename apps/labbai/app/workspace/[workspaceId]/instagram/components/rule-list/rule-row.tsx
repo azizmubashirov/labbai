@@ -1,14 +1,14 @@
 'use client'
 
-import { ChipTag, OverflowText, Skeleton } from '@labbai/emcn'
+import { ChipTag, OverflowText } from '@labbai/emcn'
 import type { InstagramAutoReplyRuleListItem } from '@/lib/api/contracts/instagram-auto-reply'
-import { useInstagramMediaByIds } from '@/app/workspace/[workspaceId]/instagram/components/media-picker'
+import { MediaThumbnail } from '@/app/workspace/[workspaceId]/instagram/components/media-thumbnails'
 import { RuleActionsMenu } from '@/app/workspace/[workspaceId]/instagram/components/rule-list/rule-actions-menu'
 import { RuleStatusBadge } from '@/app/workspace/[workspaceId]/instagram/components/rule-status-badge'
 import { TRIGGER_TYPE_LABELS } from '@/app/workspace/[workspaceId]/instagram/utils'
 
 /** Thumbnails shown per row before the "+N" overflow. */
-const MAX_THUMBNAILS = 4
+export const MAX_ROW_THUMBNAILS = 4
 /** Keyword chips shown per row before the "+N" overflow. */
 const MAX_KEYWORDS = 3
 
@@ -17,8 +17,19 @@ const MEDIA_SCOPE_LABELS = {
   next: 'Next post',
 } as const
 
+/** What a non-post rule listens to, in place of its posts. */
+const NON_POST_SCOPE_LABELS = {
+  live_comment: 'Any live video',
+  story_reply: 'Any story',
+  story_mention: 'Any story',
+} as const
+
+/** The post ids a row shows as thumbnails; the rest collapse into "+N". */
+export function rowThumbnailIds(rule: InstagramAutoReplyRuleListItem): string[] {
+  return rule.mediaScope === 'specific' ? rule.mediaIds.slice(0, MAX_ROW_THUMBNAILS) : []
+}
+
 interface RuleRowProps {
-  workspaceId: string
   rule: InstagramAutoReplyRuleListItem
   /** The account's display name, or null when the credential is gone. */
   accountName: string | null
@@ -34,7 +45,6 @@ interface RuleRowProps {
  * status, and counters. The row opens the editor; the trailing menu holds the row actions.
  */
 export function RuleRow({
-  workspaceId,
   rule,
   accountName,
   canEdit,
@@ -58,7 +68,7 @@ export function RuleRow({
             className='text-[var(--text-muted)] text-caption'
           />
         </div>
-        <RulePosts workspaceId={workspaceId} rule={rule} />
+        <RulePosts rule={rule} />
         <RuleKeywords rule={rule} />
         <div>
           <RuleStatusBadge status={rule.status} />
@@ -81,21 +91,21 @@ export function RuleRow({
 }
 
 interface RulePostsProps {
-  workspaceId: string
   rule: InstagramAutoReplyRuleListItem
 }
 
-/** The rule's chosen posts as thumbnails resolved fresh from Instagram; CDN links expire. */
-function RulePosts({ workspaceId, rule }: RulePostsProps) {
-  const isSpecific = rule.mediaScope === 'specific'
-  const shownIds = isSpecific ? rule.mediaIds.slice(0, MAX_THUMBNAILS) : []
-  const { items, isLoading } = useInstagramMediaByIds({
-    credentialId: rule.credentialId,
-    workspaceId,
-    mediaIds: shownIds,
-    enabled: shownIds.length > 0,
-  })
-
+/**
+ * The rule's chosen posts as thumbnails. The list loads every row's thumbnails in one batched
+ * lookup per account, so a row only reads them.
+ */
+function RulePosts({ rule }: RulePostsProps) {
+  if (rule.triggerType !== 'comment') {
+    return (
+      <span className='text-[var(--text-muted)] text-caption'>
+        {NON_POST_SCOPE_LABELS[rule.triggerType]}
+      </span>
+    )
+  }
   if (rule.mediaScope !== 'specific') {
     return (
       <span className='text-[var(--text-muted)] text-caption'>
@@ -107,25 +117,13 @@ function RulePosts({ workspaceId, rule }: RulePostsProps) {
     return <span className='text-[var(--text-muted)] text-caption'>No posts chosen</span>
   }
 
+  const shownIds = rowThumbnailIds(rule)
   const overflow = rule.mediaIds.length - shownIds.length
   return (
     <div className='flex items-center gap-1' aria-label={`${rule.mediaIds.length} posts`}>
-      {isLoading
-        ? shownIds.map((id) => <Skeleton key={id} className='size-8 rounded-md' />)
-        : items.map((item) =>
-            item.thumbnailUrl ? (
-              <img
-                key={item.id}
-                src={item.thumbnailUrl}
-                alt={item.label}
-                loading='lazy'
-                referrerPolicy='no-referrer'
-                className='size-8 rounded-md object-cover'
-              />
-            ) : (
-              <span key={item.id} className='size-8 rounded-md bg-[var(--surface-active)]' />
-            )
-          )}
+      {shownIds.map((id) => (
+        <MediaThumbnail key={id} mediaId={id} />
+      ))}
       {overflow > 0 && (
         <span className='pl-0.5 text-[var(--text-muted)] text-caption tabular-nums'>
           +{overflow}

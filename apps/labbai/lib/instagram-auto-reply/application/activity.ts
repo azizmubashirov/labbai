@@ -8,11 +8,14 @@ import { OrchestrationError } from '@/lib/core/orchestration/types'
 import { instagramAutoReplyOperations } from '@/lib/instagram-auto-reply/application/operations'
 import { INSTAGRAM_AUTO_REPLY_EVENT_OUTCOMES } from '@/lib/instagram-auto-reply/constants'
 import {
+  getMediaAccountIds,
   getStatsRows,
   getWorkspaceRule,
   type InstagramAutoReplyEventRecord,
   type InstagramAutoReplyStatsRows,
+  listWorkspaceContactEvents,
   listWorkspaceEvents,
+  listWorkspaceRules,
 } from '@/lib/instagram-auto-reply/repository'
 import { resolveActiveWorkspaceApplicationContext } from '@/lib/workspaces/application/workspace-context'
 
@@ -36,13 +39,18 @@ export interface InstagramAutoReplyEventView {
   updatedAt: Date
 }
 
+/** One post of a stats breakdown, with a credential that can load its thumbnail. */
+export type InstagramAutoReplyMediaStatsView = InstagramAutoReplyStatsRows['media'][number] & {
+  credentialId: string | null
+}
+
 export interface InstagramAutoReplyStatsView {
   ruleId: string | null
   matched: number
   outcomes: Record<InstagramAutoReplyEventOutcome, number>
   dmSent: number
   clicks: number
-  media: InstagramAutoReplyStatsRows['media']
+  media: InstagramAutoReplyMediaStatsView[]
 }
 
 export interface GetInstagramAutoReplyStatsInput {
@@ -54,6 +62,8 @@ export interface GetInstagramAutoReplyStatsInput {
 export interface ListInstagramAutoReplyEventsInput {
   workspaceId: string
   ruleId?: string
+  /** Only events from this Instagram-scoped user, e.g. one Inbox contact. */
+  fromId?: string
   /** Id of the last event of the previous page. */
   cursor?: string
   limit: number
@@ -93,6 +103,38 @@ export function toInstagramAutoReplyEventView(
   }
 }
 
+/**
+ * Pairs each post with a credential of the account it was matched on, so the client can load a
+ * fresh thumbnail. The credential comes from the workspace's rules for that account, earliest in
+ * match order first; a post whose account no rule uses any more gets none.
+ */
+async function withMediaCredentials(
+  workspaceId: string,
+  media: InstagramAutoReplyStatsRows['media']
+): Promise<InstagramAutoReplyMediaStatsView[]> {
+  if (media.length === 0) return []
+  const [accountByMedia, rules] = await Promise.all([
+    getMediaAccountIds(
+      workspaceId,
+      media.map((row) => row.mediaId)
+    ),
+    listWorkspaceRules(workspaceId),
+  ])
+  const credentialByAccount = new Map<string, string>()
+  for (const rule of rules) {
+    if (rule.credentialId && !credentialByAccount.has(rule.igAccountId)) {
+      credentialByAccount.set(rule.igAccountId, rule.credentialId)
+    }
+  }
+  return media.map((row) => {
+    const igAccountId = accountByMedia.get(row.mediaId)
+    return {
+      ...row,
+      credentialId: igAccountId ? (credentialByAccount.get(igAccountId) ?? null) : null,
+    }
+  })
+}
+
 /** Counts by outcome, DMs sent, clicks, and the most matched posts, for a rule or the workspace. */
 export const getInstagramAutoReplyRuleStats = defineAuthorizedWorkspaceUseCase({
   operation: instagramAutoReplyOperations.getRuleStats,
@@ -121,13 +163,13 @@ export const getInstagramAutoReplyRuleStats = defineAuthorizedWorkspaceUseCase({
       outcomes,
       dmSent: rows.dmSent,
       clicks: rows.clicks,
-      media: rows.media,
+      media: await withMediaCredentials(input.workspaceId, rows.media),
     }
     return { stats }
   },
 })
 
-/** A page of matched events, newest first, optionally for one rule. */
+/** A page of matched events, newest first, optionally for one rule or one Instagram user. */
 export const listInstagramAutoReplyEvents = defineAuthorizedWorkspaceUseCase({
   operation: instagramAutoReplyOperations.listEvents,
   resolveContext: (args: { input: ListInstagramAutoReplyEventsInput }) =>
@@ -135,7 +177,10 @@ export const listInstagramAutoReplyEvents = defineAuthorizedWorkspaceUseCase({
   authorizationOptions: {},
   async execute({ input }) {
     if (input.ruleId) await requireRuleInWorkspace(input.workspaceId, input.ruleId)
-    const rows = await listWorkspaceEvents(input)
+    const { fromId, ...query } = input
+    const rows = fromId
+      ? await listWorkspaceContactEvents({ ...query, fromId })
+      : await listWorkspaceEvents(query)
     const page = rows.slice(0, input.limit)
     const hasMore = rows.length > input.limit
     return {

@@ -6,7 +6,7 @@ import { getWorkspaceHostContextForViewer } from '@/lib/workspaces/host-context'
 import {
   INSTAGRAM_AUTO_REPLY_RULES_STALE_TIME,
   instagramAutoReplyKeys,
-} from '@/hooks/queries/instagram-auto-reply'
+} from '@/hooks/queries/utils/instagram-auto-reply-keys'
 
 /**
  * Prefetches the workspace's auto-reply rules under the same key the client

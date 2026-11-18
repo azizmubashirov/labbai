@@ -19,7 +19,9 @@ import {
   useInstagramAutoReplyRules,
 } from '@/hooks/queries/instagram-auto-reply'
 import { useOAuthCredentials } from '@/hooks/queries/oauth/oauth-credentials'
+import { useCredentialRefreshTriggers } from '@/hooks/use-credential-refresh-triggers'
 import { useDebouncedSearchSetter } from '@/hooks/use-debounced-search-setter'
+import { useOAuthReturnRouter } from '@/hooks/use-oauth-return'
 
 /** The OAuth provider id Instagram accounts are connected under. */
 const INSTAGRAM_PROVIDER_ID = 'instagram'
@@ -36,10 +38,13 @@ export function InstagramAutoReply() {
     setParams({ search: value }, options)
   )
 
-  const { data: credentials, isLoading: accountsLoading } = useOAuthCredentials(
-    INSTAGRAM_PROVIDER_ID,
-    { workspaceId }
-  )
+  const {
+    data: credentials,
+    isLoading: accountsLoading,
+    refetch: refetchCredentials,
+  } = useOAuthCredentials(INSTAGRAM_PROVIDER_ID, { workspaceId })
+  useOAuthReturnRouter()
+  useCredentialRefreshTriggers(refetchCredentials, INSTAGRAM_PROVIDER_ID, workspaceId)
   const accounts: InstagramAccountOption[] = (credentials ?? [])
     .filter((credential) => credential.type !== 'service_account')
     .map((credential) => ({ id: credential.id, name: credential.name }))

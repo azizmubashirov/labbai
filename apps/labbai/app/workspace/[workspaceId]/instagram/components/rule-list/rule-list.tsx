@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Chip, ChipConfirmModal, ChipSwitch, Skeleton, toast } from '@labbai/emcn'
 import { Plus } from '@labbai/emcn/icons'
 import { getErrorMessage } from '@labbai/utils/errors'
@@ -8,7 +8,15 @@ import { EmptyState } from '@/components/empty-state/empty-state'
 import { InstagramIcon } from '@/components/icons'
 import type { InstagramAutoReplyRuleListItem } from '@/lib/api/contracts/instagram-auto-reply'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
-import { RuleRow } from '@/app/workspace/[workspaceId]/instagram/components/rule-list/rule-row'
+import { MediaStatsTable } from '@/app/workspace/[workspaceId]/instagram/components/media-stats-table/media-stats-table'
+import {
+  groupMediaByCredential,
+  InstagramMediaThumbnails,
+} from '@/app/workspace/[workspaceId]/instagram/components/media-thumbnails'
+import {
+  RuleRow,
+  rowThumbnailIds,
+} from '@/app/workspace/[workspaceId]/instagram/components/rule-list/rule-row'
 import {
   INSTAGRAM_RULE_STATUS_FILTERS,
   type InstagramRuleStatusFilter,
@@ -21,6 +29,7 @@ import {
 import {
   useCreateInstagramAutoReplyRule,
   useDeleteInstagramAutoReplyRule,
+  useInstagramAutoReplyStats,
   useSetInstagramAutoReplyRuleStatus,
 } from '@/hooks/queries/instagram-auto-reply'
 
@@ -30,6 +39,9 @@ const STATUS_FILTER_OPTIONS = INSTAGRAM_RULE_STATUS_FILTERS.map((value) => ({
 }))
 
 const SKELETON_ROWS = 3
+
+/** Posts listed under "Top posts", most matched first. */
+const TOP_POSTS_LIMIT = 5
 
 export interface RuleListProps {
   workspaceId: string
@@ -62,10 +74,35 @@ export function RuleList({
   onOpen,
   onCreate,
 }: RuleListProps) {
+  const topPostsTitleId = useId()
   const setStatus = useSetInstagramAutoReplyRuleStatus(workspaceId)
   const createRule = useCreateInstagramAutoReplyRule(workspaceId)
   const deleteRule = useDeleteInstagramAutoReplyRule(workspaceId)
   const [pendingDelete, setPendingDelete] = useState<InstagramAutoReplyRuleListItem | null>(null)
+  const { data: workspaceStats } = useInstagramAutoReplyStats(workspaceId, undefined, {
+    enabled: rules.length > 0,
+  })
+  const topPosts = useMemo(
+    () => workspaceStats?.media.slice(0, TOP_POSTS_LIMIT) ?? [],
+    [workspaceStats]
+  )
+
+  /**
+   * Every thumbnail on the page, rows and top posts, grouped by account so each account is read
+   * in one batched lookup. Built from all rules, not only the filtered ones, so filtering does
+   * not reload thumbnails.
+   */
+  const mediaGroups = useMemo(
+    () =>
+      groupMediaByCredential([
+        ...rules.map((rule) => ({
+          credentialId: rule.credentialId,
+          mediaIds: rowThumbnailIds(rule),
+        })),
+        ...topPosts.map((post) => ({ credentialId: post.credentialId, mediaIds: [post.mediaId] })),
+      ]),
+    [rules, topPosts]
+  )
 
   const accountNames = new Map(accounts.map((account) => [account.id, account.name]))
   const query = search.trim().toLowerCase()
@@ -144,55 +181,65 @@ export function RuleList({
           />
         }
       />
-      <div className='min-h-0 flex-1 overflow-y-auto'>
-        {isLoading && rules.length === 0 ? (
-          <ul aria-label='Loading auto-replies' className='flex flex-col gap-1 px-3 py-3'>
-            {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-              <li key={index}>
-                <Skeleton className='h-[52px] w-full rounded-lg' />
-              </li>
-            ))}
-          </ul>
-        ) : rules.length === 0 ? (
-          <EmptyState
-            title='No auto-replies yet'
-            description='Reply to comments and send a DM the moment someone comments on your posts.'
-            action={
-              <Chip variant='primary' leftIcon={Plus} onClick={onCreate} disabled={!canEdit}>
-                Create auto-reply
-              </Chip>
-            }
-          />
-        ) : visibleRules.length === 0 ? (
-          <EmptyState
-            title={query ? `No results for “${search.trim()}”` : 'No results'}
-            description='No auto-reply matches this search or status.'
-            action={
-              <Chip variant='outline' onClick={clearFilters}>
-                Clear filters
-              </Chip>
-            }
-          />
-        ) : (
-          <ul aria-label='Auto-replies' className='flex flex-col gap-0.5 px-3 py-3'>
-            {visibleRules.map((rule) => (
-              <RuleRow
-                key={rule.id}
-                workspaceId={workspaceId}
-                rule={rule}
-                accountName={
-                  rule.credentialId ? (accountNames.get(rule.credentialId) ?? null) : null
-                }
-                canEdit={canEdit}
-                onOpen={(item) => onOpen(item.id)}
-                onToggleStatus={handleToggleStatus}
-                onDuplicate={handleDuplicate}
-                onDelete={setPendingDelete}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
+      <InstagramMediaThumbnails workspaceId={workspaceId} groups={mediaGroups}>
+        <div className='min-h-0 flex-1 overflow-y-auto'>
+          {isLoading && rules.length === 0 ? (
+            <ul aria-label='Loading auto-replies' className='flex flex-col gap-1 px-3 py-3'>
+              {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+                <li key={index}>
+                  <Skeleton className='h-[52px] w-full rounded-lg' />
+                </li>
+              ))}
+            </ul>
+          ) : rules.length === 0 ? (
+            <EmptyState
+              title='No auto-replies yet'
+              description='Reply to comments and send a DM the moment someone comments on your posts.'
+              action={
+                <Chip variant='primary' leftIcon={Plus} onClick={onCreate} disabled={!canEdit}>
+                  Create auto-reply
+                </Chip>
+              }
+            />
+          ) : visibleRules.length === 0 ? (
+            <EmptyState
+              title={query ? `No results for “${search.trim()}”` : 'No results'}
+              description='No auto-reply matches this search or status.'
+              action={
+                <Chip variant='outline' onClick={clearFilters}>
+                  Clear filters
+                </Chip>
+              }
+            />
+          ) : (
+            <ul aria-label='Auto-replies' className='flex flex-col gap-0.5 px-3 py-3'>
+              {visibleRules.map((rule) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  accountName={
+                    rule.credentialId ? (accountNames.get(rule.credentialId) ?? null) : null
+                  }
+                  canEdit={canEdit}
+                  onOpen={(item) => onOpen(item.id)}
+                  onToggleStatus={handleToggleStatus}
+                  onDuplicate={handleDuplicate}
+                  onDelete={setPendingDelete}
+                />
+              ))}
+            </ul>
+          )}
+          {rules.length > 0 && topPosts.length > 0 && (
+            <section aria-labelledby={topPostsTitleId} className='flex flex-col px-6 py-4'>
+              <h2 id={topPostsTitleId} className='text-[var(--text-muted)] text-small'>
+                Top posts
+              </h2>
+              <div className='mt-[9px] mb-3 h-px bg-[var(--border)]' />
+              <MediaStatsTable label='Top posts' media={topPosts} />
+            </section>
+          )}
+        </div>
+      </InstagramMediaThumbnails>
       <ChipConfirmModal
         open={pendingDelete !== null}
         onOpenChange={(open) => {

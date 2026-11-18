@@ -34,6 +34,16 @@ export const instagramCommentWebhookTrigger: TriggerConfig = {
       mode: 'trigger',
       condition: INSTAGRAM_COMMENT_CONDITION,
     },
+    {
+      id: 'autoReplyRules',
+      title: 'Auto-replies',
+      type: 'modal',
+      modalId: 'instagram-auto-reply-rules',
+      hideFromPreview: true,
+      hideFromCopilot: true,
+      mode: 'trigger',
+      condition: INSTAGRAM_COMMENT_CONDITION,
+    },
   ],
 
   outputs: {

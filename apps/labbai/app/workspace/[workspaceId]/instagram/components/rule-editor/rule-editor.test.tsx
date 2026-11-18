@@ -28,6 +28,22 @@ vi.mock('@/components/icons', () => ({
   InstagramIcon: () => <svg />,
 }))
 
+vi.mock('@/app/workspace/[workspaceId]/instagram/components/rule-editor/connect-instagram', () => ({
+  ConnectInstagram: ({ workflowId }: { workflowId?: string }) => (
+    <button type='button' data-workflow-id={workflowId}>
+      Connect Instagram
+    </button>
+  ),
+}))
+
+vi.mock('@/app/workspace/[workspaceId]/instagram/components/rule-stats/rule-stats', () => ({
+  RuleStats: ({ rule }: { rule: { id: string } }) => <div data-testid={`stats-${rule.id}`} />,
+}))
+
+vi.mock('@/app/workspace/[workspaceId]/instagram/components/rule-activity/rule-activity', () => ({
+  RuleActivity: ({ ruleId }: { ruleId: string }) => <div data-testid={`activity-${ruleId}`} />,
+}))
+
 vi.mock('@/app/workspace/[workspaceId]/components', () => {
   function Resource({ children }: { children: ReactNode }) {
     return <div>{children}</div>
@@ -79,6 +95,8 @@ function render(
     rule?: InstagramAutoReplyRule | null
     previewTab?: InstagramPreviewTab
     canEdit?: boolean
+    accounts?: { id: string; name: string }[]
+    workflowId?: string
   } = {}
 ) {
   act(() =>
@@ -86,8 +104,9 @@ function render(
       <ToastProvider>
         <RuleEditor
           workspaceId='workspace-1'
+          workflowId={options.workflowId}
           rule={options.rule ?? null}
-          accounts={[ACCOUNT]}
+          accounts={options.accounts ?? [ACCOUNT]}
           accountsLoading={false}
           canEdit={options.canEdit ?? true}
           previewTab={options.previewTab ?? 'dm'}
@@ -152,6 +171,28 @@ async function clickAsync(element: HTMLElement) {
 
 function preview(): HTMLElement {
   return byLabel('Phone preview')
+}
+
+/** Picks one option of a labelled ChipSwitch, e.g. the "On" side of a step's toggle. */
+function choose(groupLabel: string, option: string) {
+  const group = byLabel(groupLabel)
+  const match = [...group.querySelectorAll<HTMLButtonElement>('button')].find(
+    (element) => element.textContent?.trim() === option
+  )
+  if (!match) throw new Error(`No option ${option} in ${groupLabel}`)
+  click(match)
+}
+
+function stepTitles(): string[] {
+  return [...container.querySelectorAll('form h3')].map((element) => element.textContent ?? '')
+}
+
+/** Fills everything a new comment rule needs to go live: a name, any post, any comment. */
+function fillLiveReadyRule() {
+  type(fieldByTitle('Name'), 'Price in DM')
+  choose('Which posts', 'Any post')
+  choose('Keyword match', 'Any comment')
+  type(fieldByTitle('Message'), 'Here is the price list')
 }
 
 beforeEach(() => {
@@ -321,5 +362,214 @@ describe('RuleEditor saved rule', () => {
 
     expect(fieldByTitle('Name').disabled).toBe(true)
     expect(button('Go live').disabled).toBe(true)
+  })
+
+  it('shows results and recent activity under the steps', () => {
+    render({ rule: SAVED_RULE })
+
+    expect(container.textContent).toContain('Results')
+    expect(container.querySelector('[data-testid="stats-rule-1"]')).toBeTruthy()
+    expect(container.textContent).toContain('Recent activity')
+    expect(container.querySelector('[data-testid="activity-rule-1"]')).toBeTruthy()
+  })
+
+  it('shows no results for a new rule', () => {
+    render()
+
+    expect(container.querySelector('[data-testid^="stats-"]')).toBeNull()
+    expect(container.querySelector('[data-testid^="activity-"]')).toBeNull()
+  })
+
+  it('saves and then turns on an existing draft', async () => {
+    updateMutateAsync.mockResolvedValue({ ...SAVED_RULE, name: 'Prices' })
+    render({ rule: { ...SAVED_RULE, keywordMode: 'any', keywords: [] } })
+    type(fieldByTitle('Name'), 'Prices')
+
+    await clickAsync(button('Go live'))
+
+    expect(updateMutateAsync).toHaveBeenCalledTimes(1)
+    expect(setStatusMutateAsync).toHaveBeenCalledWith({ ruleId: 'rule-1', status: 'live' })
+    expect(createMutateAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('RuleEditor going live with a new rule', () => {
+  it('creates it live in one request', async () => {
+    createMutateAsync.mockResolvedValue({ ...SAVED_RULE, id: 'rule-new', status: 'live' })
+    render()
+    fillLiveReadyRule()
+
+    await clickAsync(button('Go live'))
+
+    expect(createMutateAsync).toHaveBeenCalledTimes(1)
+    expect(createMutateAsync.mock.calls[0][0]).toMatchObject({
+      status: 'live',
+      name: 'Price in DM',
+      mediaScope: 'any',
+      keywordMode: 'any',
+    })
+    expect(setStatusMutateAsync).not.toHaveBeenCalled()
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'rule-new' }))
+  })
+
+  it('leaves nothing behind when the server refuses', async () => {
+    createMutateAsync.mockRejectedValue(new Error('This account is not subscribed to comments'))
+    render()
+    fillLiveReadyRule()
+
+    await clickAsync(button('Go live'))
+
+    expect(container.textContent).toContain('This account is not subscribed to comments')
+    expect(onCreated).not.toHaveBeenCalled()
+  })
+})
+
+describe('RuleEditor accounts', () => {
+  it('offers to connect Instagram when no account is connected', () => {
+    render({ accounts: [], workflowId: 'workflow-1' })
+
+    expect(container.textContent).toContain('No Instagram account is connected.')
+    expect(button('Connect Instagram').dataset.workflowId).toBe('workflow-1')
+  })
+
+  it('does not offer to connect when an account exists', () => {
+    render()
+
+    expect(container.textContent).not.toContain('Connect Instagram')
+  })
+})
+
+describe('RuleEditor trigger types', () => {
+  it('shows every step for post comments', () => {
+    render()
+
+    expect(stepTitles()).toEqual([
+      'Instagram account',
+      'Listen for',
+      'When someone comments on',
+      'And the comment has',
+      'Reply publicly',
+      'Send a DM',
+      'Opening message first',
+      'Ask to follow first',
+      'Hand off to agent',
+      'Once per user per post',
+    ])
+  })
+
+  it('drops the post choice and the public reply for story replies', () => {
+    render()
+    choose('Listen for', 'Story replies')
+
+    expect(stepTitles()).toEqual([
+      'Instagram account',
+      'Listen for',
+      'And the reply has',
+      'Send a DM',
+      'Opening message first',
+      'Ask to follow first',
+      'Hand off to agent',
+      'Once per user per story',
+    ])
+  })
+
+  it('has no keyword step for story mentions', () => {
+    render()
+    choose('Listen for', 'Story mentions')
+
+    expect(stepTitles()).not.toContain('And the mention has')
+    expect(stepTitles()).not.toContain('Reply publicly')
+  })
+
+  it('sends only a DM for live comments', () => {
+    render()
+    choose('Listen for', 'Live comments')
+
+    expect(stepTitles()).not.toContain('When someone comments on')
+    expect(stepTitles()).not.toContain('Reply publicly')
+    expect(stepTitles()).toContain('And the comment has')
+    expect(stepTitles()).toContain('Once per user per live video')
+  })
+
+  it('saves a story rule for any story', async () => {
+    createMutateAsync.mockResolvedValue({ ...SAVED_RULE, id: 'rule-new' })
+    render()
+    choose('Which posts', 'Specific posts')
+    choose('Listen for', 'Story replies')
+    type(fieldByTitle('Name'), 'Story price')
+
+    await clickAsync(button('Save draft'))
+
+    expect(createMutateAsync.mock.calls[0][0]).toMatchObject({
+      triggerType: 'story_reply',
+      mediaScope: 'any',
+      mediaIds: [],
+    })
+  })
+})
+
+describe('RuleEditor opening message and follow gate', () => {
+  it('hides both prompts while the DM is off', () => {
+    render()
+    choose('Send a DM', 'Off')
+
+    expect(stepTitles()).not.toContain('Opening message first')
+    expect(stepTitles()).not.toContain('Ask to follow first')
+  })
+
+  it('asks for the opening message text and button title before saving', async () => {
+    render()
+    type(fieldByTitle('Name'), 'Price in DM')
+    choose('Opening message first', 'On')
+    type(fieldByTitle('Button title'), '')
+
+    await clickAsync(button('Save draft'))
+
+    expect(container.textContent).toContain('Write the opening message')
+    expect(container.textContent).toContain('Add a button title')
+    expect(createMutateAsync).not.toHaveBeenCalled()
+  })
+
+  it('flags a button title over 20 characters', () => {
+    render()
+    choose('Opening message first', 'On')
+    type(fieldByTitle('Button title'), 'x'.repeat(21))
+
+    expect(container.textContent).toContain('20 characters')
+  })
+
+  it('sends the prompts with the rule', async () => {
+    createMutateAsync.mockResolvedValue({ ...SAVED_RULE, id: 'rule-new' })
+    render()
+    type(fieldByTitle('Name'), 'Price in DM')
+    choose('Opening message first', 'On')
+    type(fieldByTitle('Opening message'), 'Want the price?')
+    choose('Ask to follow first', 'On')
+    type(fieldByTitle('Follow prompt'), 'Follow us first')
+
+    await clickAsync(button('Save draft'))
+
+    expect(createMutateAsync.mock.calls[0][0]).toMatchObject({
+      openingDm: { text: 'Want the price?', buttonTitle: 'Send me the link' },
+      followGate: { enabled: true, text: 'Follow us first', buttonTitle: 'I’m following' },
+    })
+  })
+
+  it('previews the opening message, then the follow gate, then the DM', () => {
+    render({ previewTab: 'dm' })
+    type(fieldByTitle('Message'), 'Here is the price list')
+    choose('Opening message first', 'On')
+    type(fieldByTitle('Opening message'), 'Want the price?')
+    choose('Ask to follow first', 'On')
+    type(fieldByTitle('Follow prompt'), 'Follow us first')
+
+    const text = byLabel('Direct message').textContent ?? ''
+    const opening = text.indexOf('Want the price?')
+    const gate = text.indexOf('Follow us first')
+    const dm = text.indexOf('Here is the price list')
+    expect(opening).toBeGreaterThanOrEqual(0)
+    expect(gate).toBeGreaterThan(opening)
+    expect(dm).toBeGreaterThan(gate)
+    expect(container.querySelectorAll('[aria-label="Customer taps"]')).toHaveLength(2)
   })
 })

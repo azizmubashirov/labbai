@@ -1,3 +1,5 @@
+'use client'
+
 import {
   keepPreviousData,
   type QueryClient,
@@ -13,8 +15,6 @@ import {
   deleteInstagramAutoReplyRuleContract,
   getInstagramAutoReplyRuleContract,
   getInstagramAutoReplyStatsContract,
-  type InstagramAutoReplyEvent,
-  type InstagramAutoReplyEventsPage,
   type InstagramAutoReplyRule,
   type InstagramAutoReplyRuleListItem,
   type InstagramAutoReplySettableStatus,
@@ -26,46 +26,15 @@ import {
   type UpdateInstagramAutoReplyRuleBody,
   updateInstagramAutoReplyRuleContract,
 } from '@/lib/api/contracts/instagram-auto-reply'
-
-export type {
-  InstagramAutoReplyEvent,
-  InstagramAutoReplyEventsPage,
-  InstagramAutoReplyRule,
-  InstagramAutoReplyRuleListItem,
-  InstagramAutoReplyStats,
-}
-
-export const INSTAGRAM_AUTO_REPLY_RULES_STALE_TIME = 30 * 1000
-export const INSTAGRAM_AUTO_REPLY_RULE_STALE_TIME = 30 * 1000
-export const INSTAGRAM_AUTO_REPLY_STATS_STALE_TIME = 30 * 1000
-export const INSTAGRAM_AUTO_REPLY_EVENTS_STALE_TIME = 15 * 1000
-
-/** Filters of the rules list; `credentialId` narrows it to one account's rules. */
-export interface InstagramAutoReplyRuleFilters {
-  credentialId?: string
-}
-
-export const instagramAutoReplyKeys = {
-  all: ['instagram-auto-reply'] as const,
-  lists: () => [...instagramAutoReplyKeys.all, 'list'] as const,
-  workspaceLists: (workspaceId: string) =>
-    [...instagramAutoReplyKeys.lists(), workspaceId] as const,
-  list: (workspaceId: string, filters: InstagramAutoReplyRuleFilters = {}) =>
-    [...instagramAutoReplyKeys.workspaceLists(workspaceId), filters.credentialId ?? ''] as const,
-  details: () => [...instagramAutoReplyKeys.all, 'detail'] as const,
-  detail: (workspaceId: string, ruleId: string) =>
-    [...instagramAutoReplyKeys.details(), workspaceId, ruleId] as const,
-  stats: () => [...instagramAutoReplyKeys.all, 'stats'] as const,
-  workspaceStats: (workspaceId: string) =>
-    [...instagramAutoReplyKeys.stats(), workspaceId] as const,
-  stat: (workspaceId: string, ruleId?: string) =>
-    [...instagramAutoReplyKeys.workspaceStats(workspaceId), ruleId ?? ''] as const,
-  events: () => [...instagramAutoReplyKeys.all, 'events'] as const,
-  workspaceEvents: (workspaceId: string) =>
-    [...instagramAutoReplyKeys.events(), workspaceId] as const,
-  eventList: (workspaceId: string, ruleId?: string) =>
-    [...instagramAutoReplyKeys.workspaceEvents(workspaceId), ruleId ?? ''] as const,
-}
+import {
+  INSTAGRAM_AUTO_REPLY_EVENTS_STALE_TIME,
+  INSTAGRAM_AUTO_REPLY_RULE_STALE_TIME,
+  INSTAGRAM_AUTO_REPLY_RULES_STALE_TIME,
+  INSTAGRAM_AUTO_REPLY_STATS_STALE_TIME,
+  type InstagramAutoReplyEventFilters,
+  type InstagramAutoReplyRuleFilters,
+  instagramAutoReplyKeys,
+} from '@/hooks/queries/utils/instagram-auto-reply-keys'
 
 /** Refetches every rules list of a workspace, whatever its filter. */
 function invalidateRuleLists(queryClient: QueryClient, workspaceId: string): void {
@@ -163,18 +132,23 @@ export function useInstagramAutoReplyStats(
   })
 }
 
-/** Matched events, newest first, page by page with `fetchNextPage`. */
+/**
+ * Matched events, newest first, page by page with `fetchNextPage`: the workspace's, one rule's,
+ * or one Instagram user's.
+ */
 export function useInstagramAutoReplyEvents(
   workspaceId: string,
-  ruleId?: string,
-  options: { enabled?: boolean } = {}
+  filters: InstagramAutoReplyEventFilters = {},
+  options: { enabled?: boolean; limit?: number } = {}
 ) {
+  const { ruleId, fromId } = filters
+  const { limit } = options
   return useInfiniteQuery({
-    queryKey: instagramAutoReplyKeys.eventList(workspaceId, ruleId),
+    queryKey: instagramAutoReplyKeys.eventList(workspaceId, { ruleId, fromId }, limit),
     queryFn: ({ signal, pageParam }) =>
       requestJson(listInstagramAutoReplyEventsContract, {
         params: { id: workspaceId },
-        query: { ruleId, cursor: pageParam },
+        query: { ruleId, fromId, limit, cursor: pageParam },
         signal,
       }),
     initialPageParam: undefined as string | undefined,
@@ -184,7 +158,7 @@ export function useInstagramAutoReplyEvents(
   })
 }
 
-/** Saves a new rule as a draft. */
+/** Saves a new rule, as a draft unless the body asks for `status: 'live'`. */
 export function useCreateInstagramAutoReplyRule(workspaceId: string) {
   const queryClient = useQueryClient()
   return useMutation({

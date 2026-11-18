@@ -109,6 +109,8 @@ export interface ListInstagramAutoReplyRulesInput extends InstagramAutoReplyWork
 
 export interface CreateInstagramAutoReplyRuleInput extends InstagramAutoReplyWorkspaceInput {
   values: InstagramAutoReplyRuleValues
+  /** `'live'` creates the rule live in one step, after the go-live completeness check. */
+  status?: 'draft' | 'live'
 }
 
 export interface UpdateInstagramAutoReplyRuleInput extends InstagramAutoReplyRuleInput {
@@ -250,8 +252,10 @@ export const getInstagramAutoReplyRule = defineAuthorizedWorkspaceUseCase({
 })
 
 /**
- * Saves a new rule as a draft, last in match order. The account id is derived from the
- * credential, which the acting member must be able to use in this workspace.
+ * Saves a new rule last in match order, as a draft or, with `status: 'live'`, live at once. A
+ * live create runs the same completeness check as going live and arms a `'next'` rule; the rule
+ * is written in one insert, so it never exists as a draft that failed to go live. The account id
+ * is derived from the credential, which the acting member must be able to use in this workspace.
  */
 export const createInstagramAutoReplyRule = defineAuthorizedWorkspaceUseCase({
   operation: instagramAutoReplyOperations.createRule,
@@ -260,7 +264,8 @@ export const createInstagramAutoReplyRule = defineAuthorizedWorkspaceUseCase({
   authorizationOptions: {},
   async execute({ principal, input }) {
     const values = normalizeLists(input.values)
-    throwIssues(getRuleShapeIssues(values))
+    const status = input.status ?? 'draft'
+    throwIssues(status === 'live' ? getGoLiveIssues(values) : getRuleShapeIssues(values))
     if ((await countWorkspaceRules(input.workspaceId)) >= INSTAGRAM_AUTO_REPLY_MAX_RULES) {
       throw new OrchestrationError(
         'conflict',
@@ -279,7 +284,8 @@ export const createInstagramAutoReplyRule = defineAuthorizedWorkspaceUseCase({
       workspaceId: input.workspaceId,
       credentialId,
       igAccountId,
-      status: 'draft',
+      status,
+      ...(status === 'live' && values.mediaScope === 'next' ? armNextMedia() : {}),
       sortOrder,
       createdByUserId: principal.userId,
     })
@@ -289,7 +295,9 @@ export const createInstagramAutoReplyRule = defineAuthorizedWorkspaceUseCase({
     ruleAudit(
       AuditAction.INSTAGRAM_AUTO_REPLY_RULE_CREATED,
       result.rule,
-      `Created Instagram auto-reply rule "${result.rule.name}"`
+      result.rule.status === 'live'
+        ? `Created Instagram auto-reply rule "${result.rule.name}" and turned it on`
+        : `Created Instagram auto-reply rule "${result.rule.name}"`
     ),
 })
 
