@@ -47,6 +47,7 @@ import { useDeploymentShape } from '@/lib/core/config/deployment-shape'
 import { isMacPlatform } from '@/lib/core/utils/platform'
 import { buildFolderTree, getFolderPathNames } from '@/lib/folders/tree'
 import { SLACK_COMMUNITY_URL } from '@/lib/help-links'
+import { INSTAGRAM_AUTO_REPLY_ENABLED } from '@/lib/instagram-auto-reply/feature'
 import { captureEvent } from '@/lib/posthog/client'
 import { LOGO_ACCEPT_ATTRIBUTE } from '@/lib/uploads/client/logo-file'
 import { useSidebarChrome } from '@/app/workspace/[workspaceId]/components/workspace-chrome'
@@ -764,6 +765,7 @@ export const Sidebar = memo(function Sidebar() {
           label: 'Instagram Auto-Reply',
           icon: InstagramIcon,
           href: `/workspace/${workspaceId}/instagram`,
+          hidden: !INSTAGRAM_AUTO_REPLY_ENABLED,
           restricted: false,
         },
         {

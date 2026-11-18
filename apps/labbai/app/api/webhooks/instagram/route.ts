@@ -17,6 +17,7 @@ import {
   type InstagramAutoReplySource,
   runInstagramAutoReply,
 } from '@/lib/instagram-auto-reply/engine'
+import { INSTAGRAM_AUTO_REPLY_ENABLED } from '@/lib/instagram-auto-reply/feature'
 import {
   dispatchResolvedWebhookTarget,
   findWebhooksByRoutingKey,
@@ -233,7 +234,7 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
       const [autoReply, targets] = await Promise.all([
         runInstagramAutoReply({
           accountId: delivery.accountId,
-          sources: autoReplySources(delivery.body),
+          sources: INSTAGRAM_AUTO_REPLY_ENABLED ? autoReplySources(delivery.body) : [],
           requestId,
           deadlineAt,
           limiter: autoReplyLimiter,
