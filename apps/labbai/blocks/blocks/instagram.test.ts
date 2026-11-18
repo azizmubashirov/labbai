@@ -2,6 +2,7 @@
  * @vitest-environment node
  */
 import { describe, expect, it } from 'vitest'
+import { buildCanonicalIndex, resolveCanonicalMode } from '@/lib/workflows/subblocks/visibility'
 import { InstagramBlock } from '@/blocks/blocks/instagram'
 
 describe('InstagramBlock', () => {
@@ -108,5 +109,28 @@ describe('InstagramBlock', () => {
         insightMetrics: 'reach,views',
       })
     ).toMatchObject({ metrics: 'reach,views', insightMetrics: undefined })
+  })
+
+  it('pairs the media picker with the raw media id under one canonical param', () => {
+    const group = buildCanonicalIndex(InstagramBlock.subBlocks).groupsById.mediaId
+    const picker = InstagramBlock.subBlocks.find((subBlock) => subBlock.id === 'mediaSelector')
+
+    expect(group?.basicId).toBe('mediaSelector')
+    expect(group?.advancedIds).toEqual(['mediaId'])
+    expect(picker).toMatchObject({
+      selectorKey: 'instagram.media',
+      dependsOn: ['credential'],
+      required: expect.objectContaining({ field: 'operation' }),
+    })
+  })
+
+  it('keeps a saved raw media id active for blocks created before the picker', () => {
+    const group = buildCanonicalIndex(InstagramBlock.subBlocks).groupsById.mediaId!
+
+    expect(resolveCanonicalMode(group, { mediaId: '17900000000000001' })).toBe('advanced')
+    expect(resolveCanonicalMode(group, { mediaSelector: '17900000000000001' })).toBe('basic')
+    expect(
+      buildParams({ operation: 'instagram_get_media', mediaId: '17900000000000001' })
+    ).toMatchObject({ mediaId: '17900000000000001' })
   })
 })

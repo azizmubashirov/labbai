@@ -71,6 +71,22 @@ const INSTAGRAM_OPERATION_INPUT_KEYS = new Set([
 const NUMERIC_PARAM_KEYS = new Set(['limit', 'thumbOffset'])
 const BOOLEAN_PARAM_KEYS = new Set(['hide', 'commentEnabled', 'shareToFeed', 'isAiGenerated'])
 
+/**
+ * Canonical basic/advanced pair for the media an operation acts on: the
+ * thumbnail-backed picker and the raw id. The raw id keeps the `mediaId`
+ * subblock id so saved blocks resolve to advanced mode with their value intact.
+ */
+const MEDIA_FIELD = ['mediaSelector', 'mediaId'] as const
+
+/** Operations that act on one existing media item. */
+const MEDIA_OPERATIONS = [
+  'instagram_get_media',
+  'instagram_download_media',
+  'instagram_list_comments',
+  'instagram_set_comments_enabled',
+  'instagram_get_media_insights',
+]
+
 /** Feed image, whether uploaded or referenced by URL in advanced mode. */
 const IMAGE_FIELD = ['imageUpload', 'imageRef'] as const
 
@@ -108,9 +124,9 @@ export const InstagramBlock: BlockConfig<InstagramResponse> = {
           'List recent media',
           { text: ', up to', field: 'limit', after: 'items' },
         ],
-        instagram_get_media: [{ text: 'Fetch media', field: 'mediaId', core: true }],
+        instagram_get_media: [{ text: 'Fetch media', field: MEDIA_FIELD, core: true }],
         instagram_download_media: [
-          { text: 'Download media', field: 'mediaId', core: true },
+          { text: 'Download media', field: MEDIA_FIELD, core: true },
           { text: ', saving as', field: 'filename' },
         ],
         instagram_list_stories: [
@@ -141,7 +157,7 @@ export const InstagramBlock: BlockConfig<InstagramResponse> = {
         ],
         instagram_get_publishing_limit: ['Check the content publishing rate limit'],
         instagram_list_comments: [
-          { text: 'List comments on media', field: 'mediaId', core: true },
+          { text: 'List comments on media', field: MEDIA_FIELD, core: true },
           { text: ', up to', field: 'limit', after: 'items' },
         ],
         instagram_reply_to_comment: [
@@ -154,7 +170,7 @@ export const InstagramBlock: BlockConfig<InstagramResponse> = {
         ],
         instagram_delete_comment: [{ text: 'Delete comment', field: 'commentId', core: true }],
         instagram_set_comments_enabled: [
-          { text: 'Set comments on media', field: 'mediaId', core: true },
+          { text: 'Set comments on media', field: MEDIA_FIELD, core: true },
           { text: 'to', field: 'commentEnabled' },
         ],
         instagram_private_reply: [
@@ -180,7 +196,7 @@ export const InstagramBlock: BlockConfig<InstagramResponse> = {
           { text: ', since', field: 'since' },
         ],
         instagram_get_media_insights: [
-          { text: 'Report insights for media', field: 'mediaId', core: true },
+          { text: 'Report insights for media', field: MEDIA_FIELD, core: true },
           { text: ', measuring', field: 'insightMetrics' },
         ],
       },
@@ -443,30 +459,28 @@ export const InstagramBlock: BlockConfig<InstagramResponse> = {
     },
 
     {
+      id: 'mediaSelector',
+      title: 'Media',
+      type: 'project-selector',
+      canonicalParamId: 'mediaId',
+      serviceId: 'instagram',
+      selectorKey: 'instagram.media',
+      placeholder: 'Select a post or Reel',
+      dependsOn: ['credential'],
+      mode: 'basic',
+      condition: { field: 'operation', value: MEDIA_OPERATIONS },
+      required: { field: 'operation', value: MEDIA_OPERATIONS },
+    },
+    {
       id: 'mediaId',
       title: 'Media ID',
       type: 'short-input',
+      canonicalParamId: 'mediaId',
       placeholder: 'Enter Instagram media ID',
-      condition: {
-        field: 'operation',
-        value: [
-          'instagram_get_media',
-          'instagram_download_media',
-          'instagram_list_comments',
-          'instagram_set_comments_enabled',
-          'instagram_get_media_insights',
-        ],
-      },
-      required: {
-        field: 'operation',
-        value: [
-          'instagram_get_media',
-          'instagram_download_media',
-          'instagram_list_comments',
-          'instagram_set_comments_enabled',
-          'instagram_get_media_insights',
-        ],
-      },
+      dependsOn: ['credential'],
+      mode: 'advanced',
+      condition: { field: 'operation', value: MEDIA_OPERATIONS },
+      required: { field: 'operation', value: MEDIA_OPERATIONS },
     },
     {
       id: 'filename',

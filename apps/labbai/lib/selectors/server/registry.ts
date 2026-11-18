@@ -5,6 +5,7 @@ import { calcomSelectorAttachments } from '@/lib/selectors/server/providers/calc
 import { googleSelectorAttachments } from '@/lib/selectors/server/providers/google'
 import { hubspotSelectorAttachments } from '@/lib/selectors/server/providers/hubspot'
 import { imapSelectorAttachments } from '@/lib/selectors/server/providers/imap'
+import { instagramSelectorAttachments } from '@/lib/selectors/server/providers/instagram'
 import { mcpSelectorAttachments } from '@/lib/selectors/server/providers/mcp'
 import { notionSelectorAttachments } from '@/lib/selectors/server/providers/notion'
 import { pipedriveSelectorAttachments } from '@/lib/selectors/server/providers/pipedrive'
@@ -20,6 +21,7 @@ export const serverSelectorRegistry = {
   ...googleSelectorAttachments,
   ...hubspotSelectorAttachments,
   ...imapSelectorAttachments,
+  ...instagramSelectorAttachments,
   ...notionSelectorAttachments,
   ...pipedriveSelectorAttachments,
   ...trelloSelectorAttachments,

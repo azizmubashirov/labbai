@@ -14,6 +14,11 @@ export const INSTAGRAM_MEDIA_PROPERTIES = {
     description: 'Instagram media URL when available',
     nullable: true,
   },
+  thumbnailUrl: {
+    type: 'string',
+    description: 'Thumbnail image URL; returned only for VIDEO media, including Reels',
+    nullable: true,
+  },
   permalink: { type: 'string', description: 'Permalink to the media', nullable: true },
   timestamp: { type: 'string', description: 'ISO timestamp', nullable: true },
   likeCount: { type: 'number', description: 'Like count', nullable: true },

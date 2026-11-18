@@ -1,5 +1,6 @@
 import type { RawFileInput } from '@/lib/uploads/utils/file-schemas'
 import type { UserFile } from '@/executor/types'
+import type { InstagramMediaItem } from '@/tools/instagram/media'
 import type { OutputProperty, ToolResponse, WorkflowToolExecutionContext } from '@/tools/types'
 
 /** Shared outputs returned by every Instagram publishing operation. */
@@ -39,17 +40,7 @@ export interface InstagramListMediaParams extends InstagramAccessParams {
 
 export interface InstagramListMediaResponse extends ToolResponse {
   output: {
-    media: Array<{
-      id: string
-      caption: string | null
-      mediaType: string | null
-      mediaProductType: string | null
-      mediaUrl: string | null
-      permalink: string | null
-      timestamp: string | null
-      likeCount: number | null
-      commentsCount: number | null
-    }>
+    media: InstagramMediaItem[]
     nextCursor: string | null
   }
 }
