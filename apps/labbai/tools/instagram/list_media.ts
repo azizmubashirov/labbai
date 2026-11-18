@@ -1,3 +1,4 @@
+import { INSTAGRAM_MEDIA_FIELDS, normalizeInstagramMedia } from '@/tools/instagram/media'
 import { INSTAGRAM_MEDIA_PROPERTIES } from '@/tools/instagram/output-properties'
 import type { InstagramListMediaParams, InstagramListMediaResponse } from '@/tools/instagram/types'
 import {
@@ -9,9 +10,6 @@ import {
   readGraphJson,
 } from '@/tools/instagram/utils'
 import type { ToolConfig } from '@/tools/types'
-
-const MEDIA_FIELDS =
-  'id,caption,media_type,media_product_type,media_url,permalink,timestamp,like_count,comments_count'
 
 export const instagramListMediaTool: ToolConfig<
   InstagramListMediaParams,
@@ -58,7 +56,7 @@ export const instagramListMediaTool: ToolConfig<
     url: (params) => {
       const path = params.igUserId?.trim() ? `/${params.igUserId.trim()}/media` : '/me/media'
       return graphUrl(path, {
-        fields: MEDIA_FIELDS,
+        fields: INSTAGRAM_MEDIA_FIELDS,
         limit: String(clampGraphLimit(params.limit)),
         after: params.after?.trim() || undefined,
       })
@@ -76,29 +74,14 @@ export const instagramListMediaTool: ToolConfig<
       }
     }
 
-    const data = await readGraphJson<InstagramGraphPage<Record<string, unknown>>>(
+    const data = await readGraphJson<InstagramGraphPage<unknown>>(
       response,
       'Instagram media list response'
     )
     const items = Array.isArray(data.data) ? data.data : []
-    const media = items.flatMap((item: Record<string, unknown>) => {
-      const id = item.id == null || item.id === '' ? null : String(item.id)
-      if (!id) return []
-
-      return [
-        {
-          id,
-          caption: typeof item.caption === 'string' ? item.caption : null,
-          mediaType: typeof item.media_type === 'string' ? item.media_type : null,
-          mediaProductType:
-            typeof item.media_product_type === 'string' ? item.media_product_type : null,
-          mediaUrl: typeof item.media_url === 'string' ? item.media_url : null,
-          permalink: typeof item.permalink === 'string' ? item.permalink : null,
-          timestamp: typeof item.timestamp === 'string' ? item.timestamp : null,
-          likeCount: typeof item.like_count === 'number' ? item.like_count : null,
-          commentsCount: typeof item.comments_count === 'number' ? item.comments_count : null,
-        },
-      ]
+    const media = items.flatMap((item) => {
+      const normalized = normalizeInstagramMedia(item)
+      return normalized ? [normalized] : []
     })
 
     return {

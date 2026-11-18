@@ -114,6 +114,7 @@ export const selectorManifest = {
     readiness: { all: ['oauthCredential', 'pipelineId'] },
   }),
   'hubspot.properties': providerSelector(['objectType', 'customObjectTypeId']),
+  'instagram.media': providerSelector([], { listMode: 'paginated', detail: true }),
   'notion.databases': providerSelector([], { detail: true }),
   'notion.pages': providerSelector([], { detail: true }),
   'pipedrive.pipelines': providerSelector([], { detail: true }),
