@@ -1,4 +1,5 @@
 import { InstagramIcon } from '@/components/icons'
+import { INSTAGRAM_AUTO_REPLY_ENABLED } from '@/lib/instagram-auto-reply/feature'
 import {
   INSTAGRAM_COMMENT_CONDITION,
   INSTAGRAM_COMMENT_TRIGGER_ID,
@@ -39,6 +40,7 @@ export const instagramCommentWebhookTrigger: TriggerConfig = {
       title: 'Auto-replies',
       type: 'modal',
       modalId: 'instagram-auto-reply-rules',
+      hidden: !INSTAGRAM_AUTO_REPLY_ENABLED,
       hideFromPreview: true,
       hideFromCopilot: true,
       mode: 'trigger',

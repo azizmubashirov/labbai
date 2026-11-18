@@ -6,14 +6,20 @@ import { resetEnvMock, setEnv } from '@labbai/testing'
 import { NextRequest, NextResponse } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockFindWebhooksByRoutingKey, mockDispatch, mockRelease, mockRunAutoReply } = vi.hoisted(
-  () => ({
+const { mockFindWebhooksByRoutingKey, mockDispatch, mockRelease, mockRunAutoReply, featureFlag } =
+  vi.hoisted(() => ({
     mockFindWebhooksByRoutingKey: vi.fn(),
     mockDispatch: vi.fn(),
     mockRelease: vi.fn(),
     mockRunAutoReply: vi.fn(),
-  })
-)
+    featureFlag: { enabled: true },
+  }))
+
+vi.mock('@/lib/instagram-auto-reply/feature', () => ({
+  get INSTAGRAM_AUTO_REPLY_ENABLED() {
+    return featureFlag.enabled
+  },
+}))
 
 vi.mock('@/lib/instagram-auto-reply/engine', () => ({
   runInstagramAutoReply: mockRunAutoReply,
@@ -140,6 +146,7 @@ function dispatchedCommentIds(): Record<string, string[]> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  featureFlag.enabled = true
   resetEnvMock()
   setEnv({ INSTAGRAM_CLIENT_SECRET: APP_SECRET, INSTAGRAM_WEBHOOK_VERIFY_TOKEN: 'verify-me' })
   mockRunAutoReply.mockResolvedValue(engineResult())
@@ -403,6 +410,19 @@ describe('POST /api/webhooks/instagram — auto-reply engine', () => {
     ).toEqual([['C1'], ['C2'], []])
     expect(calls.every((input) => input.limiter === calls[0].limiter)).toBe(true)
     expect(calls[0].deadlineAt).toBe(5_000_000 + INSTAGRAM_DISPATCH_DEADLINE_MS)
+  })
+
+  it('hands the engine no events while the feature is off, so comments reach the workflows', async () => {
+    featureFlag.enabled = false
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1')])
+
+    const response = await POST(
+      signedPost({ object: 'instagram', entry: [comment('IG1', 'C1'), dm('IG1', 'm1')] })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockRunAutoReply.mock.calls.map(([input]) => input.sources)).toEqual([[]])
+    expect(mockDispatch).toHaveBeenCalledTimes(1)
   })
 
   it('removes consumed comments, keeps unmatched and handed-off ones, and leaves DMs', async () => {

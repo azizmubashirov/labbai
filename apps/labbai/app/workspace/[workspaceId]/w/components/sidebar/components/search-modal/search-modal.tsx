@@ -46,6 +46,7 @@ import { InstagramIcon } from '@/components/icons'
 import { useDeploymentShape } from '@/lib/core/config/deployment-shape'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { getFolderPathNames } from '@/lib/folders/tree'
+import { INSTAGRAM_AUTO_REPLY_ENABLED } from '@/lib/instagram-auto-reply/feature'
 import { sendMothershipMessage } from '@/lib/mothership/events'
 import { captureEvent } from '@/lib/posthog/client'
 import { toSearchToken } from '@/lib/search/tokens'
@@ -287,6 +288,7 @@ function SearchModalContent({
           name: 'Instagram Auto-Reply',
           icon: InstagramIcon,
           href: `/workspace/${workspaceId}/instagram`,
+          hidden: !INSTAGRAM_AUTO_REPLY_ENABLED,
         },
         {
           id: 'tables',

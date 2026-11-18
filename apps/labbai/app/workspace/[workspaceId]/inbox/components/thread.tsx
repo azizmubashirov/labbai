@@ -5,6 +5,7 @@ import { Chip, ChipSwitch, cn, toast } from '@labbai/emcn'
 import { CircleAlert } from '@labbai/emcn/icons'
 import { getErrorMessage } from '@labbai/utils/errors'
 import { format, isSameDay } from 'date-fns'
+import { INSTAGRAM_AUTO_REPLY_ENABLED } from '@/lib/instagram-auto-reply/feature'
 import { AutoReplyEventItem } from '@/app/workspace/[workspaceId]/inbox/components/auto-reply-event'
 import {
   ChannelIcon,
@@ -159,13 +160,13 @@ export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }:
   const firstMessageId = messages[0]?.id
   const lastMessageId = messages[messages.length - 1]?.id
 
-  const isInstagram = conversation?.channel === 'instagram'
+  const showAutoReplies = INSTAGRAM_AUTO_REPLY_ENABLED && conversation?.channel === 'instagram'
   const { data: autoReplyData } = useInstagramAutoReplyEvents(
     workspaceId,
     { fromId: conversation?.externalChatId },
-    { enabled: isInstagram, limit: THREAD_AUTO_REPLY_LIMIT }
+    { enabled: showAutoReplies, limit: THREAD_AUTO_REPLY_LIMIT }
   )
-  const autoReplyEvents = isInstagram ? autoReplyData?.pages[0]?.events : undefined
+  const autoReplyEvents = showAutoReplies ? autoReplyData?.pages[0]?.events : undefined
   const timeline = useMemo(
     () =>
       buildThreadTimeline({
