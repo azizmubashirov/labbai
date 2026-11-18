@@ -11,14 +11,25 @@ const {
   mockResolveOAuthAccountId,
   mockRefreshAccessTokenIfNeeded,
   mockGetCredentialOwner,
+  mockLoggerWarn,
 } = vi.hoisted(() => ({
   mockResolveBackgroundWebhookEnv: vi.fn(),
   mockResolveOAuthAccountId: vi.fn(),
   mockRefreshAccessTokenIfNeeded: vi.fn(),
   mockGetCredentialOwner: vi.fn(),
+  mockLoggerWarn: vi.fn(),
 }))
 
 vi.mock('@labbai/db', () => ({ ...dbChainMock, ...schemaMock }))
+
+vi.mock('@labbai/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    warn: mockLoggerWarn,
+    error: vi.fn(),
+    debug: vi.fn(),
+  }),
+}))
 
 vi.mock('@/lib/oauth/credential-service', () => ({
   resolveOAuthAccountId: mockResolveOAuthAccountId,
@@ -43,6 +54,7 @@ vi.mock('@/executor/utils/reference-validation', () => ({
 import {
   getInstagramComments,
   instagramHandler,
+  partitionInstagramDelivery,
   scopeInstagramDelivery,
   splitInstagramDeliveryByAccount,
 } from '@/lib/webhooks/providers/instagram'
@@ -288,23 +300,49 @@ describe('Instagram per-account scoping', () => {
     }
   })
 
+  it('skips entries without a string id and past the entry bound, keeping valid ones', () => {
+    const partition = partitionInstagramDelivery(
+      [
+        {
+          object: 'instagram',
+          entry: [
+            { messaging: [] },
+            { id: 42, messaging: [] },
+            { id: 'IG1', messaging: [] },
+            { id: 'IG2', messaging: [] },
+            { id: 'IG1', messaging: [] },
+          ],
+        },
+      ],
+      2
+    )
+    expect(partition.accounts.map((part) => part.accountId)).toEqual(['IG1', 'IG2'])
+    expect(partition.accounts[0].body.object).toBe('instagram')
+    expect(partition.skippedEntries).toBe(3)
+  })
+
   it('gives each trigger only its own account and event kind', () => {
     const comments = scopeInstagramDelivery(twoAccountDelivery, 'IG2', 'comments')
-    expect(getInstagramComments(comments).map((comment) => comment.commentId)).toEqual(['C2'])
-    expect(JSON.stringify(comments)).not.toContain('messaging')
+    expect(comments.status).toBe('scoped')
+    const commentBody = comments.status === 'scoped' ? comments.body : null
+    expect(getInstagramComments(commentBody).map((comment) => comment.commentId)).toEqual(['C2'])
+    expect(JSON.stringify(commentBody)).not.toContain('messaging')
 
     const messages = scopeInstagramDelivery(twoAccountDelivery, 'IG1', 'messages')
+    expect(messages.status).toBe('scoped')
     expect(JSON.stringify(messages)).not.toContain('changes')
     expect(JSON.stringify(messages)).not.toContain('IG2')
 
-    expect(scopeInstagramDelivery(twoAccountDelivery, 'IG3', 'messages')).toBeNull()
+    expect(scopeInstagramDelivery(twoAccountDelivery, 'IG3', 'messages')).toEqual({
+      status: 'foreign-account',
+    })
     expect(
       scopeInstagramDelivery(
         { entry: [{ id: 'IG1', changes: [commentChange('R1', 'IG1')] }] },
         'IG1',
         'comments'
       )
-    ).toBeNull()
+    ).toEqual({ status: 'no-events' })
   })
 
   it('scopes a routed webhook to its routing key', async () => {
@@ -349,6 +387,22 @@ describe('Instagram per-account scoping', () => {
         providerConfig: { credentialId: 'cred-3' },
       })
     ).toBeNull()
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('no entries for the webhook'),
+      { webhookId: 'wh-legacy', accountId: 'IG3' }
+    )
+  })
+
+  it('does not warn when the account matches but carries no event of the trigger kind', async () => {
+    expect(
+      await instagramHandler.scopeDeliveryBody?.({
+        webhook: { id: 'wh-2', routingKey: 'IG1' },
+        body: { entry: [{ id: 'IG1', changes: [commentChange('R1', 'IG1')] }] },
+        requestId: 'r',
+        providerConfig: { triggerId: 'instagram_comment_webhook' },
+      })
+    ).toBeNull()
+    expect(mockLoggerWarn).not.toHaveBeenCalled()
   })
 
   it('fails closed when the webhook account cannot be determined', async () => {

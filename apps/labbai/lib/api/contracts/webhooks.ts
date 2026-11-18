@@ -311,12 +311,6 @@ export const quickBooksWebhookParamsSchema = z.object({
   appKey: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Invalid QuickBooks webhook app key'),
 })
 
-/**
- * Meta batches at most this many updates into one Instagram delivery.
- * @see https://developers.facebook.com/documentation/instagram-platform/webhooks/setup
- */
-export const INSTAGRAM_WEBHOOK_MAX_ENTRIES = 1000
-
 /** Meta's handshake on the shared Instagram callback. */
 export const instagramWebhookVerificationQuerySchema = z.object({
   'hub.mode': z.string().min(1, 'hub.mode is required').max(64),
@@ -336,41 +330,16 @@ export const instagramWebhookVerificationContract = defineRouteContract({
 })
 
 /**
- * Envelope of an Instagram delivery, validated after the `X-Hub-Signature-256` check against the
- * raw body. Entries are routed by `id`, the receiving professional account; their contents are
- * read by the Instagram provider handler.
+ * What the shared Instagram callback answers a delivery with. The delivery itself is not parsed
+ * through a contract: it is authenticated against the raw bytes first, then read entry by entry
+ * so one malformed entry cannot reject the others.
  */
-export const instagramWebhookEnvelopeSchema = z.object({
-  object: z.string().max(64).optional(),
-  entry: z
-    .array(z.object({ id: z.string().min(1).max(256) }).passthrough())
-    .max(INSTAGRAM_WEBHOOK_MAX_ENTRIES),
-})
-
-export type InstagramWebhookEnvelope = z.input<typeof instagramWebhookEnvelopeSchema>
-
-export const instagramWebhookHeadersSchema = z.object({
-  'x-hub-signature-256': z.string().min(1),
-})
-
 export const instagramWebhookResponseSchema = z.union([
   z.object({ ok: z.literal(true), routed: z.number().int().nonnegative() }),
   z.object({ error: z.string().min(1) }),
 ])
 
 export type InstagramWebhookResponse = z.output<typeof instagramWebhookResponseSchema>
-
-export const instagramWebhookContract = defineRouteContract({
-  method: 'POST',
-  path: '/api/webhooks/instagram',
-  headers: instagramWebhookHeadersSchema,
-  /** Validated after HMAC verification against the raw payload. */
-  body: instagramWebhookEnvelopeSchema,
-  response: {
-    mode: 'json',
-    schema: instagramWebhookResponseSchema,
-  },
-})
 
 export const quickBooksWebhookContract = defineRouteContract({
   method: 'POST',

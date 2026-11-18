@@ -177,39 +177,74 @@ export function getInstagramComments(body: unknown): InstagramComment[] {
   return comments
 }
 
+/** A delivery split by professional account, with a count of the entries that cannot be routed. */
+export interface InstagramDeliveryPartition {
+  accounts: InstagramAccountDelivery[]
+  /** Entries without a string `id`, or past `maxEntries`. They are never dispatched. */
+  skippedEntries: number
+}
+
 /**
  * Splits a delivery into one body per professional account (`entry.id`), each carrying only that
- * account's entries. Entries without an account id are dropped.
+ * account's entries in delivery order. Entries without a string id, and entries past
+ * `maxEntries`, are counted as skipped instead of failing the whole delivery.
  */
-export function splitInstagramDeliveryByAccount(body: unknown): InstagramAccountDelivery[] {
+export function partitionInstagramDelivery(
+  body: unknown,
+  maxEntries = Number.POSITIVE_INFINITY
+): InstagramDeliveryPartition {
   const envelope = deliveryEnvelopes(body)[0] ?? {}
   const entriesByAccount = new Map<string, Record<string, unknown>[]>()
+  let routedEntries = 0
+  let skippedEntries = 0
   for (const entry of deliveryEntries(body)) {
     const accountId = toStringOrNull(entry.id)
-    if (!accountId) continue
+    if (!accountId || routedEntries >= maxEntries) {
+      skippedEntries++
+      continue
+    }
+    routedEntries++
     const entries = entriesByAccount.get(accountId)
     if (entries) entries.push(entry)
     else entriesByAccount.set(accountId, [entry])
   }
-  return [...entriesByAccount].map(([accountId, entries]) => ({
-    accountId,
-    body: { ...omit(envelope, ['entry']), entry: entries },
-  }))
+  return {
+    accounts: [...entriesByAccount].map(([accountId, entries]) => ({
+      accountId,
+      body: { ...omit(envelope, ['entry']), entry: entries },
+    })),
+    skippedEntries,
+  }
+}
+
+/** Splits a delivery into one body per professional account; see {@link partitionInstagramDelivery}. */
+export function splitInstagramDeliveryByAccount(body: unknown): InstagramAccountDelivery[] {
+  return partitionInstagramDelivery(body).accounts
 }
 
 /**
+ * Result of scoping a delivery to one trigger. `foreign-account` means no entry belongs to the
+ * trigger's account; `no-events` means the account's entries carry no event of the trigger's
+ * kind (an echo, or a DM reaching a comment trigger).
+ */
+export type InstagramScopeResult =
+  | { status: 'scoped'; body: Record<string, unknown> }
+  | { status: 'foreign-account' }
+  | { status: 'no-events' }
+
+/**
  * The part of a delivery one trigger may see: entries of its own account, stripped to its own
- * event kind. Returns null when nothing of that kind is left, so the webhook is not run.
+ * event kind. Anything other than `scoped` means the webhook is not run.
  */
 export function scopeInstagramDelivery(
   body: unknown,
   accountId: string,
   kind: InstagramEventKind
-): Record<string, unknown> | null {
+): InstagramScopeResult {
   const delivery = splitInstagramDeliveryByAccount(body).find(
     (part) => part.accountId === accountId
   )
-  if (!delivery) return null
+  if (!delivery) return { status: 'foreign-account' }
 
   const entries = toArray(delivery.body.entry).map((entry) =>
     kind === 'comments'
@@ -221,7 +256,7 @@ export function scopeInstagramDelivery(
     kind === 'comments'
       ? getInstagramComments(scoped).length > 0
       : getInstagramDirectMessages(scoped).length > 0
-  return hasEvents ? scoped : null
+  return hasEvents ? { status: 'scoped', body: scoped } : { status: 'no-events' }
 }
 
 /** Instagram account behind an OAuth credential, as stored by the Instagram Login callback. */
@@ -333,7 +368,14 @@ export const instagramHandler: WebhookProviderHandler = {
       accountId,
       instagramEventKindForTrigger(providerConfig.triggerId)
     )
-    return scoped ? { body: scoped } : null
+    if (scoped.status === 'foreign-account') {
+      logger.warn(`[${requestId}] Instagram delivery has no entries for the webhook's account`, {
+        webhookId: webhook.id,
+        accountId,
+      })
+      return null
+    }
+    return scoped.status === 'scoped' ? { body: scoped.body } : null
   },
 
   /**

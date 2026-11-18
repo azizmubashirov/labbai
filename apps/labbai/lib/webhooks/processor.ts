@@ -108,11 +108,15 @@ async function parseMultipartBody(
   return fields
 }
 
-export async function parseWebhookBody(
+/**
+ * Reads the raw webhook body under the shared byte cap without parsing it, so a provider can
+ * verify a signature over the exact bytes before anything interprets them. Returns a 413 or 400
+ * response when the body is too large or unreadable.
+ */
+export async function readWebhookRawBody(
   request: NextRequest,
   requestId: string
-): Promise<{ body: unknown; rawBody: string } | NextResponse> {
-  let rawBody: string | null = null
+): Promise<string | NextResponse> {
   try {
     assertContentLengthWithinLimit(request.headers, WEBHOOK_MAX_BODY_BYTES, WEBHOOK_BODY_LABEL)
 
@@ -120,11 +124,7 @@ export async function parseWebhookBody(
       maxBytes: WEBHOOK_MAX_BODY_BYTES,
       label: WEBHOOK_BODY_LABEL,
     })
-    rawBody = new TextDecoder().decode(buffer)
-
-    if (!rawBody || rawBody.length === 0) {
-      return { body: {}, rawBody: '' }
-    }
+    return new TextDecoder().decode(buffer)
   } catch (bodyError) {
     if (isPayloadSizeLimitError(bodyError)) {
       logger.warn(`[${requestId}] Rejected oversized webhook body`, {
@@ -137,6 +137,17 @@ export async function parseWebhookBody(
       error: toError(bodyError).message,
     })
     return new NextResponse('Failed to read request body', { status: 400 })
+  }
+}
+
+export async function parseWebhookBody(
+  request: NextRequest,
+  requestId: string
+): Promise<{ body: unknown; rawBody: string } | NextResponse> {
+  const rawBody = await readWebhookRawBody(request, requestId)
+  if (rawBody instanceof NextResponse) return rawBody
+  if (rawBody.length === 0) {
+    return { body: {}, rawBody: '' }
   }
 
   let body: unknown

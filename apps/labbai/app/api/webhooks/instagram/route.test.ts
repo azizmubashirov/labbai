@@ -20,10 +20,7 @@ vi.mock('@/lib/core/admission/gate', () => ({
 vi.mock('@/lib/webhooks/processor', () => ({
   findWebhooksByRoutingKey: mockFindWebhooksByRoutingKey,
   dispatchResolvedWebhookTarget: mockDispatch,
-  parseWebhookBody: async (request: NextRequest) => {
-    const rawBody = await request.clone().text()
-    return { body: rawBody ? JSON.parse(rawBody) : {}, rawBody }
-  },
+  readWebhookRawBody: (request: NextRequest) => request.clone().text(),
 }))
 
 vi.mock('@/lib/oauth/credential-service', () => ({
@@ -36,7 +33,12 @@ vi.mock('@/lib/webhooks/provider-subscription-utils', () => ({
   getProviderConfig: vi.fn(() => ({})),
 }))
 
-import { GET, POST } from '@/app/api/webhooks/instagram/route'
+import {
+  GET,
+  INSTAGRAM_DELIVERY_CONCURRENCY,
+  INSTAGRAM_DISPATCH_DEADLINE_MS,
+  POST,
+} from '@/app/api/webhooks/instagram/route'
 
 const APP_SECRET = 'instagram-app-secret'
 
@@ -63,7 +65,7 @@ function dm(accountId: string, mid: string) {
 }
 
 function signedPost(body: unknown, secret = APP_SECRET): NextRequest {
-  const rawBody = JSON.stringify(body)
+  const rawBody = typeof body === 'string' ? body : JSON.stringify(body)
   return new NextRequest('http://localhost/api/webhooks/instagram', {
     method: 'POST',
     body: rawBody,
@@ -202,21 +204,129 @@ describe('POST /api/webhooks/instagram', () => {
     expect(dispatchedEntryAccounts()).toEqual({ 'wh-a1': ['IG1'] })
   })
 
-  it('asks Meta to retry only when nothing could be queued', async () => {
-    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1')])
-    mockDispatch.mockResolvedValueOnce({
-      outcome: 'failed',
-      response: new NextResponse(null, { status: 500 }),
-      reason: 'queue-failed',
-    })
+  it('asks Meta to retry when any target failed, even if another was queued', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1'), target('wh-a2', 'IG1')])
+    mockDispatch.mockImplementation(async (webhook: { id: string }) =>
+      webhook.id === 'wh-a1'
+        ? { outcome: 'queued', response: new NextResponse(null), reason: 'queued' }
+        : {
+            outcome: 'failed',
+            response: new NextResponse(null, { status: 500 }),
+            reason: 'queue-failed',
+          }
+    )
 
     const response = await POST(signedPost({ object: 'instagram', entry: [dm('IG1', 'm1')] }))
     expect(response.status).toBe(500)
+    expect(mockDispatch).toHaveBeenCalledTimes(2)
   })
 
-  it('rejects a signed body that is not an Instagram envelope', async () => {
+  it('keeps routing other accounts when one lookup throws, then asks for a retry', async () => {
+    mockFindWebhooksByRoutingKey.mockImplementation(async (accountId: string) => {
+      if (accountId === 'IG1') throw new Error('database unavailable')
+      return [target('wh-b', 'IG2')]
+    })
+
+    const response = await POST(
+      signedPost({ object: 'instagram', entry: [dm('IG1', 'm1'), dm('IG2', 'm2')] })
+    )
+
+    expect(response.status).toBe(500)
+    expect(dispatchedEntryAccounts()).toEqual({ 'wh-b': ['IG2'] })
+  })
+
+  it('counts a dispatch that throws as failed without stopping the others', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1'), target('wh-a2', 'IG1')])
+    mockDispatch.mockRejectedValueOnce(new Error('boom'))
+
+    const response = await POST(signedPost({ object: 'instagram', entry: [dm('IG1', 'm1')] }))
+    expect(response.status).toBe(500)
+    expect(mockDispatch).toHaveBeenCalledTimes(2)
+  })
+
+  it('checks the signature before parsing, so a malformed unsigned body is a 401', async () => {
+    const unsigned = await POST(
+      new NextRequest('http://localhost/api/webhooks/instagram', {
+        method: 'POST',
+        body: '{not json',
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    expect(unsigned.status).toBe(401)
+
+    const signed = await POST(signedPost('{not json'))
+    expect(signed.status).toBe(400)
+    expect(mockFindWebhooksByRoutingKey).not.toHaveBeenCalled()
+  })
+
+  it('skips entries without a string id and routes the valid ones', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1')])
+
+    const response = await POST(
+      signedPost({
+        object: 'instagram',
+        entry: [{ messaging: [] }, { id: 7, messaging: [] }, dm('IG1', 'm1')],
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockFindWebhooksByRoutingKey).toHaveBeenCalledTimes(1)
+    expect(dispatchedEntryAccounts()).toEqual({ 'wh-a1': ['IG1'] })
+  })
+
+  it('accepts a delivery wrapped in a bare array', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1')])
+
+    const response = await POST(signedPost([{ object: 'instagram', entry: [dm('IG1', 'm1')] }]))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ ok: true, routed: 1 })
+  })
+
+  it('acknowledges a signed delivery with nothing routable', async () => {
     const response = await POST(signedPost({ entry: [{ messaging: [] }] }))
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(200)
     expect(mockDispatch).not.toHaveBeenCalled()
+  })
+
+  it('runs at most the concurrency bound of dispatches at once', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue(
+      Array.from({ length: 12 }, (_, index) => target(`wh-${index}`, 'IG1'))
+    )
+    let inFlight = 0
+    let peak = 0
+    mockDispatch.mockImplementation(async () => {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      inFlight--
+      return { outcome: 'queued', response: new NextResponse(null), reason: 'queued' }
+    })
+
+    const response = await POST(signedPost({ object: 'instagram', entry: [dm('IG1', 'm1')] }))
+
+    expect(response.status).toBe(200)
+    expect(mockDispatch).toHaveBeenCalledTimes(12)
+    expect(peak).toBe(INSTAGRAM_DELIVERY_CONCURRENCY)
+  })
+
+  it('starts no dispatch after the deadline and asks for a retry', async () => {
+    let now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    mockFindWebhooksByRoutingKey.mockResolvedValue([
+      target('wh-a1', 'IG1'),
+      target('wh-a2', 'IG1'),
+      target('wh-a3', 'IG1'),
+    ])
+    mockDispatch.mockImplementation(async () => {
+      now += INSTAGRAM_DISPATCH_DEADLINE_MS + 1
+      return { outcome: 'queued', response: new NextResponse(null), reason: 'queued' }
+    })
+
+    const response = await POST(signedPost({ object: 'instagram', entry: [dm('IG1', 'm1')] }))
+    clock.mockRestore()
+
+    expect(response.status).toBe(500)
+    expect(mockDispatch).toHaveBeenCalledTimes(1)
   })
 })

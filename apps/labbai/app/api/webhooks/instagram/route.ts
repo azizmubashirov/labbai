@@ -1,25 +1,27 @@
 import { createLogger } from '@labbai/logger'
 import { safeCompare } from '@labbai/security/compare'
+import { getErrorMessage } from '@labbai/utils/errors'
 import { type NextRequest, NextResponse } from 'next/server'
 import {
   type InstagramWebhookResponse,
-  instagramWebhookEnvelopeSchema,
   instagramWebhookVerificationContract,
 } from '@/lib/api/contracts/webhooks'
 import { parseRequest } from '@/lib/api/server'
 import { admissionRejectedResponse, tryAdmit } from '@/lib/core/admission/gate'
 import { env } from '@/lib/core/config/env'
+import { mapWithConcurrency } from '@/lib/core/utils/concurrency'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
 import {
   dispatchResolvedWebhookTarget,
   findWebhooksByRoutingKey,
-  parseWebhookBody,
+  readWebhookRawBody,
 } from '@/lib/webhooks/processor'
 import {
   getInstagramWebhookAppSecrets,
+  type InstagramAccountDelivery,
   isValidInstagramSignature,
-  splitInstagramDeliveryByAccount,
+  partitionInstagramDelivery,
 } from '@/lib/webhooks/providers/instagram'
 
 const logger = createLogger('InstagramWebhookIngress')
@@ -29,17 +31,32 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 
 /**
- * Most professional accounts one delivery is routed for. Meta batches up to 1000 updates, but
- * a batch normally covers a handful of accounts; past this bound the remaining accounts are
- * logged and dropped rather than holding the request past Meta's timeout.
+ * Meta batches at most this many updates into one delivery; entries past it are skipped.
+ * @see https://developers.facebook.com/documentation/instagram-platform/webhooks/setup
+ */
+export const INSTAGRAM_MAX_ENTRIES_PER_DELIVERY = 1000
+
+/**
+ * Most professional accounts one delivery is routed for. A batch normally covers a handful of
+ * accounts; past this bound the remaining accounts are logged and dropped rather than holding
+ * the request past Meta's timeout.
  */
 export const INSTAGRAM_MAX_ACCOUNTS_PER_DELIVERY = 100
 
 /**
- * Most webhooks one delivery is dispatched to, across all its accounts. Dispatches run one at a
- * time, so this also bounds the database work and queued jobs a single delivery can cause.
+ * Most webhooks one delivery is dispatched to, across all its accounts. This bounds the database
+ * work and queued jobs a single delivery can cause.
  */
 export const INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY = 250
+
+/** Routing lookups and dispatches in flight at once for one delivery. */
+export const INSTAGRAM_DELIVERY_CONCURRENCY = 5
+
+/**
+ * No new dispatch starts once this much time has passed since the delivery arrived. The targets
+ * left are counted as failed, so Meta retries the delivery instead of timing the request out.
+ */
+export const INSTAGRAM_DISPATCH_DEADLINE_MS = 15_000
 
 function json(body: InstagramWebhookResponse, status = 200): NextResponse {
   return NextResponse.json(body, { status })
@@ -92,13 +109,32 @@ export const POST = withRouteHandler(async (request: NextRequest) => {
   }
 })
 
+/** One webhook to run for one account's part of the delivery. */
+interface DispatchJob {
+  delivery: InstagramAccountDelivery
+  target: Awaited<ReturnType<typeof findWebhooksByRoutingKey>>[number]
+}
+
+type DispatchOutcome = 'queued' | 'ignored' | 'failed'
+
+/**
+ * Reads the JSON of a delivery whose signature has already been checked. Returns `undefined`
+ * when the signed body is not JSON.
+ */
+function parseSignedBody(rawBody: string): unknown {
+  try {
+    return JSON.parse(rawBody)
+  } catch {
+    return undefined
+  }
+}
+
 async function handleDelivery(request: NextRequest): Promise<NextResponse> {
   const requestId = generateRequestId()
   const receivedAt = Date.now()
 
-  const parsedBody = await parseWebhookBody(request, requestId)
-  if (parsedBody instanceof NextResponse) return parsedBody
-  const { body, rawBody } = parsedBody
+  const rawBody = await readWebhookRawBody(request, requestId)
+  if (rawBody instanceof NextResponse) return rawBody
 
   const secrets = getInstagramWebhookAppSecrets()
   if (secrets.length === 0) {
@@ -110,13 +146,22 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
     return json({ error: 'Invalid signature' }, 401)
   }
 
-  const envelope = instagramWebhookEnvelopeSchema.safeParse(body)
-  if (!envelope.success) {
-    logger.warn(`[${requestId}] Instagram delivery has an unexpected shape`)
+  const body = parseSignedBody(rawBody)
+  if (body === undefined) {
+    logger.warn(`[${requestId}] Signed Instagram delivery is not valid JSON`)
     return json({ error: 'Invalid Instagram delivery' }, 400)
   }
 
-  const accounts = splitInstagramDeliveryByAccount(envelope.data)
+  const { accounts, skippedEntries } = partitionInstagramDelivery(
+    body,
+    INSTAGRAM_MAX_ENTRIES_PER_DELIVERY
+  )
+  if (skippedEntries > 0) {
+    logger.warn(`[${requestId}] Skipped Instagram entries without a routable account id`, {
+      skippedEntries,
+      maxEntries: INSTAGRAM_MAX_ENTRIES_PER_DELIVERY,
+    })
+  }
   if (accounts.length > INSTAGRAM_MAX_ACCOUNTS_PER_DELIVERY) {
     logger.error(`[${requestId}] Instagram delivery exceeds the per-delivery account bound`, {
       accounts: accounts.length,
@@ -124,50 +169,95 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
     })
   }
 
-  let dispatched = 0
-  let queued = 0
   let failed = 0
-  for (const delivery of accounts.slice(0, INSTAGRAM_MAX_ACCOUNTS_PER_DELIVERY)) {
-    const targets = await findWebhooksByRoutingKey(delivery.accountId, requestId, 'instagram')
+
+  const lookups = await mapWithConcurrency(
+    accounts.slice(0, INSTAGRAM_MAX_ACCOUNTS_PER_DELIVERY),
+    INSTAGRAM_DELIVERY_CONCURRENCY,
+    async (delivery) => {
+      try {
+        const targets = await findWebhooksByRoutingKey(delivery.accountId, requestId, 'instagram')
+        return { delivery, targets }
+      } catch (error) {
+        logger.error(`[${requestId}] Instagram webhook lookup failed for an account`, {
+          error: getErrorMessage(error),
+        })
+        return { delivery, targets: null }
+      }
+    }
+  )
+
+  const jobs: DispatchJob[] = []
+  for (const { delivery, targets } of lookups) {
+    if (targets === null) {
+      failed++
+      continue
+    }
     if (targets.length === 0) {
       logger.info(`[${requestId}] No Instagram webhook for an account in the delivery, dropping`, {
         entries: Array.isArray(delivery.body.entry) ? delivery.body.entry.length : 0,
       })
       continue
     }
-
-    for (const target of targets) {
-      if (dispatched >= INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY) {
-        logger.error(`[${requestId}] Instagram delivery exceeds the per-delivery dispatch bound`, {
-          bound: INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY,
-        })
-        break
-      }
-      dispatched++
-      const result = await dispatchResolvedWebhookTarget(
-        target.webhook,
-        target.workflow,
-        delivery.body,
-        request,
-        { requestId, receivedAt }
-      )
-      if (result.outcome === 'queued') queued++
-      if (result.outcome === 'failed') {
-        failed++
-        logger.warn(`[${requestId}] Instagram dispatch failed for webhook ${target.webhook.id}`, {
-          reason: result.reason,
-          status: result.response.status,
-        })
-      }
-    }
+    for (const target of targets) jobs.push({ delivery, target })
+  }
+  if (jobs.length > INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY) {
+    logger.error(`[${requestId}] Instagram delivery exceeds the per-delivery dispatch bound`, {
+      bound: INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY,
+      dropped: jobs.length - INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY,
+    })
   }
 
+  const outcomes = await mapWithConcurrency(
+    jobs.slice(0, INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY),
+    INSTAGRAM_DELIVERY_CONCURRENCY,
+    async ({ delivery, target }): Promise<DispatchOutcome> => {
+      if (Date.now() - receivedAt > INSTAGRAM_DISPATCH_DEADLINE_MS) {
+        logger.warn(
+          `[${requestId}] Instagram dispatch deadline passed for webhook ${target.webhook.id}`
+        )
+        return 'failed'
+      }
+      try {
+        const result = await dispatchResolvedWebhookTarget(
+          target.webhook,
+          target.workflow,
+          delivery.body,
+          request,
+          { requestId, receivedAt }
+        )
+        if (result.outcome === 'failed') {
+          logger.warn(`[${requestId}] Instagram dispatch failed for webhook ${target.webhook.id}`, {
+            reason: result.reason,
+            status: result.response.status,
+          })
+        }
+        return result.outcome
+      } catch (error) {
+        logger.error(`[${requestId}] Instagram dispatch threw for webhook ${target.webhook.id}`, {
+          error: getErrorMessage(error),
+        })
+        return 'failed'
+      }
+    }
+  )
+
+  const queued = outcomes.filter((outcome) => outcome === 'queued').length
+  failed += outcomes.filter((outcome) => outcome === 'failed').length
+
   /**
-   * Meta retries a non-2xx delivery for up to 36 hours. Ask for a retry only when nothing was
-   * queued, so a partial failure does not re-run the targets that already succeeded.
+   * Meta retries a non-2xx delivery for up to 36 hours, so any failed target asks for a retry.
+   * That is safe for the targets that already succeeded: each webhook's idempotency key is its
+   * id plus a hash of the event ids it was given, so a retried delivery is deduplicated per
+   * webhook and only the failed ones run again. Inbox messages are inserted on conflict do
+   * nothing, so a retry does not record them twice.
    */
-  if (failed > 0 && queued === 0) {
-    return json({ error: 'Instagram delivery could not be processed' }, 500)
+  if (failed > 0) {
+    logger.warn(`[${requestId}] Instagram delivery had failed targets, asking Meta to retry`, {
+      failed,
+      queued,
+    })
+    return json({ error: 'Instagram delivery could not be fully processed' }, 500)
   }
   return json({ ok: true, routed: queued })
 }
