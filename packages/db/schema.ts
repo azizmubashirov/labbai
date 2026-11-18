@@ -8258,3 +8258,195 @@ export const crmConversationSync = pgTable(
     pk: primaryKey({ columns: [table.linkId, table.conversationId] }),
   })
 )
+
+/** Lifecycle of an Instagram auto-reply rule; only `live` rules are matched. */
+export type InstagramAutoReplyRuleStatus = 'draft' | 'live' | 'paused'
+
+/** Instagram events an auto-reply rule listens to. */
+export type InstagramAutoReplyTriggerType =
+  | 'comment'
+  | 'live_comment'
+  | 'story_reply'
+  | 'story_mention'
+
+/** Which posts a rule applies to: listed ones, any, or the next one published after go-live. */
+export type InstagramAutoReplyMediaScope = 'specific' | 'any' | 'next'
+
+/** How a rule's keywords decide a match. */
+export type InstagramAutoReplyKeywordMode = 'include' | 'exclude' | 'any'
+
+/** What happened to one matched comment, story reply, or mention. */
+export type InstagramAutoReplyEventOutcome =
+  | 'pending'
+  | 'replied'
+  | 'partial'
+  | 'skipped_duplicate'
+  | 'handoff'
+  | 'expired'
+  | 'failed'
+
+/** How far a multi-step private reply (opening DM, follow gate) has progressed. */
+export type InstagramAutoReplyDmStage = 'opening' | 'follow_gate' | 'delivered'
+
+/** One link button of an auto-reply DM. */
+export interface InstagramAutoReplyDmButton {
+  title: string
+  url: string
+}
+
+/** The private reply an auto-reply rule sends: text, up to three link buttons, and an image. */
+export interface InstagramAutoReplyDmMessage {
+  text: string
+  buttons: InstagramAutoReplyDmButton[]
+  imageUrl?: string | null
+}
+
+/** A first DM with one postback button; the main DM is sent after the user taps it. */
+export interface InstagramAutoReplyOpeningDm {
+  text: string
+  buttonTitle: string
+}
+
+/** Asks the user to follow the account before the main DM is sent. */
+export interface InstagramAutoReplyFollowGate {
+  enabled: boolean
+  text: string
+  buttonTitle: string
+}
+
+/**
+ * The DM configuration a matched event was answered with, frozen at claim time. Later steps
+ * (postback follow-ups, tracked link redirects) read it instead of the rule, which may have
+ * changed or been deleted since.
+ */
+export interface InstagramAutoReplyDmSnapshot {
+  dmMessage: InstagramAutoReplyDmMessage
+  openingDm: InstagramAutoReplyOpeningDm | null
+  followGate: InstagramAutoReplyFollowGate | null
+}
+
+/**
+ * A deterministic "comment → reply" rule for one Instagram professional account. Matching comments
+ * get a public reply and/or a private DM without a workflow run, or are handed off to the
+ * account's comment-trigger workflows. The first matching live rule wins (lowest `sort_order`,
+ * then oldest).
+ */
+export const instagramAutoReplyRule = pgTable(
+  'instagram_auto_reply_rule',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    /** The Instagram OAuth credential the rule replies with. Null once that credential is deleted. */
+    credentialId: text('credential_id').references(() => credential.id, { onDelete: 'set null' }),
+    /** Professional account id (`user_id`): the webhook `entry.id` and the ingress routing key. */
+    igAccountId: text('ig_account_id').notNull(),
+    name: text('name').notNull(),
+    status: text('status').$type<InstagramAutoReplyRuleStatus>().notNull().default('draft'),
+    triggerType: text('trigger_type')
+      .$type<InstagramAutoReplyTriggerType>()
+      .notNull()
+      .default('comment'),
+    mediaScope: text('media_scope').$type<InstagramAutoReplyMediaScope>().notNull(),
+    mediaIds: jsonb('media_ids').$type<string[]>().notNull().default([]),
+    /** Set on go-live for `media_scope = 'next'`; the next media is the first one created after it. */
+    nextMediaArmedAt: timestamp('next_media_armed_at', { withTimezone: true }),
+    /** The media a `'next'` rule resolved to, filled lazily by the engine. */
+    nextMediaId: text('next_media_id'),
+    keywordMode: text('keyword_mode').$type<InstagramAutoReplyKeywordMode>().notNull(),
+    keywords: jsonb('keywords').$type<string[]>().notNull().default([]),
+    publicReplyEnabled: boolean('public_reply_enabled').notNull().default(true),
+    /** Public reply variants; one is picked at random per comment. */
+    publicReplies: jsonb('public_replies').$type<string[]>().notNull().default([]),
+    dmEnabled: boolean('dm_enabled').notNull().default(true),
+    dmMessage: jsonb('dm_message').$type<InstagramAutoReplyDmMessage>().notNull(),
+    openingDm: jsonb('opening_dm').$type<InstagramAutoReplyOpeningDm>(),
+    followGate: jsonb('follow_gate').$type<InstagramAutoReplyFollowGate>(),
+    /** When set, a match is not answered here but dispatched to the comment-trigger workflows. */
+    handoffToAgent: boolean('handoff_to_agent').notNull().default(false),
+    oncePerUserPerPost: boolean('once_per_user_per_post').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdByUserId: text('created_by_user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    workspaceIdx: index('instagram_auto_reply_rule_workspace_idx').on(table.workspaceId),
+    accountStatusIdx: index('instagram_auto_reply_rule_account_status_idx').on(
+      table.igAccountId,
+      table.status
+    ),
+  })
+)
+
+/**
+ * One matched comment, story reply, or mention and what the engine did with it. The row is the
+ * idempotency claim: it is inserted before anything is sent, and the unique
+ * `(ig_account_id, source_id)` turns a Meta redelivery into a no-op. Unmatched comments are not
+ * stored.
+ */
+export const instagramAutoReplyEvent = pgTable(
+  'instagram_auto_reply_event',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id, { onDelete: 'cascade' }),
+    ruleId: text('rule_id').references(() => instagramAutoReplyRule.id, { onDelete: 'set null' }),
+    igAccountId: text('ig_account_id').notNull(),
+    /** Comment id, or the message id of a story reply or mention. */
+    sourceId: text('source_id').notNull(),
+    triggerType: text('trigger_type').$type<InstagramAutoReplyTriggerType>().notNull(),
+    mediaId: text('media_id'),
+    /** Instagram-scoped id of the user who commented. */
+    fromId: text('from_id'),
+    fromUsername: text('from_username'),
+    /** The comment text, truncated to 1000 characters. */
+    text: text('text'),
+    outcome: text('outcome').$type<InstagramAutoReplyEventOutcome>().notNull().default('pending'),
+    publicReplyId: text('public_reply_id'),
+    dmSent: boolean('dm_sent').notNull().default(false),
+    dmStage: text('dm_stage').$type<InstagramAutoReplyDmStage>(),
+    dmSnapshot: jsonb('dm_snapshot').$type<InstagramAutoReplyDmSnapshot>(),
+    /** Last send error, truncated to 500 characters. */
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    accountSourceUnique: uniqueIndex('instagram_auto_reply_event_account_source_unique').on(
+      table.igAccountId,
+      table.sourceId
+    ),
+    ruleMediaFromIdx: index('instagram_auto_reply_event_rule_media_from_idx').on(
+      table.ruleId,
+      table.mediaId,
+      table.fromId
+    ),
+    workspaceCreatedIdx: index('instagram_auto_reply_event_workspace_created_idx').on(
+      table.workspaceId,
+      table.createdAt.desc()
+    ),
+  })
+)
+
+/** One tap on a tracked DM link button, recorded by the redirect route before it forwards. */
+export const instagramAutoReplyClick = pgTable(
+  'instagram_auto_reply_click',
+  {
+    id: text('id').primaryKey(),
+    eventId: text('event_id')
+      .notNull()
+      .references(() => instagramAutoReplyEvent.id, { onDelete: 'cascade' }),
+    ruleId: text('rule_id').references(() => instagramAutoReplyRule.id, { onDelete: 'set null' }),
+    buttonIndex: integer('button_index').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    eventIdx: index('instagram_auto_reply_click_event_idx').on(table.eventId),
+    ruleIdx: index('instagram_auto_reply_click_rule_idx').on(table.ruleId),
+  })
+)

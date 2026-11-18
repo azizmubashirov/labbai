@@ -188,6 +188,11 @@ export const AuditAction = {
   INBOX_CONVERSATION_UPDATED: 'inbox_conversation.updated',
   INBOX_REPLY_SENT: 'inbox_conversation.reply_sent',
 
+  // Instagram auto-reply
+  INSTAGRAM_AUTO_REPLY_RULE_CREATED: 'instagram_auto_reply_rule.created',
+  INSTAGRAM_AUTO_REPLY_RULE_UPDATED: 'instagram_auto_reply_rule.updated',
+  INSTAGRAM_AUTO_REPLY_RULE_DELETED: 'instagram_auto_reply_rule.deleted',
+
   // Sandboxes
   SANDBOX_CREATED: 'sandbox.created',
   SANDBOX_UPDATED: 'sandbox.updated',
@@ -283,6 +288,7 @@ export const AuditResourceType = {
   FILE: 'file',
   FOLDER: 'folder',
   INBOX_CONVERSATION: 'inbox_conversation',
+  INSTAGRAM_AUTO_REPLY_RULE: 'instagram_auto_reply_rule',
   KNOWLEDGE_BASE: 'knowledge_base',
   MCP_SERVER: 'mcp_server',
   OAUTH: 'oauth',
