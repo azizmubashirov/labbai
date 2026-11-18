@@ -1,10 +1,14 @@
 import { db, workflowDeploymentVersion } from '@labbai/db'
-import { webhook } from '@labbai/db/schema'
+import { webhook, workflow } from '@labbai/db/schema'
 import { createLogger } from '@labbai/logger'
 import { safeCompare } from '@labbai/security/compare'
 import { hmacSha256Hex } from '@labbai/security/hmac'
+import { toError } from '@labbai/utils/errors'
+import { isRecordLike } from '@labbai/utils/object'
 import { and, eq, isNull, or } from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
+import { resolveBackgroundWebhookEnv } from '@/lib/webhooks/env-resolver'
+import { resolveEnvVarReferences } from '@/executor/utils/reference-validation'
 
 const logger = createLogger('WebhookProvider:Meta')
 
@@ -63,6 +67,32 @@ export function verifyMetaWebhookAuth(
 }
 
 /**
+ * Resolves `{{VAR}}` references in a stored verify token against the same background env the
+ * signed delivery is checked with, so a token kept in workspace secrets passes the handshake.
+ * Returns an empty string when a reference cannot be resolved, which fails the comparison.
+ */
+async function resolveVerificationToken(
+  configuredToken: string,
+  row: { workflowOwnerId: string; workspaceId: string | null },
+  requestId: string
+): Promise<string> {
+  if (!configuredToken.includes('{{')) return configuredToken
+  try {
+    const envVars = await resolveBackgroundWebhookEnv(
+      row.workflowOwnerId,
+      row.workspaceId ?? undefined
+    )
+    const resolved = resolveEnvVarReferences(configuredToken, envVars)
+    return typeof resolved === 'string' && !resolved.includes('{{') ? resolved : ''
+  } catch (error) {
+    logger.warn(`[${requestId}] Failed to resolve Meta webhook verify token`, {
+      error: toError(error).message,
+    })
+    return ''
+  }
+}
+
+/**
  * Answers Meta's subscription handshake (`GET ?hub.mode=subscribe&hub.verify_token&hub.challenge`)
  * by matching the token against the active webhooks of `provider` on `path`. Returns null when
  * the request is not a handshake, or when no webhook on the path expects a token, so ownership of
@@ -87,8 +117,9 @@ export async function handleMetaVerification(
   }
 
   const rows = await db
-    .select({ webhook })
+    .select({ webhook, workflowOwnerId: workflow.userId, workspaceId: workflow.workspaceId })
     .from(webhook)
+    .innerJoin(workflow, eq(webhook.workflowId, workflow.id))
     .leftJoin(
       workflowDeploymentVersion,
       and(
@@ -110,11 +141,14 @@ export async function handleMetaVerification(
 
   let candidates = 0
   for (const row of rows) {
-    const providerConfig = (row.webhook.providerConfig as Record<string, unknown>) || {}
-    const verificationToken = providerConfig.verificationToken
-    if (typeof verificationToken !== 'string' || !verificationToken) continue
+    const providerConfig = isRecordLike(row.webhook.providerConfig)
+      ? (row.webhook.providerConfig as Record<string, unknown>)
+      : {}
+    const configuredToken = providerConfig.verificationToken
+    if (typeof configuredToken !== 'string' || !configuredToken) continue
     candidates++
-    if (safeCompare(token, verificationToken)) {
+    const verificationToken = await resolveVerificationToken(configuredToken, row, requestId)
+    if (verificationToken && safeCompare(token, verificationToken)) {
       logger.info(
         `[${requestId}] ${provider} verification successful for webhook ${row.webhook.id}`
       )

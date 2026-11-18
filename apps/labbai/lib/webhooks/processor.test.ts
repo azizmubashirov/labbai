@@ -127,6 +127,7 @@ import {
   parseWebhookBody,
   processPolledWebhookEvent,
 } from '@/lib/webhooks/processor'
+import { getProviderHandler } from '@/lib/webhooks/providers'
 
 afterAll(resetDbChainMock)
 
@@ -812,6 +813,26 @@ describe('handleProviderChallenges method gating', () => {
 
     expect((await response)?.status).toBe(200)
     expect(handleChallenge).toHaveBeenCalledOnce()
+  })
+
+  /**
+   * Meta answers its subscription handshake on `GET`, before any webhook lookup, so a Meta
+   * provider missing from the challenge list rejects the handshake as a wrong-method delivery.
+   */
+  it('offers the handshake to every Meta provider', async () => {
+    mockProviderHandler.current = {}
+    vi.mocked(getProviderHandler).mockClear()
+
+    await handleProviderChallenges(
+      {},
+      new NextRequest('http://localhost:3000/api/webhooks/trigger/abc', { method: 'GET' }),
+      'req-1',
+      'abc'
+    )
+
+    expect(vi.mocked(getProviderHandler).mock.calls.map(([provider]) => provider)).toEqual(
+      expect.arrayContaining(['whatsapp', 'instagram'])
+    )
   })
 
   it('does not run a declaring handler on a method outside its list', async () => {
