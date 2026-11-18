@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getRuleCounters: vi.fn(),
   getStatsRows: vi.fn(),
   getWorkspaceRule: vi.fn(),
+  hasLiveRuleInOtherWorkspace: vi.fn(),
   insertRule: vi.fn(),
   listWorkspaceContactEvents: vi.fn(),
   listWorkspaceEvents: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('@/lib/instagram-auto-reply/repository', () => ({
   getRuleCounters: mocks.getRuleCounters,
   getStatsRows: mocks.getStatsRows,
   getWorkspaceRule: mocks.getWorkspaceRule,
+  hasLiveRuleInOtherWorkspace: mocks.hasLiveRuleInOtherWorkspace,
   insertRule: mocks.insertRule,
   listWorkspaceContactEvents: mocks.listWorkspaceContactEvents,
   listWorkspaceEvents: mocks.listWorkspaceEvents,
@@ -176,6 +178,7 @@ describe('Instagram auto-reply application', () => {
     mocks.getRuleCounters.mockResolvedValue(new Map())
     mocks.getMediaAccountIds.mockResolvedValue(new Map())
     mocks.listWorkspaceRules.mockResolvedValue([])
+    mocks.hasLiveRuleInOtherWorkspace.mockResolvedValue(false)
     grantInstagramCredential()
   })
 
@@ -296,6 +299,33 @@ describe('Instagram auto-reply application', () => {
         input: { workspaceId: WORKSPACE_ID, status: 'live', values: CREATE_VALUES },
       })
       expect(mocks.insertRule.mock.calls[0][0]).not.toHaveProperty('nextMediaArmedAt')
+    })
+
+    it('refuses to create live when another workspace is live on the account', async () => {
+      mocks.hasLiveRuleInOtherWorkspace.mockResolvedValue(true)
+      const error = await expectOrchestrationError(
+        createInstagramAutoReplyRule.execute({
+          principal: MEMBER,
+          input: { workspaceId: WORKSPACE_ID, status: 'live', values: CREATE_VALUES },
+        }),
+        'conflict'
+      )
+      expect(error.message).toContain('another workspace')
+      expect(mocks.hasLiveRuleInOtherWorkspace).toHaveBeenCalledWith(
+        '17841400000000001',
+        WORKSPACE_ID
+      )
+      expect(mocks.insertRule).not.toHaveBeenCalled()
+    })
+
+    it('still saves a draft when another workspace is live on the account', async () => {
+      mocks.hasLiveRuleInOtherWorkspace.mockResolvedValue(true)
+      await createInstagramAutoReplyRule.execute({
+        principal: MEMBER,
+        input: { workspaceId: WORKSPACE_ID, values: CREATE_VALUES },
+      })
+      expect(mocks.hasLiveRuleInOtherWorkspace).not.toHaveBeenCalled()
+      expect(mocks.insertRule).toHaveBeenCalledTimes(1)
     })
 
     it('refuses to create live while incomplete, saving nothing', async () => {
@@ -434,6 +464,29 @@ describe('Instagram auto-reply application', () => {
       )
     })
 
+    it('refuses to move a live rule onto an account another workspace is live on', async () => {
+      mocks.getWorkspaceRule.mockResolvedValue({ ...RULE_ROW, status: 'live' })
+      grantInstagramCredential({ id: 'cred-2' })
+      mocks.getInstagramAccountUserId.mockResolvedValue('17841400000000002')
+      mocks.hasLiveRuleInOtherWorkspace.mockResolvedValue(true)
+      await expectOrchestrationError(
+        updateInstagramAutoReplyRule.execute({
+          principal: MEMBER,
+          input: {
+            workspaceId: WORKSPACE_ID,
+            ruleId: 'rule-1',
+            changes: { credentialId: 'cred-2' },
+          },
+        }),
+        'conflict'
+      )
+      expect(mocks.hasLiveRuleInOtherWorkspace).toHaveBeenCalledWith(
+        '17841400000000002',
+        WORKSPACE_ID
+      )
+      expect(mocks.updateWorkspaceRule).not.toHaveBeenCalled()
+    })
+
     it('keeps a live rule complete', async () => {
       mocks.getWorkspaceRule.mockResolvedValue({ ...RULE_ROW, status: 'live' })
       await expectOrchestrationError(
@@ -508,6 +561,33 @@ describe('Instagram auto-reply application', () => {
         input: { workspaceId: WORKSPACE_ID, ruleId: 'rule-1', status: 'live' },
       })
       expect(mocks.updateWorkspaceRule.mock.calls[0][2]).not.toHaveProperty('nextMediaArmedAt')
+    })
+
+    it('refuses to go live when another workspace is live on the account', async () => {
+      mocks.hasLiveRuleInOtherWorkspace.mockResolvedValue(true)
+      await expectOrchestrationError(
+        setInstagramAutoReplyRuleStatus.execute({
+          principal: MEMBER,
+          input: { workspaceId: WORKSPACE_ID, ruleId: 'rule-1', status: 'live' },
+        }),
+        'conflict'
+      )
+      expect(mocks.hasLiveRuleInOtherWorkspace).toHaveBeenCalledWith(
+        '17841400000000001',
+        WORKSPACE_ID
+      )
+      expect(mocks.updateWorkspaceRule).not.toHaveBeenCalled()
+      expect(auditMockFns.mockRecordAudit).not.toHaveBeenCalled()
+    })
+
+    it('pauses even when another workspace is live on the account', async () => {
+      mocks.getWorkspaceRule.mockResolvedValue({ ...RULE_ROW, status: 'live' })
+      mocks.hasLiveRuleInOtherWorkspace.mockResolvedValue(true)
+      await setInstagramAutoReplyRuleStatus.execute({
+        principal: MEMBER,
+        input: { workspaceId: WORKSPACE_ID, ruleId: 'rule-1', status: 'paused' },
+      })
+      expect(mocks.updateWorkspaceRule).toHaveBeenCalledTimes(1)
     })
 
     it('refuses to go live while incomplete, naming what is missing', async () => {

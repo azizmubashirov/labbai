@@ -48,9 +48,9 @@ function notFound(): NextResponse {
 }
 
 /**
- * Public tracked redirect behind every auto-reply DM link button. It records the tap and answers
- * 302 to the `https:` URL stored in the event's DM snapshot; the URL in the request never decides
- * the target. An unknown event or button is a 404. Responses are never cached, so every tap is
+ * Public tracked redirect behind every auto-reply DM link button. It applies the per-IP click
+ * limit, then records the tap and answers 302 to the normalized `href` of the `https:` URL stored
+ * in the event's DM snapshot; the URL in the request never decides the target. An unknown event or button is a 404. Responses are never cached, so every tap is
  * counted.
  */
 export const GET = withRouteHandler(
@@ -62,11 +62,9 @@ export const GET = withRouteHandler(
     if (!parsed.success) return parsed.response
 
     const { eventId, buttonIndex } = parsed.data.params
-    const target = await followTrackedLink({
-      eventId,
-      buttonIndex,
-      record: await shouldRecordClick(request),
-    })
+    /** The IP limit is checked before the event is read, so a replayed link costs no lookup. */
+    const record = await shouldRecordClick(request)
+    const target = await followTrackedLink({ eventId, buttonIndex, record })
     if (!target) return notFound()
 
     return new NextResponse(null, {

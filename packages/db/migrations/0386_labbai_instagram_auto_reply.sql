@@ -1,4 +1,4 @@
--- migration-safe: Instagram auto-reply. Additive only: three new tables with their own foreign keys and indexes; no existing table is altered.
+-- migration-safe: Instagram auto-reply. Additive only: three new tables with their own foreign keys and indexes (all created in this migration, so plain CREATE INDEX is safe); no existing table is altered.
 CREATE TABLE "instagram_auto_reply_rule" (
 	"id" text PRIMARY KEY NOT NULL,
 	"workspace_id" text NOT NULL,
@@ -44,6 +44,7 @@ CREATE TABLE "instagram_auto_reply_event" (
 	"dm_stage" text,
 	"dm_snapshot" jsonb,
 	"error" text,
+	"retryable" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -65,8 +66,10 @@ ALTER TABLE "instagram_auto_reply_click" ADD CONSTRAINT "instagram_auto_reply_cl
 ALTER TABLE "instagram_auto_reply_click" ADD CONSTRAINT "instagram_auto_reply_click_rule_id_instagram_auto_reply_rule_id_fk" FOREIGN KEY ("rule_id") REFERENCES "public"."instagram_auto_reply_rule"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "instagram_auto_reply_rule_workspace_idx" ON "instagram_auto_reply_rule" USING btree ("workspace_id");--> statement-breakpoint
 CREATE INDEX "instagram_auto_reply_rule_account_status_idx" ON "instagram_auto_reply_rule" USING btree ("ig_account_id","status");--> statement-breakpoint
+CREATE INDEX "instagram_auto_reply_rule_credential_idx" ON "instagram_auto_reply_rule" USING btree ("credential_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "instagram_auto_reply_event_account_source_unique" ON "instagram_auto_reply_event" USING btree ("ig_account_id","source_id");--> statement-breakpoint
 CREATE INDEX "instagram_auto_reply_event_rule_media_from_idx" ON "instagram_auto_reply_event" USING btree ("rule_id","media_id","from_id");--> statement-breakpoint
 CREATE INDEX "instagram_auto_reply_event_workspace_created_idx" ON "instagram_auto_reply_event" USING btree ("workspace_id","created_at" DESC);--> statement-breakpoint
+CREATE INDEX "instagram_auto_reply_event_from_idx" ON "instagram_auto_reply_event" USING btree ("from_id","ig_account_id","trigger_type","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "instagram_auto_reply_click_event_idx" ON "instagram_auto_reply_click" USING btree ("event_id");--> statement-breakpoint
 CREATE INDEX "instagram_auto_reply_click_rule_idx" ON "instagram_auto_reply_click" USING btree ("rule_id");

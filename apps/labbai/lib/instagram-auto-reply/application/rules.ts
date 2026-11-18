@@ -22,6 +22,7 @@ import {
   deleteWorkspaceRule,
   getRuleCounters,
   getWorkspaceRule,
+  hasLiveRuleInOtherWorkspace,
   type InstagramAutoReplyRuleChanges,
   type InstagramAutoReplyRuleCounterRow,
   type InstagramAutoReplyRuleRecord,
@@ -182,6 +183,23 @@ async function requireRule(
   return rule
 }
 
+/**
+ * Refuses to make a rule live on an Instagram account that another workspace already answers.
+ * The engine matches every live rule of an account regardless of workspace, so two workspaces
+ * live on one account would answer from one shared, unordered pool of rules.
+ *
+ * The check and the write are not one transaction, so two workspaces going live on the same
+ * account at the same instant could both pass; this guards the ordinary case, not that race.
+ */
+async function assertAccountFreeForLive(workspaceId: string, igAccountId: string): Promise<void> {
+  if (await hasLiveRuleInOtherWorkspace(igAccountId, workspaceId)) {
+    throw new OrchestrationError(
+      'conflict',
+      'This Instagram account already has live auto-reply rules in another workspace. Pause them there first.'
+    )
+  }
+}
+
 function throwIssues(issues: InstagramAutoReplyRuleIssue[]): void {
   if (issues.length === 0) return
   throw new OrchestrationError('validation', issues.map((issue) => issue.message).join('. '))
@@ -277,6 +295,7 @@ export const createInstagramAutoReplyRule = defineAuthorizedWorkspaceUseCase({
       workspaceId: input.workspaceId,
       credentialId: values.credentialId,
     })
+    if (status === 'live') await assertAccountFreeForLive(input.workspaceId, igAccountId)
     const sortOrder = await nextWorkspaceRuleSortOrder(input.workspaceId)
     const rule = await insertRule({
       ...values,
@@ -327,7 +346,12 @@ export const updateInstagramAutoReplyRule = defineAuthorizedWorkspaceUseCase({
 
     const merged = { ...existing, ...changes }
     throwIssues(getRuleShapeIssues(merged))
-    if (existing.status === 'live') throwIssues(getGoLiveIssues(merged))
+    if (existing.status === 'live') {
+      throwIssues(getGoLiveIssues(merged))
+      if (merged.igAccountId !== existing.igAccountId) {
+        await assertAccountFreeForLive(input.workspaceId, merged.igAccountId)
+      }
+    }
 
     if (merged.mediaScope !== 'next') {
       if (existing.nextMediaArmedAt || existing.nextMediaId) {
@@ -397,6 +421,7 @@ export const setInstagramAutoReplyRuleStatus = defineAuthorizedWorkspaceUseCase(
         workspaceId: input.workspaceId,
         credentialId: existing.credentialId,
       })
+      await assertAccountFreeForLive(input.workspaceId, credential.igAccountId)
       changes = {
         ...changes,
         credentialId: credential.credentialId,

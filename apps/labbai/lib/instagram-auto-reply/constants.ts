@@ -92,6 +92,16 @@ export const INSTAGRAM_AUTO_REPLY_EVENTS_PAGE_DEFAULT = 50
 export const INSTAGRAM_AUTO_REPLY_STATS_MAX_MEDIA = 50
 /** Meta allows a private reply only within 7 days of the comment; older comments are `expired`. */
 export const INSTAGRAM_AUTO_REPLY_PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+/**
+ * A `pending` event untouched for this long belongs to a run that stopped between its claim and
+ * its outcome; a redelivery re-opens it. Runs finish within the ingress deadline, far below this.
+ */
+export const INSTAGRAM_AUTO_REPLY_PENDING_STALE_MS = 2 * 60 * 1000
+/**
+ * Shared time budget for every Graph call one source makes (public reply and DM together, which
+ * run side by side), so one comment cannot hold a send slot for several 10-second timeouts.
+ */
+export const INSTAGRAM_AUTO_REPLY_SOURCE_SEND_BUDGET_MS = 12_000
 /** Comments the engine answers at once across one whole webhook delivery. */
 export const INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY = 5
 /** Public path of the tracked DM link redirect; the event id and button index follow it. */

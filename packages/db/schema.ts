@@ -8379,6 +8379,8 @@ export const instagramAutoReplyRule = pgTable(
       table.igAccountId,
       table.status
     ),
+    /** Lists a credential's rules (the trigger modal) and serves the `credential_id` foreign key. */
+    credentialIdx: index('instagram_auto_reply_rule_credential_idx').on(table.credentialId),
   })
 )
 
@@ -8407,12 +8409,19 @@ export const instagramAutoReplyEvent = pgTable(
     /** The comment text, truncated to 1000 characters. */
     text: text('text'),
     outcome: text('outcome').$type<InstagramAutoReplyEventOutcome>().notNull().default('pending'),
+    /** Stored as soon as the public reply is posted, so a retry never posts it again. */
     publicReplyId: text('public_reply_id'),
+    /** Set as soon as the main DM is delivered, so a retry never sends it again. */
     dmSent: boolean('dm_sent').notNull().default(false),
     dmStage: text('dm_stage').$type<InstagramAutoReplyDmStage>(),
     dmSnapshot: jsonb('dm_snapshot').$type<InstagramAutoReplyDmSnapshot>(),
     /** Last send error, truncated to 500 characters. */
     error: text('error'),
+    /**
+     * True for a `failed` event that nothing was sent for and whose failure was transient, so a
+     * Meta redelivery may re-open it. A permanent failure stays false and is never retried.
+     */
+    retryable: boolean('retryable').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -8428,6 +8437,16 @@ export const instagramAutoReplyEvent = pgTable(
     ),
     workspaceCreatedIdx: index('instagram_auto_reply_event_workspace_created_idx').on(
       table.workspaceId,
+      table.createdAt.desc()
+    ),
+    /**
+     * One user's events: the story-mention cooldown (`from_id`, account, trigger, since), the
+     * Inbox contact timeline, and data deletion by `from_id`.
+     */
+    fromIdx: index('instagram_auto_reply_event_from_idx').on(
+      table.fromId,
+      table.igAccountId,
+      table.triggerType,
       table.createdAt.desc()
     ),
   })

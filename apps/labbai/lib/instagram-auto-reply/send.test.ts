@@ -76,6 +76,46 @@ describe('sendPublicReply', () => {
   })
 })
 
+describe('shared send budget', () => {
+  it('aborts a call when the shared signal fires, as a transient failure', async () => {
+    mockFetch.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+        })
+    )
+    const budget = new AbortController()
+
+    const pending = sendPublicReply('t', 'C1', 'x', { signal: budget.signal })
+    budget.abort(new Error('budget spent'))
+
+    await expect(pending).resolves.toMatchObject({ ok: false, code: null, retryable: true })
+  })
+
+  it('passes the shared signal to every call of a DM with its fallback', async () => {
+    mockFetch
+      .mockResolvedValueOnce(graphError(100, 'Invalid parameter'))
+      .mockResolvedValueOnce(jsonResponse({ message_id: 'mid-1' }))
+    const budget = new AbortController()
+
+    await sendPrivateReply(
+      't',
+      'IG1',
+      'C1',
+      { text: 'Hi', buttons: BUTTONS },
+      {
+        signal: budget.signal,
+      }
+    )
+    budget.abort()
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    for (const [, init] of mockFetch.mock.calls) {
+      expect((init.signal as AbortSignal).aborted).toBe(true)
+    }
+  })
+})
+
 describe('sendPrivateReply', () => {
   it('sends a DM without buttons as plain text to recipient.comment_id', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ recipient_id: 'U1', message_id: 'mid-1' }))

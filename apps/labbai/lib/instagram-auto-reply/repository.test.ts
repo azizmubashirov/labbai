@@ -12,17 +12,19 @@ import {
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   claimEvent,
-  deleteEventsFromUser,
+  claimOncePerUser,
+  deleteAutoReplyDataForInstagramId,
   getEventById,
   getEventOutcomeBySource,
   getInstagramAccountUserId,
   getMediaAccountIds,
-  hasPriorReply,
+  hasLiveRuleInOtherWorkspace,
   hasRecentAnswer,
   listLiveRulesForAccount,
   listWorkspaceContactEvents,
   recordClick,
-  retryFailedEvent,
+  recordEventSend,
+  reopenEvent,
   setEventDmStage,
   setNextMediaId,
   transitionEventDmStage,
@@ -131,52 +133,130 @@ describe('Instagram auto-reply repository', () => {
     })
   })
 
-  describe('retryFailedEvent', () => {
-    it('moves only a failed row back to pending and clears its error', async () => {
+  describe('reopenEvent', () => {
+    it('re-opens a retryable failed row or a stale pending row, keeping recorded sends', async () => {
       dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'event-1', outcome: 'pending' }])
 
-      const result = await retryFailedEvent({ igAccountId: '1784', sourceId: 'comment-1' })
+      const before = Date.now()
+      const result = await reopenEvent({ igAccountId: '1784', sourceId: 'comment-1' })
 
       expect(result).toEqual({ id: 'event-1', outcome: 'pending' })
       const set = dbChainMockFns.set.mock.calls[0][0] as Record<string, unknown>
-      expect(set).toMatchObject({ outcome: 'pending', error: null })
+      expect(set).toMatchObject({ outcome: 'pending', error: null, retryable: false })
       expect(set).not.toHaveProperty('ruleId')
+      expect(set).not.toHaveProperty('publicReplyId')
+      expect(set).not.toHaveProperty('dmSent')
+      expect(set).not.toHaveProperty('dmStage')
+
       const where = lastWhere()
-      expect(hasEq(where, EVENT.outcome, 'failed')).toBe(true)
       expect(hasEq(where, EVENT.igAccountId, '1784')).toBe(true)
       expect(hasEq(where, EVENT.sourceId, 'comment-1')).toBe(true)
+      const either = flattenMockConditions(where).find((node) => node.type === 'or') as {
+        conditions: unknown[]
+      }
+      const [failedBranch, pendingBranch] = either.conditions
+      expect(hasEq(failedBranch, EVENT.outcome, 'failed')).toBe(true)
+      expect(hasEq(failedBranch, EVENT.retryable, true)).toBe(true)
+      expect(hasEq(pendingBranch, EVENT.outcome, 'pending')).toBe(true)
+      const stale = flattenMockConditions(pendingBranch).find((node) => node.type === 'lt') as {
+        left: unknown
+        right: Date
+      }
+      expect(stale.left).toBe(EVENT.updatedAt)
+      expect(before - stale.right.getTime()).toBeGreaterThanOrEqual(2 * 60 * 1000)
     })
 
-    it('returns null when no failed row matched', async () => {
+    it('returns null when no row could be re-opened', async () => {
       dbChainMockFns.returning.mockResolvedValueOnce([])
-      await expect(
-        retryFailedEvent({ igAccountId: '1784', sourceId: 'comment-1' })
-      ).resolves.toBeNull()
+      await expect(reopenEvent({ igAccountId: '1784', sourceId: 'comment-1' })).resolves.toBeNull()
     })
   })
 
-  describe('hasPriorReply', () => {
-    it('looks for an answered event of the same rule, post, and user', async () => {
-      queueTableRows(schemaMock.instagramAutoReplyEvent, [{ id: 'event-0' }])
-      await expect(hasPriorReply('rule-1', 'media-1', 'user-9')).resolves.toBe(true)
+  describe('claimOncePerUser', () => {
+    const input = { eventId: 'event-2', ruleId: 'rule-1', mediaId: 'media-1', fromId: 'user-9' }
 
-      const nodes = flattenMockConditions(lastWhere())
-      expect(hasEq(lastWhere(), EVENT.ruleId, 'rule-1')).toBe(true)
-      expect(hasEq(lastWhere(), EVENT.mediaId, 'media-1')).toBe(true)
-      expect(hasEq(lastWhere(), EVENT.fromId, 'user-9')).toBe(true)
-      expect(nodes).toContainEqual({
+    it('locks the rule, post, and user, then counts pending and answered events but this one', async () => {
+      await expect(claimOncePerUser(input)).resolves.toBe(false)
+
+      expect(dbChainMockFns.transaction).toHaveBeenCalledTimes(1)
+      const lock = dbChainMockFns.execute.mock.calls[0][0] as {
+        strings: string[]
+        values: unknown[]
+      }
+      expect(lock.strings.join('?')).toContain('pg_advisory_xact_lock')
+      expect(lock.values).toEqual(['instagram-auto-reply:once:rule-1:media-1:user-9'])
+
+      const where = lastWhere()
+      expect(hasEq(where, EVENT.ruleId, 'rule-1')).toBe(true)
+      expect(hasEq(where, EVENT.mediaId, 'media-1')).toBe(true)
+      expect(hasEq(where, EVENT.fromId, 'user-9')).toBe(true)
+      expect(flattenMockConditions(where)).toContainEqual({
+        type: 'ne',
+        left: EVENT.id,
+        right: 'event-2',
+      })
+      expect(flattenMockConditions(where)).toContainEqual({
         type: 'inArray',
         column: EVENT.outcome,
-        values: ['replied', 'partial'],
+        values: ['pending', 'replied', 'partial'],
       })
+      expect(dbChainMockFns.update).not.toHaveBeenCalled()
     })
 
-    it('is false when nothing matched, and matches a missing post with IS NULL', async () => {
-      await expect(hasPriorReply('rule-1', null, 'user-9')).resolves.toBe(false)
+    it('marks this event skipped_duplicate inside the lock when another one exists', async () => {
+      queueTableRows(schemaMock.instagramAutoReplyEvent, [{ id: 'event-1' }])
+
+      await expect(claimOncePerUser(input)).resolves.toBe(true)
+
+      expect(dbChainMockFns.set.mock.calls[0][0]).toMatchObject({
+        outcome: 'skipped_duplicate',
+        retryable: false,
+      })
+      expect(hasEq(lastWhere(), EVENT.id, 'event-2')).toBe(true)
+    })
+
+    it('matches a missing post with IS NULL', async () => {
+      await claimOncePerUser({ ...input, mediaId: null })
       expect(flattenMockConditions(lastWhere())).toContainEqual({
         type: 'isNull',
         column: EVENT.mediaId,
       })
+    })
+  })
+
+  describe('recordEventSend', () => {
+    it('stores a posted public reply id on the event', async () => {
+      await recordEventSend('event-1', { publicReplyId: 'reply-1' })
+      expect(dbChainMockFns.set.mock.calls[0][0]).toMatchObject({ publicReplyId: 'reply-1' })
+      expect(hasEq(lastWhere(), EVENT.id, 'event-1')).toBe(true)
+    })
+
+    it('stores a delivered DM on the event', async () => {
+      await recordEventSend('event-1', { dmSent: true, dmStage: 'delivered' })
+      expect(dbChainMockFns.set.mock.calls[0][0]).toMatchObject({
+        dmSent: true,
+        dmStage: 'delivered',
+      })
+    })
+  })
+
+  describe('hasLiveRuleInOtherWorkspace', () => {
+    it('looks for a live rule of the account outside the workspace', async () => {
+      queueTableRows(schemaMock.instagramAutoReplyRule, [{ id: 'rule-x' }])
+      await expect(hasLiveRuleInOtherWorkspace('1784', 'ws-1')).resolves.toBe(true)
+
+      const where = lastWhere()
+      expect(hasEq(where, RULE.igAccountId, '1784')).toBe(true)
+      expect(hasEq(where, RULE.status, 'live')).toBe(true)
+      expect(flattenMockConditions(where)).toContainEqual({
+        type: 'ne',
+        left: RULE.workspaceId,
+        right: 'ws-1',
+      })
+    })
+
+    it('is false when no other workspace is live on the account', async () => {
+      await expect(hasLiveRuleInOtherWorkspace('1784', 'ws-1')).resolves.toBe(false)
     })
   })
 
@@ -241,17 +321,17 @@ describe('Instagram auto-reply repository', () => {
   })
 
   describe('getEventById and recordClick', () => {
-    it('returns null for a missing event and records nothing', async () => {
+    it('returns null for a missing event', async () => {
       await expect(getEventById('missing')).resolves.toBeNull()
-      await expect(recordClick('missing', 0)).resolves.toBeNull()
-      expect(dbChainMockFns.insert).not.toHaveBeenCalled()
     })
 
-    it('attributes a click to the event’s rule', async () => {
-      queueTableRows(schemaMock.instagramAutoReplyEvent, [{ id: 'event-1', ruleId: 'rule-1' }])
+    it('attributes a click to the given event’s rule without reading the event again', async () => {
       dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'click-1' }])
 
-      await expect(recordClick('event-1', 2)).resolves.toEqual({ id: 'click-1' })
+      await expect(recordClick({ id: 'event-1', ruleId: 'rule-1' }, 2)).resolves.toEqual({
+        id: 'click-1',
+      })
+      expect(dbChainMockFns.select).not.toHaveBeenCalled()
       expect(dbChainMockFns.values).toHaveBeenCalledWith(
         expect.objectContaining({ eventId: 'event-1', ruleId: 'rule-1', buttonIndex: 2 })
       )
@@ -332,12 +412,35 @@ describe('Instagram auto-reply repository', () => {
     })
   })
 
-  describe('deleteEventsFromUser', () => {
-    it('deletes every event of the user and reports how many', async () => {
-      dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'event-1' }, { id: 'event-2' }])
+  describe('deleteAutoReplyDataForInstagramId', () => {
+    it('deletes the account’s and the sender’s events, then the account’s rules, in one transaction', async () => {
+      dbChainMockFns.returning
+        .mockResolvedValueOnce([{ id: 'event-1' }, { id: 'event-2' }])
+        .mockResolvedValueOnce([{ id: 'rule-1' }])
 
-      await expect(deleteEventsFromUser('user-9')).resolves.toBe(2)
-      expect(hasEq(lastWhere(), EVENT.fromId, 'user-9')).toBe(true)
+      await expect(deleteAutoReplyDataForInstagramId('1784')).resolves.toEqual({
+        rules: 1,
+        events: 2,
+      })
+
+      expect(dbChainMockFns.transaction).toHaveBeenCalledTimes(1)
+      expect(dbChainMockFns.delete.mock.calls.map(([table]) => table)).toEqual([EVENT, RULE])
+      const [eventWhere, ruleWhere] = dbChainMockFns.where.mock.calls.map(([where]) => where)
+      expect(eventWhere).toEqual({
+        type: 'or',
+        conditions: [
+          { type: 'eq', left: EVENT.igAccountId, right: '1784' },
+          { type: 'eq', left: EVENT.fromId, right: '1784' },
+        ],
+      })
+      expect(hasEq(ruleWhere, RULE.igAccountId, '1784')).toBe(true)
+    })
+
+    it('reports zero counts when the id matches nothing', async () => {
+      await expect(deleteAutoReplyDataForInstagramId('unknown')).resolves.toEqual({
+        rules: 0,
+        events: 0,
+      })
     })
   })
 

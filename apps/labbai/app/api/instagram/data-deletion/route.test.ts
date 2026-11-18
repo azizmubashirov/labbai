@@ -6,12 +6,12 @@ import { resetEnvMock, setEnv, urlsMock, urlsMockFns } from '@labbai/testing'
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockDeleteEventsFromUser } = vi.hoisted(() => ({
-  mockDeleteEventsFromUser: vi.fn(),
+const { mockDeleteAutoReplyData } = vi.hoisted(() => ({
+  mockDeleteAutoReplyData: vi.fn(),
 }))
 
 vi.mock('@/lib/instagram-auto-reply/repository', () => ({
-  deleteEventsFromUser: mockDeleteEventsFromUser,
+  deleteAutoReplyDataForInstagramId: mockDeleteAutoReplyData,
 }))
 vi.mock('@/lib/core/utils/urls', () => urlsMock)
 vi.mock('@/lib/oauth/credential-service', () => ({
@@ -53,7 +53,7 @@ beforeEach(() => {
   resetEnvMock()
   setEnv({ INSTAGRAM_CLIENT_SECRET: APP_SECRET })
   urlsMockFns.mockGetBaseUrl.mockReturnValue('https://app.test')
-  mockDeleteEventsFromUser.mockResolvedValue(2)
+  mockDeleteAutoReplyData.mockResolvedValue({ rules: 1, events: 2 })
 })
 
 describe('POST /api/instagram/data-deletion', () => {
@@ -62,7 +62,7 @@ describe('POST /api/instagram/data-deletion', () => {
 
     expect(response.status).toBe(200)
     const body = await response.json()
-    expect(mockDeleteEventsFromUser).toHaveBeenCalledWith('17841400000000001')
+    expect(mockDeleteAutoReplyData).toHaveBeenCalledWith('17841400000000001')
     expect(isValidDeletionConfirmationCode(body.confirmation_code, [APP_SECRET])).toBe(true)
     expect(body.url).toBe(
       `https://app.test/instagram/data-deletion?code=${encodeURIComponent(body.confirmation_code)}`
@@ -78,7 +78,7 @@ describe('POST /api/instagram/data-deletion', () => {
       })
     )
     expect(response.status).toBe(200)
-    expect(mockDeleteEventsFromUser).toHaveBeenCalledTimes(1)
+    expect(mockDeleteAutoReplyData).toHaveBeenCalledTimes(1)
   })
 
   it('rejects a bad signature and deletes nothing', async () => {
@@ -93,7 +93,7 @@ describe('POST /api/instagram/data-deletion', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'signed_request signature is invalid',
     })
-    expect(mockDeleteEventsFromUser).not.toHaveBeenCalled()
+    expect(mockDeleteAutoReplyData).not.toHaveBeenCalled()
   })
 
   it('rejects a malformed or missing signed_request and deletes nothing', async () => {
@@ -103,7 +103,7 @@ describe('POST /api/instagram/data-deletion', () => {
     expect(malformed.status).toBe(400)
     await expect(malformed.json()).resolves.toEqual({ error: 'signed_request is malformed' })
     expect(missing.status).toBe(400)
-    expect(mockDeleteEventsFromUser).not.toHaveBeenCalled()
+    expect(mockDeleteAutoReplyData).not.toHaveBeenCalled()
   })
 
   it('is unavailable without a configured app secret', async () => {
@@ -112,11 +112,11 @@ describe('POST /api/instagram/data-deletion', () => {
     const response = await POST(formPost({ signed_request: VALID }))
 
     expect(response.status).toBe(503)
-    expect(mockDeleteEventsFromUser).not.toHaveBeenCalled()
+    expect(mockDeleteAutoReplyData).not.toHaveBeenCalled()
   })
 
   it('answers 500 when the deletion fails', async () => {
-    mockDeleteEventsFromUser.mockRejectedValue(new Error('db down'))
+    mockDeleteAutoReplyData.mockRejectedValue(new Error('db down'))
 
     const response = await POST(formPost({ signed_request: VALID }))
 
