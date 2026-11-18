@@ -216,6 +216,9 @@ export const auditMock = {
     WORKFLOW_PUBLIC_API_TOGGLED: 'workflow.public_api_toggled',
     WORKFLOW_EXPORTED: 'workflow.exported',
     ACCOUNT_DELETED: 'account.deleted',
+    INSTAGRAM_AUTO_REPLY_RULE_CREATED: 'instagram_auto_reply_rule.created',
+    INSTAGRAM_AUTO_REPLY_RULE_UPDATED: 'instagram_auto_reply_rule.updated',
+    INSTAGRAM_AUTO_REPLY_RULE_DELETED: 'instagram_auto_reply_rule.deleted',
   },
   AuditResourceType: {
     ACCOUNT: 'account',
@@ -231,6 +234,7 @@ export const auditMock = {
     ENVIRONMENT: 'environment',
     FILE: 'file',
     FOLDER: 'folder',
+    INSTAGRAM_AUTO_REPLY_RULE: 'instagram_auto_reply_rule',
     KNOWLEDGE_BASE: 'knowledge_base',
     MCP_SERVER: 'mcp_server',
     OAUTH: 'oauth',
