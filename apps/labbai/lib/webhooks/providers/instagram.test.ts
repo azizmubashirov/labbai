@@ -2,15 +2,34 @@
  * @vitest-environment node
  */
 import { hmacSha256Hex } from '@labbai/security/hmac'
-import { dbChainMock, queueTableRows, schemaMock } from '@labbai/testing'
+import { dbChainMock, queueTableRows, resetEnvMock, schemaMock, setEnv } from '@labbai/testing'
 import { NextRequest } from 'next/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockResolveBackgroundWebhookEnv } = vi.hoisted(() => ({
+const {
+  mockResolveBackgroundWebhookEnv,
+  mockResolveOAuthAccountId,
+  mockRefreshAccessTokenIfNeeded,
+  mockGetCredentialOwner,
+} = vi.hoisted(() => ({
   mockResolveBackgroundWebhookEnv: vi.fn(),
+  mockResolveOAuthAccountId: vi.fn(),
+  mockRefreshAccessTokenIfNeeded: vi.fn(),
+  mockGetCredentialOwner: vi.fn(),
 }))
 
 vi.mock('@labbai/db', () => ({ ...dbChainMock, ...schemaMock }))
+
+vi.mock('@/lib/oauth/credential-service', () => ({
+  resolveOAuthAccountId: mockResolveOAuthAccountId,
+  refreshAccessTokenIfNeeded: mockRefreshAccessTokenIfNeeded,
+}))
+
+vi.mock('@/lib/webhooks/provider-subscription-utils', () => ({
+  getCredentialOwner: mockGetCredentialOwner,
+  getProviderConfig: (webhook: Record<string, unknown>) =>
+    (webhook.providerConfig as Record<string, unknown>) || {},
+}))
 
 vi.mock('@/lib/webhooks/env-resolver', () => ({
   resolveBackgroundWebhookEnv: mockResolveBackgroundWebhookEnv,
@@ -21,7 +40,17 @@ vi.mock('@/executor/utils/reference-validation', () => ({
     value.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, name: string) => envVars[name] ?? match),
 }))
 
-import { instagramHandler } from '@/lib/webhooks/providers/instagram'
+import {
+  getInstagramComments,
+  instagramHandler,
+  scopeInstagramDelivery,
+  splitInstagramDeliveryByAccount,
+} from '@/lib/webhooks/providers/instagram'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  resetEnvMock()
+})
 
 const body = {
   object: 'instagram',
@@ -91,6 +120,372 @@ describe('instagramHandler', () => {
 
   it('derives a stable idempotency key from the message ids', () => {
     expect(instagramHandler.extractIdempotencyId?.(body)).toMatch(/^instagram:1:/)
+  })
+})
+
+/** A customer comment in the `changes[]` shape. */
+function commentChange(id: string, fromId: string, extra: Record<string, unknown> = {}) {
+  return {
+    field: 'comments',
+    value: {
+      id,
+      from: { id: fromId, username: `user_${fromId}` },
+      text: `comment ${id}`,
+      media: { id: 'MEDIA1', media_product_type: 'REELS' },
+      ...extra,
+    },
+  }
+}
+
+/** One delivery carrying two accounts, each with a DM and a comment, plus IG1's own reply. */
+const twoAccountDelivery = {
+  object: 'instagram',
+  entry: [
+    {
+      id: 'IG1',
+      time: 1_790_000_000,
+      changes: [commentChange('C1', 'U1'), commentChange('C1-reply', 'IG1', { parent_id: 'C1' })],
+    },
+    {
+      id: 'IG2',
+      time: 1_790_000_001,
+      changes: [commentChange('C2', 'U2')],
+    },
+    {
+      id: 'IG1',
+      messaging: [
+        {
+          sender: { id: 'U1' },
+          recipient: { id: 'IG1' },
+          timestamp: 1_790_000_000_000,
+          message: { mid: 'm1', text: 'Salom' },
+        },
+      ],
+    },
+    {
+      id: 'IG2',
+      messaging: [
+        {
+          sender: { id: 'U2' },
+          recipient: { id: 'IG2' },
+          timestamp: 1_790_000_000_002,
+          message: { mid: 'm2', text: 'Assalomu alaykum' },
+        },
+      ],
+    },
+  ],
+}
+
+describe('Instagram comments', () => {
+  it('normalizes a comment from the changes[] shape', () => {
+    const [comment] = getInstagramComments({
+      entry: [{ id: 'IG1', time: 1_790_000_000, changes: [commentChange('C1', 'U1')] }],
+    })
+    expect(comment).toMatchObject({
+      commentId: 'C1',
+      mediaId: 'MEDIA1',
+      mediaProductType: 'REELS',
+      parentId: null,
+      text: 'comment C1',
+      fromId: 'U1',
+      fromUsername: 'user_U1',
+      accountId: 'IG1',
+      timestamp: 1_790_000_000,
+    })
+    expect(comment.raw).toMatchObject({ id: 'C1' })
+  })
+
+  it('reads the Instagram Login shape with field and value on the entry, and comment_id', () => {
+    const comments = getInstagramComments({
+      entry: [
+        { id: 'IG1', field: 'comments', value: commentChange('C1', 'U1').value },
+        {
+          id: 'IG1',
+          changes: [{ field: 'comments', value: { comment_id: 'C2', from: { id: 'U2' } } }],
+        },
+      ],
+    })
+    expect(comments.map((comment) => comment.commentId)).toEqual(['C1', 'C2'])
+  })
+
+  it('drops comments the account wrote itself, so replies never loop', () => {
+    const comments = getInstagramComments(twoAccountDelivery)
+    expect(comments.map((comment) => comment.commentId)).toEqual(['C1', 'C2'])
+  })
+
+  it('ignores other change fields and comments without an author', () => {
+    expect(
+      getInstagramComments({
+        entry: [
+          {
+            id: 'IG1',
+            changes: [
+              { field: 'mentions', value: { id: 'X', from: { id: 'U1' } } },
+              { field: 'comments', value: { id: 'C9' } },
+            ],
+          },
+        ],
+      })
+    ).toEqual([])
+  })
+
+  it('formats comment trigger input from the first comment', async () => {
+    const result = await instagramHandler.formatInput?.({
+      webhook: { providerConfig: { triggerId: 'instagram_comment_webhook' } },
+      body: twoAccountDelivery,
+    } as never)
+    expect(result?.input).toMatchObject({
+      commentId: 'C1',
+      fromId: 'U1',
+      accountId: 'IG1',
+      mediaId: 'MEDIA1',
+    })
+    expect((result?.input as { comments: unknown[] }).comments).toHaveLength(2)
+  })
+})
+
+describe('Instagram idempotency', () => {
+  it('keeps the DM-only key unchanged and adds comment ids', () => {
+    const dmOnly = instagramHandler.extractIdempotencyId?.(body)
+    const withComment = instagramHandler.extractIdempotencyId?.({
+      entry: [...body.entry, { id: 'IG1', changes: [commentChange('C1', 'U1')] }],
+    })
+    expect(dmOnly).toMatch(/^instagram:1:/)
+    expect(withComment).toMatch(/^instagram:2:/)
+    expect(withComment).not.toBe(dmOnly)
+  })
+
+  it('keys a comment-only delivery on the comment id and ignores self replies', () => {
+    const first = instagramHandler.extractIdempotencyId?.({
+      entry: [{ id: 'IG1', changes: [commentChange('C1', 'U1')] }],
+    })
+    const retried = instagramHandler.extractIdempotencyId?.({
+      entry: [
+        {
+          id: 'IG1',
+          changes: [commentChange('C1', 'U1'), commentChange('R1', 'IG1', { parent_id: 'C1' })],
+        },
+      ],
+    })
+    expect(first).toMatch(/^instagram:1:/)
+    expect(retried).toBe(first)
+    expect(
+      instagramHandler.extractIdempotencyId?.({
+        entry: [{ id: 'IG1', changes: [commentChange('R1', 'IG1')] }],
+      })
+    ).toBeNull()
+  })
+})
+
+describe('Instagram per-account scoping', () => {
+  it('splits a delivery into one body per account', () => {
+    const parts = splitInstagramDeliveryByAccount(twoAccountDelivery)
+    expect(parts.map((part) => part.accountId)).toEqual(['IG1', 'IG2'])
+    for (const part of parts) {
+      expect(part.body.object).toBe('instagram')
+      const ids = (part.body.entry as Array<{ id: string }>).map((entry) => entry.id)
+      expect(new Set(ids)).toEqual(new Set([part.accountId]))
+    }
+  })
+
+  it('gives each trigger only its own account and event kind', () => {
+    const comments = scopeInstagramDelivery(twoAccountDelivery, 'IG2', 'comments')
+    expect(getInstagramComments(comments).map((comment) => comment.commentId)).toEqual(['C2'])
+    expect(JSON.stringify(comments)).not.toContain('messaging')
+
+    const messages = scopeInstagramDelivery(twoAccountDelivery, 'IG1', 'messages')
+    expect(JSON.stringify(messages)).not.toContain('changes')
+    expect(JSON.stringify(messages)).not.toContain('IG2')
+
+    expect(scopeInstagramDelivery(twoAccountDelivery, 'IG3', 'messages')).toBeNull()
+    expect(
+      scopeInstagramDelivery(
+        { entry: [{ id: 'IG1', changes: [commentChange('R1', 'IG1')] }] },
+        'IG1',
+        'comments'
+      )
+    ).toBeNull()
+  })
+
+  it('scopes a routed webhook to its routing key', async () => {
+    const scoped = await instagramHandler.scopeDeliveryBody?.({
+      webhook: { id: 'wh-2', routingKey: 'IG2' },
+      body: twoAccountDelivery,
+      requestId: 'r',
+      providerConfig: { triggerId: 'instagram_webhook' },
+    })
+    const delivered = JSON.stringify(scoped?.body)
+    expect(delivered).toContain('m2')
+    expect(delivered).not.toContain('m1')
+    expect(mockResolveOAuthAccountId).not.toHaveBeenCalled()
+  })
+
+  it('scopes a legacy path webhook to its credential account and drops foreign entries', async () => {
+    mockResolveOAuthAccountId.mockResolvedValueOnce({ accountId: 'acct-row-1' })
+    queueTableRows(schemaMock.account, [{ accountId: 'IG1', providerId: 'instagram' }])
+
+    const scoped = await instagramHandler.scopeDeliveryBody?.({
+      webhook: { id: 'wh-legacy', routingKey: null },
+      body: twoAccountDelivery,
+      requestId: 'r',
+      providerConfig: { credentialId: 'cred-1' },
+    })
+
+    expect(mockResolveOAuthAccountId).toHaveBeenCalledWith('cred-1')
+    const delivered = JSON.stringify(scoped?.body)
+    expect(delivered).toContain('m1')
+    expect(delivered).not.toContain('IG2')
+  })
+
+  it('ignores a delivery that has nothing for the legacy webhook account', async () => {
+    mockResolveOAuthAccountId.mockResolvedValueOnce({ accountId: 'acct-row-3' })
+    queueTableRows(schemaMock.account, [{ accountId: 'IG3', providerId: 'instagram' }])
+
+    expect(
+      await instagramHandler.scopeDeliveryBody?.({
+        webhook: { id: 'wh-legacy', routingKey: null },
+        body: twoAccountDelivery,
+        requestId: 'r',
+        providerConfig: { credentialId: 'cred-3' },
+      })
+    ).toBeNull()
+  })
+
+  it('fails closed when the webhook account cannot be determined', async () => {
+    expect(
+      await instagramHandler.scopeDeliveryBody?.({
+        webhook: { id: 'wh-x', routingKey: null },
+        body: twoAccountDelivery,
+        requestId: 'r',
+        providerConfig: {},
+      })
+    ).toBeNull()
+  })
+})
+
+describe('Instagram signature without a per-trigger secret', () => {
+  it('verifies with the Instagram app secret from env', async () => {
+    setEnv({ INSTAGRAM_CLIENT_SECRET: 'app-secret' })
+    const rawBody = JSON.stringify(body)
+    const context = { rawBody, requestId: 'r', providerConfig: {} }
+
+    expect(
+      await instagramHandler.verifyAuth?.({
+        ...context,
+        request: requestWithSignature(`sha256=${hmacSha256Hex(rawBody, 'app-secret')}`),
+      } as never)
+    ).toBeNull()
+    const forged = await instagramHandler.verifyAuth?.({
+      ...context,
+      request: requestWithSignature(`sha256=${hmacSha256Hex(rawBody, 'other')}`),
+    } as never)
+    expect(forged?.status).toBe(401)
+  })
+
+  it('rejects when no secret is configured anywhere', async () => {
+    setEnv({ INSTAGRAM_CLIENT_SECRET: undefined, INSTAGRAM_WEBHOOK_APP_SECRET: undefined })
+    const rawBody = JSON.stringify(body)
+    const response = await instagramHandler.verifyAuth?.({
+      rawBody,
+      requestId: 'r',
+      providerConfig: {},
+      request: requestWithSignature(`sha256=${hmacSha256Hex(rawBody, '')}`),
+    } as never)
+    expect(response?.status).toBe(401)
+  })
+})
+
+describe('Instagram deployment', () => {
+  it('routes by the professional account id stored on the credential', async () => {
+    mockResolveOAuthAccountId.mockResolvedValueOnce({ accountId: 'acct-row-1' })
+    queueTableRows(schemaMock.account, [
+      { accountId: '17841400000000001', providerId: 'instagram' },
+    ])
+
+    await expect(
+      instagramHandler.prepareDeploymentConfig?.({
+        credentialId: 'cred-1',
+        providerConfig: {},
+        requestId: 'r',
+        triggerId: 'instagram_comment_webhook',
+      })
+    ).resolves.toEqual({ routingKey: '17841400000000001' })
+  })
+
+  it('refuses to deploy without an Instagram credential', async () => {
+    await expect(
+      instagramHandler.prepareDeploymentConfig?.({
+        providerConfig: {},
+        requestId: 'r',
+        triggerId: 'instagram_webhook',
+      })
+    ).rejects.toThrow('Select the Instagram account')
+
+    mockResolveOAuthAccountId.mockResolvedValueOnce({ accountId: 'acct-row-9' })
+    queueTableRows(schemaMock.account, [{ accountId: 'x', providerId: 'google' }])
+    await expect(
+      instagramHandler.prepareDeploymentConfig?.({
+        credentialId: 'cred-9',
+        providerConfig: {},
+        requestId: 'r',
+        triggerId: 'instagram_webhook',
+      })
+    ).rejects.toThrow('could not be read')
+  })
+
+  it('subscribes the account to messages and comments on deploy', async () => {
+    mockGetCredentialOwner.mockResolvedValueOnce({ userId: 'user-1', accountId: 'acct-row-1' })
+    mockRefreshAccessTokenIfNeeded.mockResolvedValueOnce('token-1')
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
+
+    await instagramHandler.createSubscription?.({
+      webhook: { id: 'wh-1', providerConfig: { credentialId: 'cred-1' } },
+      workflow: {},
+      userId: 'user-1',
+      requestId: 'r',
+      request: new NextRequest('http://localhost/'),
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toBe(
+      'https://graph.instagram.com/v25.0/me/subscribed_apps?subscribed_fields=messages%2Ccomments'
+    )
+    expect(init).toMatchObject({ method: 'POST', headers: { Authorization: 'Bearer token-1' } })
+    fetchMock.mockRestore()
+  })
+
+  it('fails the deploy with Meta’s message when the subscription is rejected', async () => {
+    mockGetCredentialOwner.mockResolvedValueOnce({ userId: 'user-1', accountId: 'acct-row-1' })
+    mockRefreshAccessTokenIfNeeded.mockResolvedValueOnce('token-1')
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'Unsupported request' } }), {
+        status: 400,
+      })
+    )
+
+    await expect(
+      instagramHandler.createSubscription?.({
+        webhook: { id: 'wh-1', providerConfig: { credentialId: 'cred-1' } },
+        workflow: {},
+        userId: 'user-1',
+        requestId: 'r',
+        request: new NextRequest('http://localhost/'),
+      })
+    ).rejects.toThrow('Unsupported request')
+    fetchMock.mockRestore()
+  })
+
+  it('never unsubscribes the shared account on webhook deletion', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await instagramHandler.deleteSubscription?.({
+      webhook: { id: 'wh-1', providerConfig: { credentialId: 'cred-1' } },
+      workflow: {},
+      requestId: 'r',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+    fetchMock.mockRestore()
   })
 })
 

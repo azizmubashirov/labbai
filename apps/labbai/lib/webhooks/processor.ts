@@ -35,7 +35,7 @@ import {
   requiresPendingWebhookVerification,
 } from '@/lib/webhooks/pending-verification'
 import { getProviderHandler } from '@/lib/webhooks/providers'
-import type { WebhookProviderHandler } from '@/lib/webhooks/providers/types'
+import type { ScopedDeliveryBody, WebhookProviderHandler } from '@/lib/webhooks/providers/types'
 import { normalizeWebhookRegistrationPath } from '@/lib/webhooks/registration-identity'
 import { blockExistsInDeployment } from '@/lib/workflows/persistence/utils'
 import { LABBAI_TRIGGER_PROVIDER } from '@/lib/workspace-events/constants'
@@ -285,6 +285,28 @@ export function shouldSkipWebhookEvent(
   return (
     handler.shouldSkipEvent?.({ webhook: webhookRecord, body, requestId, providerConfig }) ?? false
   )
+}
+
+/**
+ * Narrows a delivery to the part a webhook owns. Providers without a scope hook own the whole
+ * body. Returns null when the provider finds nothing in the delivery for this webhook.
+ */
+export async function scopeWebhookDeliveryBody(
+  webhookRecord: Record<string, unknown> & {
+    provider: string
+    providerConfig: Record<string, unknown>
+  },
+  body: unknown,
+  requestId: string
+): Promise<ScopedDeliveryBody | null> {
+  const handler = getProviderHandler(webhookRecord.provider)
+  if (!handler.scopeDeliveryBody) return { body }
+  return handler.scopeDeliveryBody({
+    webhook: webhookRecord,
+    body,
+    requestId,
+    providerConfig: webhookRecord.providerConfig,
+  })
 }
 
 /**
@@ -856,7 +878,7 @@ async function queueWebhookExecutionWithResult(
 export async function dispatchResolvedWebhookTarget(
   foundWebhook: typeof webhook.$inferSelect,
   foundWorkflow: typeof workflow.$inferSelect,
-  body: unknown,
+  deliveryBody: unknown,
   request: NextRequest,
   options: WebhookProcessorOptions
 ): Promise<WebhookDispatchResult> {
@@ -873,6 +895,16 @@ export async function dispatchResolvedWebhookTarget(
     provider: foundWebhook.provider,
     providerConfig: parseProviderConfig(foundWebhook.providerConfig),
   }
+
+  const scoped = await scopeWebhookDeliveryBody(webhookRecord, deliveryBody, options.requestId)
+  if (!scoped) {
+    return {
+      outcome: 'ignored',
+      response: NextResponse.json({ message: 'No events for this webhook in the delivery' }),
+      reason: 'event-mismatch',
+    }
+  }
+  const body = scoped.body
 
   if (shouldSkipWebhookEvent(webhookRecord, body, options.requestId)) {
     return {

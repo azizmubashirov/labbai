@@ -1,8 +1,15 @@
 import { InstagramIcon } from '@/components/icons'
+import {
+  INSTAGRAM_DM_CONDITION,
+  INSTAGRAM_DM_TRIGGER_ID,
+  instagramAccountField,
+  instagramSetupInstructions,
+  instagramTriggerOptions,
+} from '@/triggers/instagram/utils'
 import type { TriggerConfig } from '@/triggers/types'
 
 export const instagramWebhookTrigger: TriggerConfig = {
-  id: 'instagram_webhook',
+  id: INSTAGRAM_DM_TRIGGER_ID,
   name: 'Instagram Direct Messages',
   provider: 'instagram',
   description: 'Trigger workflow when a customer sends your Instagram account a direct message',
@@ -11,65 +18,67 @@ export const instagramWebhookTrigger: TriggerConfig = {
 
   subBlocks: [
     {
-      id: 'triggerCredentials',
-      title: 'Instagram Account',
-      type: 'oauth-input',
-      description:
-        'The professional account that receives the messages. Inbox replies are sent from it.',
-      serviceId: 'instagram',
-      requiredScopes: [],
-      required: true,
+      id: 'selectedTriggerId',
+      title: 'Trigger Type',
+      canvasNoun: 'an event',
+      type: 'dropdown',
       mode: 'trigger',
+      options: instagramTriggerOptions,
+      value: () => INSTAGRAM_DM_TRIGGER_ID,
+      required: true,
     },
+    instagramAccountField(
+      INSTAGRAM_DM_CONDITION,
+      'The professional account that receives the messages. Inbox replies are sent from it.'
+    ),
     {
       id: 'webhookUrlDisplay',
-      title: 'Webhook URL',
+      title: 'Legacy Webhook URL',
       type: 'short-input',
       readOnly: true,
       showCopyButton: true,
       useWebhookUrl: true,
       placeholder: 'Webhook URL will be generated',
-      mode: 'trigger',
+      description:
+        'Only for a Meta app of your own whose callback points at this workflow. Not needed with the shared Labbai app.',
+      mode: 'trigger-advanced',
+      condition: INSTAGRAM_DM_CONDITION,
     },
     {
       id: 'verificationToken',
-      title: 'Verification Token',
+      title: 'Verification Token (legacy)',
       type: 'short-input',
-      placeholder: 'Generate or enter a verification token',
-      description: 'Any secret string. Enter the same value as the Verify token in your Meta app.',
+      placeholder: 'Only for a callback that points at this workflow',
+      description:
+        'Only needed when your own Meta app uses the legacy webhook URL above as its callback.',
       password: true,
-      required: true,
-      mode: 'trigger',
+      mode: 'trigger-advanced',
+      condition: INSTAGRAM_DM_CONDITION,
     },
     {
       id: 'appSecret',
-      title: 'App Secret',
+      title: 'App Secret (legacy)',
       type: 'short-input',
-      placeholder: 'Paste your Meta app secret',
-      description: 'Used to validate the X-Hub-Signature-256 header on every delivery.',
+      placeholder: 'Only for a callback that points at this workflow',
+      description:
+        'Validates X-Hub-Signature-256 for the legacy webhook URL. Leave empty to use the Labbai app secret.',
       password: true,
-      required: true,
-      mode: 'trigger',
+      mode: 'trigger-advanced',
+      condition: INSTAGRAM_DM_CONDITION,
     },
     {
       id: 'triggerInstructions',
       title: 'Setup Instructions',
       hideFromPreview: true,
       type: 'text',
-      defaultValue: [
-        'Select the Instagram professional account above, then click <strong>"Save Configuration"</strong> and deploy the workflow.',
-        'Open your app in the <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer" class="text-muted-foreground underline transition-colors hover:text-muted-foreground/80">Meta App Dashboard</a> and go to <strong>Instagram &gt; API setup with Instagram login</strong>.',
-        'Under <strong>Configure webhooks</strong>, paste the <strong>Webhook URL</strong> above as the Callback URL and the <strong>Verification Token</strong> as the Verify token, then click <strong>Verify and save</strong>.',
-        'Subscribe to the <code>messages</code> webhook field.',
-        'Copy the app secret from <strong>App settings &gt; Basic</strong> into the <strong>App Secret</strong> field above.',
+      defaultValue: instagramSetupInstructions([
+        'Select the Instagram professional account above.',
+        'Deploy the workflow. Labbai subscribes the account to its messages automatically.',
+        'In the Instagram app, turn on <strong>Settings &gt; Messages &gt; Connected tools &gt; Allow access to messages</strong>.',
         'Messages can only be answered within 24 hours of the customer’s last message.',
-      ]
-        .map(
-          (instruction, index) =>
-            `<div class="mb-3"><strong>${index + 1}.</strong> ${instruction}</div>`
-        )
-        .join(''),
+      ]),
       mode: 'trigger',
+      condition: INSTAGRAM_DM_CONDITION,
     },
   ],
 
@@ -91,7 +100,10 @@ export const instagramWebhookTrigger: TriggerConfig = {
       description: 'Id of the message the customer replied to, if any',
     },
     messages: { type: 'json', description: 'All customer messages in the delivery' },
-    raw: { type: 'json', description: 'Complete webhook payload from Instagram' },
+    raw: {
+      type: 'json',
+      description: 'Webhook payload from Instagram, limited to this account’s direct messages',
+    },
   },
 
   webhook: {

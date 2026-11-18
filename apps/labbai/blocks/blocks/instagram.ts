@@ -746,6 +746,7 @@ Return ONLY the timestamp or date - no explanations, no extra text.`,
       condition: { field: 'operation', value: IG_USER_ID_OPS },
     },
     ...getTrigger('instagram_webhook').subBlocks,
+    ...getTrigger('instagram_comment_webhook').subBlocks,
   ],
   tools: {
     access: [
@@ -1175,7 +1176,7 @@ Return ONLY the timestamp or date - no explanations, no extra text.`,
   },
   triggers: {
     enabled: true,
-    available: ['instagram_webhook'],
+    available: ['instagram_webhook', 'instagram_comment_webhook'],
   },
 }
 

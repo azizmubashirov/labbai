@@ -27,6 +27,11 @@ export interface EventFilterContext {
   providerConfig: Record<string, unknown>
 }
 
+/** The part of a delivery a webhook owns, returned by `scopeDeliveryBody`. */
+export interface ScopedDeliveryBody {
+  body: unknown
+}
+
 /** Context for custom input preparation during execution. */
 export interface FormatInputContext {
   webhook: Record<string, unknown>
@@ -166,6 +171,16 @@ export interface WebhookProviderHandler {
 
   /** Format error responses (some providers need special formats). */
   formatErrorResponse?(error: string, status: number): NextResponse
+
+  /**
+   * Narrow a delivery to the part this webhook owns before event filtering, Inbox recording,
+   * idempotency and queueing see it. Return null when nothing in the delivery belongs to this
+   * webhook; it is then acknowledged without running. Use for providers whose single callback
+   * carries events for several connected accounts.
+   */
+  scopeDeliveryBody?(
+    ctx: EventFilterContext
+  ): Promise<ScopedDeliveryBody | null> | ScopedDeliveryBody | null
 
   /** Return true to skip this event (filtering by event type, collection, etc.). */
   shouldSkipEvent?(ctx: EventFilterContext): boolean

@@ -552,6 +552,67 @@ describe('webhook processor execution identity', () => {
   })
 })
 
+describe('provider delivery scoping', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPreprocessExecution.mockResolvedValue({
+      success: true,
+      actorUserId: 'actor-user-1',
+      billingAttribution,
+      executionTimeout: { sync: 0, async: 120_000 },
+    })
+    mockEnqueue.mockResolvedValue('job-1')
+    mockGetInlineJobQueue.mockResolvedValue({ enqueue: mockEnqueue })
+    mockGetJobQueue.mockResolvedValue({ enqueue: mockEnqueue })
+    mockShouldExecuteInline.mockReturnValue(false)
+    mockGenerateId.mockReturnValue('generated-execution-id')
+    workflowsPersistenceUtilsMockFns.mockBlockExistsInDeployment.mockResolvedValue(true)
+  })
+
+  it('queues only the part of the delivery the provider assigns to the webhook', async () => {
+    const scopeDeliveryBody = vi.fn(() => ({ body: { entry: [{ id: 'mine' }] } }))
+    mockProviderHandler.current = { scopeDeliveryBody }
+
+    const result = await dispatchResolvedWebhookTarget(
+      makeWebhookRecord({ providerConfig: { triggerId: 't' } }),
+      makeWorkflowRecord({}),
+      { entry: [{ id: 'mine' }, { id: 'theirs' }] },
+      createMockRequest('POST', {}) as NextRequest,
+      { requestId: 'request-1' }
+    )
+
+    expect(result.outcome).toBe('queued')
+    expect(scopeDeliveryBody).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { entry: [{ id: 'mine' }, { id: 'theirs' }] },
+        providerConfig: { triggerId: 't' },
+      })
+    )
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      'webhook-execution',
+      expect.objectContaining({ body: { entry: [{ id: 'mine' }] } }),
+      expect.anything()
+    )
+  })
+
+  it('acknowledges without running when nothing in the delivery belongs to the webhook', async () => {
+    mockProviderHandler.current = { scopeDeliveryBody: vi.fn(async () => null) }
+
+    const result = await dispatchResolvedWebhookTarget(
+      makeWebhookRecord({}),
+      makeWorkflowRecord({}),
+      { entry: [{ id: 'theirs' }] },
+      createMockRequest('POST', {}) as NextRequest,
+      { requestId: 'request-1' }
+    )
+
+    expect(result).toMatchObject({ outcome: 'ignored', reason: 'event-mismatch' })
+    expect(result.response.status).toBe(200)
+    expect(mockPreprocessExecution).not.toHaveBeenCalled()
+    expect(mockEnqueue).not.toHaveBeenCalled()
+  })
+})
+
 describe('polled webhook reservation ownership', () => {
   const foundWebhook = {
     id: 'webhook-1',
