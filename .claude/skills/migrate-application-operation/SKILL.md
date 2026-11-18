@@ -166,7 +166,7 @@ Do not create internal-, public-, or Copilot-specific versions of the same seman
 
 Choose principal kinds from actual behavior. Do not accept every principal merely because the use case is shared. Workspace API keys have a write ceiling and cannot satisfy admin operations. The operation definition must fail fast when its role, workspace-key policy, and principal kinds disagree.
 
-`capability` is required — name the permission-group capability that governs the operation, or `'none'` with a `// permission-group-exempt: <reason>` comment directly above it. `defineWorkspaceOperation` throws at definition time when it is absent. See `add-permission-group-item`.
+`capability` is required — name the permission-group capability that governs the operation, or `'none'` with a `// permission-group-exempt: <reason>` comment directly above it. `defineWorkspaceOperation` throws at definition time when it is absent. Capabilities and their rules live in `apps/labbai/lib/permission-groups/capabilities.ts` (`CAPABILITY_RULES`).
 
 Route declarations, tool adapters, and use cases must use the same literal operation. Runtime operation selection is permitted only from a trusted, code-defined registry. Never accept an operation ID or permission tag from an HTTP body, model argument, or other untrusted input.
 
