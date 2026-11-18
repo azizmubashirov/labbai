@@ -13,6 +13,7 @@ import {
   DEFAULT_MAX_ERROR_BODY_BYTES,
   readResponseTextWithLimit,
 } from '@/lib/core/utils/stream-limits'
+import { isAutoReplyPayload } from '@/lib/instagram-auto-reply/payload'
 import { refreshAccessTokenIfNeeded, resolveOAuthAccountId } from '@/lib/oauth/credential-service'
 import { getCredentialOwner, getProviderConfig } from '@/lib/webhooks/provider-subscription-utils'
 import { WebhookDeploymentConfigurationError } from '@/lib/webhooks/providers/errors'
@@ -37,8 +38,21 @@ import { type InstagramEventKind, instagramEventKindForTrigger } from '@/trigger
 
 const logger = createLogger('WebhookProvider:Instagram')
 
-/** Webhook fields every connected account is subscribed to, for both triggers. */
-export const INSTAGRAM_SUBSCRIBED_FIELDS = 'messages,comments'
+/**
+ * Webhook fields every connected account is subscribed to, for both triggers and the auto-reply
+ * engine. `messaging_postbacks` carries taps on the engine's opening-DM and follow-gate buttons,
+ * which Meta lists as a field of its own, separate from `messages`; `live_comments` carries
+ * comments on live broadcasts.
+ */
+export const INSTAGRAM_SUBSCRIBED_FIELDS = 'messages,messaging_postbacks,comments,live_comments'
+
+/** The `changes[].field` values that carry comments. */
+export type InstagramCommentField = 'comments' | 'live_comments'
+
+const COMMENT_FIELDS: ReadonlySet<unknown> = new Set<InstagramCommentField>([
+  'comments',
+  'live_comments',
+])
 
 /** Bounds the `subscribed_apps` call so a slow Graph API cannot stall a deploy. */
 const SUBSCRIBE_TIMEOUT_MS = 10_000
@@ -143,17 +157,29 @@ function entryChanges(entry: Record<string, unknown>): Record<string, unknown>[]
 }
 
 /**
- * Customer comments in an Instagram webhook delivery. Comments the account posted itself
- * (`from.id === entry.id`), which include the replies an automation sends, are skipped so a
- * reply never triggers another reply.
+ * Customer comments on posts and reels in an Instagram webhook delivery. Comments the account
+ * posted itself (`from.id === entry.id`), which include the replies an automation sends, are
+ * skipped so a reply never triggers another reply.
  */
 export function getInstagramComments(body: unknown): InstagramComment[] {
+  return readComments(body, 'comments')
+}
+
+/**
+ * Customer comments on the account's live broadcasts (`field: 'live_comments'`), parsed and
+ * filtered like {@link getInstagramComments}. Meta sends the id as `comment_id` here.
+ */
+export function getInstagramLiveComments(body: unknown): InstagramComment[] {
+  return readComments(body, 'live_comments')
+}
+
+function readComments(body: unknown, field: InstagramCommentField): InstagramComment[] {
   const comments: InstagramComment[] = []
   for (const entry of deliveryEntries(body)) {
     const accountId = toStringOrNull(entry.id)
     if (!accountId) continue
     for (const change of entryChanges(entry)) {
-      if (change.field !== 'comments') continue
+      if (change.field !== field) continue
       const value = toRecord(change.value)
       const commentId = toStringOrNull(value.id) ?? toStringOrNull(value.comment_id)
       const from = toRecord(value.from)
@@ -177,18 +203,18 @@ export function getInstagramComments(body: unknown): InstagramComment[] {
   return comments
 }
 
-/** Whether a `{ field, value }` change is a comment whose id is in `commentIds`. */
+/** Whether a `{ field, value }` change is a comment or live comment whose id is in `commentIds`. */
 function isListedComment(change: Record<string, unknown>, commentIds: ReadonlySet<string>) {
-  if (change.field !== 'comments') return false
+  if (!COMMENT_FIELDS.has(change.field)) return false
   const value = toRecord(change.value)
   const commentId = toStringOrNull(value.id) ?? toStringOrNull(value.comment_id)
   return commentId !== null && commentIds.has(commentId)
 }
 
 /**
- * One account's delivery body without the given comments, for dispatch after the auto-reply
- * engine consumed them. Direct messages and every other change are kept as they are. An entry
- * left with nothing to carry is dropped.
+ * One account's delivery body without the given comments and live comments, for dispatch after
+ * the auto-reply engine consumed them. Direct messages and every other change are kept as they
+ * are. An entry left with nothing to carry is dropped.
  *
  * @returns The stripped body, or null when no entry is left, so there is nothing to dispatch.
  */
@@ -208,6 +234,156 @@ export function removeInstagramComments(
     }
     if (typeof entry.field === 'string' && isListedComment(entry, commentIds)) {
       entry = omit(entry, ['field', 'value'])
+    }
+    const carriesEvents =
+      Array.isArray(entry.changes) ||
+      typeof entry.field === 'string' ||
+      toArray(entry.messaging).length > 0
+    if (carriesEvents) entries.push(entry)
+  }
+  return entries.length > 0 ? { ...body, entry: entries } : null
+}
+
+/** A customer's reply to one of the account's stories, or a mention of the account in theirs. */
+export interface InstagramStoryEvent {
+  kind: 'story_reply' | 'story_mention'
+  /** The message `mid`; the engine's idempotency key for the event. */
+  messageId: string
+  /** The professional account that received the message (`entry.id`). */
+  accountId: string
+  /** Instagram-scoped id of the customer, who receives the answer. */
+  senderId: string
+  /** The reply text; mentions usually have none. */
+  text: string | null
+  /** Id of the story replied to (`reply_to.story.id`). Meta sends no id for mentions. */
+  storyId: string | null
+  /** CDN URL of the story. It expires, so it is never stored. */
+  storyUrl: string | null
+  /** `messaging[].timestamp` as Meta sent it (milliseconds). */
+  timestamp: number | null
+}
+
+/**
+ * Customer messaging events of one entry, with the fields every reader needs. Echoes (messages
+ * the account sent, including the engine's own DMs), deleted messages, and events the account
+ * sent itself are skipped, so an answer never answers itself.
+ */
+function customerMessagingEvents(body: unknown) {
+  const events: Array<{
+    accountId: string
+    senderId: string
+    event: Record<string, unknown>
+    message: Record<string, unknown>
+  }> = []
+  for (const entry of deliveryEntries(body)) {
+    const accountId = toStringOrNull(entry.id)
+    if (!accountId) continue
+    for (const raw of toArray(entry.messaging)) {
+      const event = toRecord(raw)
+      const message = toRecord(event.message)
+      if (message.is_echo === true || message.is_deleted === true) continue
+      const senderId = toStringOrNull(toRecord(event.sender).id)
+      if (!senderId || senderId === accountId) continue
+      events.push({ accountId, senderId, event, message })
+    }
+  }
+  return events
+}
+
+/**
+ * Story replies (`message.reply_to.story`) and story mentions (an attachment of type
+ * `story_mention`) in an Instagram webhook delivery. Both arrive as ordinary `messaging` events,
+ * so the DM trigger sees them too unless the auto-reply engine consumes them.
+ */
+export function getInstagramStoryEvents(body: unknown): InstagramStoryEvent[] {
+  const stories: InstagramStoryEvent[] = []
+  for (const { accountId, senderId, event, message } of customerMessagingEvents(body)) {
+    const messageId = toStringOrNull(message.mid)
+    if (!messageId) continue
+    const mention = toArray(message.attachments)
+      .map(toRecord)
+      .find((attachment) => attachment.type === 'story_mention')
+    const story = toRecord(toRecord(message.reply_to).story)
+    const isReply = Object.keys(story).length > 0
+    if (!mention && !isReply) continue
+    stories.push({
+      kind: mention ? 'story_mention' : 'story_reply',
+      messageId,
+      accountId,
+      senderId,
+      text: toStringOrNull(message.text),
+      storyId: mention ? null : toStringOrNull(story.id),
+      storyUrl: mention ? toStringOrNull(toRecord(mention.payload).url) : toStringOrNull(story.url),
+      timestamp: toNumberOrNull(event.timestamp),
+    })
+  }
+  return stories
+}
+
+/** A tap on a postback button or quick reply the auto-reply engine sent (`iar:` payload). */
+export interface InstagramAutoReplyPostback {
+  /** `postback.mid`, or the quick reply's `message.mid`. */
+  messageId: string
+  accountId: string
+  /** Instagram-scoped id of the customer who tapped, who receives the follow-up. */
+  senderId: string
+  payload: string
+  source: 'postback' | 'quick_reply'
+  timestamp: number | null
+}
+
+/**
+ * Taps on the engine's own buttons: `messaging[].postback` and `message.quick_reply` whose
+ * payload starts with `iar:`. Other postbacks and quick replies are left to the DM workflows.
+ */
+export function getInstagramAutoReplyPostbacks(body: unknown): InstagramAutoReplyPostback[] {
+  const postbacks: InstagramAutoReplyPostback[] = []
+  for (const { accountId, senderId, event, message } of customerMessagingEvents(body)) {
+    const postback = toRecord(event.postback)
+    const quickReply = toRecord(message.quick_reply)
+    const fromPostback = toStringOrNull(postback.payload)
+    const payload = fromPostback ?? toStringOrNull(quickReply.payload)
+    const messageId = fromPostback ? toStringOrNull(postback.mid) : toStringOrNull(message.mid)
+    if (!payload || !messageId || !isAutoReplyPayload(payload)) continue
+    postbacks.push({
+      messageId,
+      accountId,
+      senderId,
+      payload,
+      source: fromPostback ? 'postback' : 'quick_reply',
+      timestamp: toNumberOrNull(event.timestamp),
+    })
+  }
+  return postbacks
+}
+
+/** The `mid` of a messaging event: its message's, or its postback's. */
+function messagingEventId(event: Record<string, unknown>): string | null {
+  return toStringOrNull(toRecord(event.message).mid) ?? toStringOrNull(toRecord(event.postback).mid)
+}
+
+/**
+ * One account's delivery body without the given messaging events (story replies, mentions, and
+ * `iar:` postbacks the auto-reply engine consumed), matched by message or postback `mid`. Other
+ * DMs, postbacks, and comment changes are kept as they are. An entry left with nothing to carry
+ * is dropped.
+ *
+ * @returns The stripped body, or null when no entry is left, so there is nothing to dispatch.
+ */
+export function removeInstagramMessages(
+  body: Record<string, unknown>,
+  messageIds: ReadonlySet<string>
+): Record<string, unknown> | null {
+  if (messageIds.size === 0) return body
+  const entries: Record<string, unknown>[] = []
+  for (const raw of toArray(body.entry)) {
+    let entry = toRecord(raw)
+    if (Array.isArray(entry.messaging)) {
+      const messaging = entry.messaging.filter((event) => {
+        const id = messagingEventId(toRecord(event))
+        return id === null || !messageIds.has(id)
+      })
+      entry = messaging.length > 0 ? { ...entry, messaging } : omit(entry, ['messaging'])
     }
     const carriesEvents =
       Array.isArray(entry.changes) ||

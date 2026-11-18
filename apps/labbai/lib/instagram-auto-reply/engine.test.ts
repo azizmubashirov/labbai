@@ -4,7 +4,11 @@
 import { urlsMock, urlsMockFns } from '@labbai/testing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InstagramAutoReplyRuleRecord } from '@/lib/instagram-auto-reply/repository'
-import type { InstagramComment } from '@/lib/webhooks/providers/instagram'
+import type {
+  InstagramAutoReplyPostback,
+  InstagramComment,
+  InstagramStoryEvent,
+} from '@/lib/webhooks/providers/instagram'
 
 const repo = vi.hoisted(() => ({
   listLiveRulesForAccount: vi.fn(),
@@ -15,12 +19,21 @@ const repo = vi.hoisted(() => ({
   updateEventOutcome: vi.fn(),
   setNextMediaId: vi.fn(),
   getWorkspaceRule: vi.fn(),
+  getEventById: vi.fn(),
+  hasRecentAnswer: vi.fn(),
+  setEventDmStage: vi.fn(),
+  transitionEventDmStage: vi.fn(),
 }))
 
 const graph = vi.hoisted(() => ({
   sendPublicReply: vi.fn(),
   sendPrivateReply: vi.fn(),
+  sendLinkMessage: vi.fn(),
+  sendPostbackPrompt: vi.fn(),
+  getUserFollowsBusiness: vi.fn(),
   listRecentMedia: vi.fn(),
+  isTemplateRejected: (result: { error: string; code: number | null }) =>
+    result.code === 100 || /template/i.test(result.error),
 }))
 
 const { mockResolveRuleAccessToken } = vi.hoisted(() => ({
@@ -136,6 +149,19 @@ beforeEach(() => {
     data: { messageId: 'mid-1', usedTextFallback: false },
   })
   graph.listRecentMedia.mockResolvedValue({ ok: true, data: [] })
+  graph.sendLinkMessage.mockResolvedValue({
+    ok: true,
+    data: { messageId: 'mid-dm', usedTextFallback: false },
+  })
+  graph.sendPostbackPrompt.mockResolvedValue({
+    ok: true,
+    data: { messageId: 'mid-prompt', usedQuickReply: false },
+  })
+  graph.getUserFollowsBusiness.mockResolvedValue({ ok: true, data: { follows: true } })
+  repo.getEventById.mockResolvedValue(null)
+  repo.hasRecentAnswer.mockResolvedValue(false)
+  repo.setEventDmStage.mockResolvedValue(undefined)
+  repo.transitionEventDmStage.mockResolvedValue({ id: 'event-1' })
 })
 
 describe('runInstagramAutoReply — matching', () => {
@@ -604,5 +630,504 @@ describe('runInstagramAutoReply — bounds and failures', () => {
       accountError: null,
     })
     expect(repo.listLiveRulesForAccount).not.toHaveBeenCalled()
+  })
+})
+
+const OPENING = { text: 'Tap below for the link', buttonTitle: 'Send it' }
+const GATE = { enabled: true, text: 'Follow us first', buttonTitle: 'I followed' }
+
+function story(overrides: Partial<InstagramStoryEvent> = {}): InstagramStoryEvent {
+  return {
+    kind: 'story_reply',
+    messageId: 'mid-story-1',
+    accountId: ACCOUNT,
+    senderId: 'U1',
+    text: 'Narx qancha?',
+    storyId: 'S1',
+    storyUrl: 'https://cdn.example.com/story.jpg',
+    timestamp: NOW - 60_000,
+    ...overrides,
+  }
+}
+
+function postback(payload: string, overrides: Partial<InstagramAutoReplyPostback> = {}) {
+  return {
+    messageId: 'mid-tap-1',
+    accountId: ACCOUNT,
+    senderId: 'U1',
+    payload,
+    source: 'postback' as const,
+    timestamp: NOW,
+    ...overrides,
+  }
+}
+
+function runSources(...items: InstagramAutoReplySource[]) {
+  return runInstagramAutoReply({
+    accountId: ACCOUNT,
+    sources: items,
+    requestId: 'req-1',
+    deadlineAt: NOW + 15_000,
+  })
+}
+
+/** An event waiting at `dmStage` for a tap, as the comment run left it. */
+function waitingEvent(
+  dmStage: 'opening' | 'follow_gate' | 'delivered',
+  overrides: Record<string, unknown> = {}
+) {
+  return {
+    id: 'event-1',
+    workspaceId: 'ws-1',
+    ruleId: 'rule-1',
+    igAccountId: ACCOUNT,
+    fromId: 'U1',
+    outcome: 'replied',
+    dmStage,
+    dmSent: false,
+    dmSnapshot: {
+      dmMessage: rule().dmMessage,
+      openingDm: OPENING,
+      followGate: null,
+    },
+    ...overrides,
+  }
+}
+
+describe('runInstagramAutoReply — opening DM', () => {
+  it('sends the opening text with an open postback instead of the main DM', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ openingDm: OPENING })])
+
+    const result = await run(comment())
+
+    expect(result.results[0]).toMatchObject({ status: 'replied', consumed: true })
+    expect(repo.setEventDmStage).toHaveBeenCalledWith('event-1', 'opening')
+    expect(graph.sendPostbackPrompt).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      { commentId: 'C1' },
+      { text: OPENING.text, buttonTitle: OPENING.buttonTitle, payload: 'iar:event-1:open' }
+    )
+    expect(graph.sendPrivateReply).not.toHaveBeenCalled()
+    expect(graph.sendPublicReply).toHaveBeenCalled()
+    const stored = storedOutcome()
+    expect(stored).toMatchObject({ outcome: 'replied' })
+    expect(stored).not.toHaveProperty('dmStage')
+    expect(stored).not.toHaveProperty('dmSent')
+  })
+
+  it('sends the main DM instead when Instagram takes no button on a private reply', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ openingDm: OPENING })])
+    graph.sendPostbackPrompt.mockResolvedValue({
+      ok: false,
+      error: 'Invalid parameter',
+      code: 100,
+      retryable: false,
+    })
+
+    const result = await run(comment())
+
+    expect(result.results[0].status).toBe('replied')
+    expect(repo.setEventDmStage).toHaveBeenNthCalledWith(2, 'event-1', null)
+    expect(graph.sendPrivateReply).toHaveBeenCalledTimes(1)
+    expect(storedOutcome()).toMatchObject({ dmSent: true, dmStage: 'delivered' })
+  })
+
+  it('clears the stage and fails retryably when the opening DM hits a transient error', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([
+      rule({ openingDm: OPENING, publicReplyEnabled: false }),
+    ])
+    graph.sendPostbackPrompt.mockResolvedValue({
+      ok: false,
+      error: 'Service unavailable',
+      code: 2,
+      retryable: true,
+    })
+
+    const result = await run(comment())
+
+    expect(result.results[0]).toMatchObject({ status: 'failed', retryable: true })
+    expect(repo.setEventDmStage).toHaveBeenLastCalledWith('event-1', null)
+    expect(graph.sendPrivateReply).not.toHaveBeenCalled()
+  })
+})
+
+describe('runInstagramAutoReply — postbacks', () => {
+  beforeEach(() => {
+    repo.getWorkspaceRule.mockResolvedValue(rule({ openingDm: OPENING }))
+  })
+
+  it('delivers the main DM to the user who tapped and marks it delivered', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening'))
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(result.results[0]).toMatchObject({
+      sourceId: 'mid-tap-1',
+      status: 'replied',
+      consumed: true,
+      eventId: 'event-1',
+    })
+    expect(result.consumedSourceIds).toEqual(new Set(['mid-tap-1']))
+    expect(repo.listLiveRulesForAccount).not.toHaveBeenCalled()
+    expect(repo.transitionEventDmStage).toHaveBeenCalledWith('event-1', 'opening', {
+      dmStage: 'delivered',
+      dmSent: true,
+      error: null,
+    })
+    expect(graph.sendLinkMessage).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      { userId: 'U1' },
+      {
+        text: 'Narxlar shu yerda',
+        buttons: [{ title: 'Katalog', url: 'https://app.test/api/instagram/r/event-1/0' }],
+      }
+    )
+  })
+
+  it('does nothing for a second tap after delivery', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('delivered', { dmSent: true }))
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(result.results[0]).toMatchObject({ status: 'already_claimed', consumed: true })
+    expect(repo.transitionEventDmStage).not.toHaveBeenCalled()
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when a concurrent tap won the stage first', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening'))
+    repo.transitionEventDmStage.mockResolvedValue(null)
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(result.results[0]).toMatchObject({ status: 'already_claimed', consumed: true })
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('ignores a tap on an event of another account', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening', { igAccountId: 'IG-OTHER' }))
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(result.results[0]).toMatchObject({ status: 'ignored', consumed: true })
+    expect(repo.transitionEventDmStage).not.toHaveBeenCalled()
+    expect(repo.getWorkspaceRule).not.toHaveBeenCalled()
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('ignores an unknown event and a malformed payload', async () => {
+    const result = await runSources(
+      { kind: 'postback', postback: postback('iar:event-404:open') },
+      { kind: 'postback', postback: postback('iar:event-1:delete', { messageId: 'mid-tap-2' }) }
+    )
+
+    expect(result.results.map((r) => [r.status, r.consumed])).toEqual([
+      ['ignored', true],
+      ['ignored', true],
+    ])
+    expect(repo.getEventById).toHaveBeenCalledTimes(1)
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('moves the stage back and asks for a retry when delivery fails transiently', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening'))
+    graph.sendLinkMessage.mockResolvedValue({
+      ok: false,
+      error: 'Rate limited',
+      code: 4,
+      retryable: true,
+    })
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(result.results[0]).toMatchObject({ status: 'failed', retryable: true, consumed: true })
+    expect(result.retryableFailures).toBe(1)
+    expect(repo.transitionEventDmStage).toHaveBeenLastCalledWith('event-1', 'delivered', {
+      dmStage: 'opening',
+      dmSent: false,
+      error: 'Rate limited',
+    })
+  })
+
+  it('records an error without sending when the rule was deleted', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening', { ruleId: null }))
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(result.results[0]).toMatchObject({ status: 'failed', retryable: false, consumed: true })
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('runInstagramAutoReply — follow gate', () => {
+  const gatedSnapshot = { dmMessage: rule().dmMessage, openingDm: OPENING, followGate: GATE }
+
+  beforeEach(() => {
+    repo.getWorkspaceRule.mockResolvedValue(rule({ openingDm: OPENING, followGate: GATE }))
+  })
+
+  it('delivers on the opening tap when the user already follows', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening', { dmSnapshot: gatedSnapshot }))
+    graph.getUserFollowsBusiness.mockResolvedValue({ ok: true, data: { follows: true } })
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(graph.getUserFollowsBusiness).toHaveBeenCalledWith('token-1', 'U1')
+    expect(result.results[0].status).toBe('replied')
+    expect(graph.sendLinkMessage).toHaveBeenCalledTimes(1)
+    expect(graph.sendPostbackPrompt).not.toHaveBeenCalled()
+  })
+
+  it('sends the gate with a followed postback when the user does not follow', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening', { dmSnapshot: gatedSnapshot }))
+    graph.getUserFollowsBusiness.mockResolvedValue({ ok: true, data: { follows: false } })
+
+    const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
+
+    expect(result.results[0]).toMatchObject({ status: 'replied', consumed: true })
+    expect(repo.transitionEventDmStage).toHaveBeenCalledWith('event-1', 'opening', {
+      dmStage: 'follow_gate',
+    })
+    expect(graph.sendPostbackPrompt).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      { userId: 'U1' },
+      { text: GATE.text, buttonTitle: GATE.buttonTitle, payload: 'iar:event-1:followed' }
+    )
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('skips the gate when the follow status is unavailable', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening', { dmSnapshot: gatedSnapshot }))
+    graph.getUserFollowsBusiness.mockResolvedValue({ ok: true, data: { follows: null } })
+
+    const missingField = await runSources({
+      kind: 'postback',
+      postback: postback('iar:event-1:open'),
+    })
+    graph.getUserFollowsBusiness.mockResolvedValue({
+      ok: false,
+      error: 'User consent is required to access user profile',
+      code: 230,
+      retryable: false,
+    })
+    const graphError = await runSources({
+      kind: 'postback',
+      postback: postback('iar:event-1:open', { messageId: 'mid-tap-2' }),
+    })
+
+    expect(missingField.results[0].status).toBe('replied')
+    expect(graphError.results[0].status).toBe('replied')
+    expect(graph.sendLinkMessage).toHaveBeenCalledTimes(2)
+    expect(graph.sendPostbackPrompt).not.toHaveBeenCalled()
+  })
+
+  it('re-checks on the followed tap and delivers once the user follows', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('follow_gate', { dmSnapshot: gatedSnapshot }))
+    graph.getUserFollowsBusiness.mockResolvedValue({ ok: true, data: { follows: true } })
+
+    const result = await runSources({
+      kind: 'postback',
+      postback: postback('iar:event-1:followed'),
+    })
+
+    expect(result.results[0].status).toBe('replied')
+    expect(repo.transitionEventDmStage).toHaveBeenCalledWith('event-1', 'follow_gate', {
+      dmStage: 'delivered',
+      dmSent: true,
+      error: null,
+    })
+    expect(graph.sendLinkMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the gate again when the user still does not follow', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('follow_gate', { dmSnapshot: gatedSnapshot }))
+    graph.getUserFollowsBusiness.mockResolvedValue({ ok: true, data: { follows: false } })
+
+    const result = await runSources({
+      kind: 'postback',
+      postback: postback('iar:event-1:followed'),
+    })
+
+    expect(result.results[0].status).toBe('replied')
+    expect(repo.transitionEventDmStage).not.toHaveBeenCalled()
+    expect(graph.sendPostbackPrompt).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      { userId: 'U1' },
+      expect.objectContaining({ payload: 'iar:event-1:followed' })
+    )
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('ignores a followed tap on an event that is not at the gate', async () => {
+    repo.getEventById.mockResolvedValue(waitingEvent('opening', { dmSnapshot: gatedSnapshot }))
+
+    const result = await runSources({
+      kind: 'postback',
+      postback: postback('iar:event-1:followed'),
+    })
+
+    expect(result.results[0]).toMatchObject({ status: 'already_claimed', consumed: true })
+    expect(graph.getUserFollowsBusiness).not.toHaveBeenCalled()
+  })
+
+  it('opens a comment with the gate itself, without a profile lookup', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ followGate: GATE })])
+
+    const result = await run(comment())
+
+    expect(result.results[0].status).toBe('replied')
+    expect(repo.setEventDmStage).toHaveBeenCalledWith('event-1', 'follow_gate')
+    expect(graph.getUserFollowsBusiness).not.toHaveBeenCalled()
+    expect(graph.sendPostbackPrompt).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      { commentId: 'C1' },
+      expect.objectContaining({ payload: 'iar:event-1:followed' })
+    )
+  })
+
+  it('ignores a disabled gate', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([
+      rule({ followGate: { ...GATE, enabled: false } }),
+    ])
+
+    await run(comment())
+
+    expect(graph.sendPostbackPrompt).not.toHaveBeenCalled()
+    expect(graph.sendPrivateReply).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('runInstagramAutoReply — story replies and mentions', () => {
+  it('answers a matching story reply by DM to the sender, keyed by the message id', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ triggerType: 'story_reply' })])
+
+    const result = await runSources({ kind: 'story', story: story() })
+
+    expect(repo.listLiveRulesForAccount).toHaveBeenCalledWith(ACCOUNT, 'story_reply')
+    expect(result.results[0]).toMatchObject({
+      sourceId: 'mid-story-1',
+      status: 'replied',
+      consumed: true,
+    })
+    expect(repo.claimEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'mid-story-1',
+        triggerType: 'story_reply',
+        mediaId: 'S1',
+        fromId: 'U1',
+      })
+    )
+    expect(graph.sendPublicReply).not.toHaveBeenCalled()
+    expect(graph.sendPrivateReply).not.toHaveBeenCalled()
+    expect(graph.sendLinkMessage).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      { userId: 'U1' },
+      expect.objectContaining({ text: 'Narxlar shu yerda' })
+    )
+    expect(storedOutcome()).toMatchObject({ dmSent: true, dmStage: 'delivered' })
+  })
+
+  it('leaves a story reply without the keywords for the DM workflows', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ triggerType: 'story_reply' })])
+
+    const result = await runSources({ kind: 'story', story: story({ text: 'Zo‘r!' }) })
+
+    expect(result.results[0]).toMatchObject({ status: 'unmatched', consumed: false })
+    expect(repo.claimEvent).not.toHaveBeenCalled()
+  })
+
+  it('matches a story mention whatever its text', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([
+      rule({ triggerType: 'story_mention', keywords: ['narx'] }),
+    ])
+
+    const result = await runSources({
+      kind: 'story',
+      story: story({ kind: 'story_mention', text: null, storyId: null }),
+    })
+
+    expect(repo.listLiveRulesForAccount).toHaveBeenCalledWith(ACCOUNT, 'story_mention')
+    expect(result.results[0].status).toBe('replied')
+    expect(repo.hasRecentAnswer).toHaveBeenCalledWith({
+      igAccountId: ACCOUNT,
+      fromId: 'U1',
+      triggerType: 'story_mention',
+      since: new Date(NOW - 24 * 60 * 60 * 1000),
+    })
+    expect(repo.hasPriorReply).not.toHaveBeenCalled()
+  })
+
+  it('answers a user’s mentions at most once per 24 hours', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ triggerType: 'story_mention' })])
+    repo.hasRecentAnswer.mockResolvedValue(true)
+
+    const result = await runSources({
+      kind: 'story',
+      story: story({ kind: 'story_mention', text: null, storyId: null }),
+    })
+
+    expect(result.results[0]).toMatchObject({ status: 'skipped_duplicate', consumed: true })
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('records expired for a story event older than the 24-hour messaging window', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ triggerType: 'story_reply' })])
+
+    const result = await runSources({
+      kind: 'story',
+      story: story({ timestamp: NOW - 25 * 60 * 60 * 1000 }),
+    })
+
+    expect(result.results[0].status).toBe('expired')
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+
+  it('checks the follow status before answering a gated story reply', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([
+      rule({ triggerType: 'story_reply', followGate: GATE }),
+    ])
+    graph.getUserFollowsBusiness.mockResolvedValue({ ok: true, data: { follows: false } })
+
+    const result = await runSources({ kind: 'story', story: story() })
+
+    expect(result.results[0].status).toBe('replied')
+    expect(repo.setEventDmStage).toHaveBeenCalledWith('event-1', 'follow_gate')
+    expect(graph.sendPostbackPrompt).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      { userId: 'U1' },
+      expect.objectContaining({ payload: 'iar:event-1:followed' })
+    )
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('runInstagramAutoReply — live comments', () => {
+  it('answers a live comment with a private reply only, never a public one', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ triggerType: 'live_comment' })])
+
+    const result = await runSources({
+      kind: 'live_comment',
+      comment: comment({ commentId: 'LC1', mediaId: 'LIVE1' }),
+    })
+
+    expect(repo.listLiveRulesForAccount).toHaveBeenCalledWith(ACCOUNT, 'live_comment')
+    expect(result.results[0]).toMatchObject({ sourceId: 'LC1', status: 'replied', consumed: true })
+    expect(repo.claimEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'LC1', triggerType: 'live_comment', mediaId: 'LIVE1' })
+    )
+    expect(graph.sendPublicReply).not.toHaveBeenCalled()
+    expect(graph.sendPrivateReply).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      'LC1',
+      expect.objectContaining({ text: 'Narxlar shu yerda' })
+    )
   })
 })

@@ -12,7 +12,7 @@ import {
 import { generateId } from '@labbai/utils/id'
 import { filterUndefined } from '@labbai/utils/object'
 import { truncateAtCodePoint } from '@labbai/utils/string'
-import { and, asc, count, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import {
   INSTAGRAM_AUTO_REPLY_ANSWERED_OUTCOMES,
   INSTAGRAM_AUTO_REPLY_EVENT_ERROR_MAX_LENGTH,
@@ -603,6 +603,99 @@ export async function getEventById(eventId: string): Promise<InstagramAutoReplyE
     .where(eq(instagramAutoReplyEvent.id, eventId))
     .limit(1)
   return row ?? null
+}
+
+/**
+ * Whether this user already got an answer (`replied` or `partial`) to an event of this trigger
+ * type on this account since `since`, for "a story mention is answered once per user per 24h".
+ */
+export async function hasRecentAnswer(input: {
+  igAccountId: string
+  fromId: string
+  triggerType: InstagramAutoReplyTriggerType
+  since: Date
+}): Promise<boolean> {
+  const t = instagramAutoReplyEvent
+  const [row] = await db
+    .select({ id: t.id })
+    .from(t)
+    .where(
+      and(
+        eq(t.igAccountId, input.igAccountId),
+        eq(t.fromId, input.fromId),
+        eq(t.triggerType, input.triggerType),
+        inArray(t.outcome, [...INSTAGRAM_AUTO_REPLY_ANSWERED_OUTCOMES]),
+        gte(t.createdAt, input.since)
+      )
+    )
+    .limit(1)
+  return Boolean(row)
+}
+
+/**
+ * Sets how far an event's multi-step DM has progressed, unconditionally. Only the engine run that
+ * claimed the event calls this, before the prompt goes out, so a tap on it finds the stage.
+ */
+export async function setEventDmStage(
+  eventId: string,
+  dmStage: InstagramAutoReplyDmStage | null
+): Promise<void> {
+  await db
+    .update(instagramAutoReplyEvent)
+    .set({ dmStage, updatedAt: new Date() })
+    .where(eq(instagramAutoReplyEvent.id, eventId))
+}
+
+/** What a stage transition writes besides the new stage. Omitted fields are left unchanged. */
+export interface InstagramAutoReplyDmStageChanges {
+  dmStage: InstagramAutoReplyDmStage | null
+  dmSent?: boolean
+  /** Truncated to 500 characters before it is stored; null clears it. */
+  error?: string | null
+}
+
+/**
+ * Moves an event's DM stage from `from` to `changes.dmStage` in one conditional update, so of two
+ * concurrent taps on the same button only one wins, and a tap after delivery finds nothing to do.
+ *
+ * @returns The updated event, or null when the event is gone or no longer at `from`.
+ */
+export async function transitionEventDmStage(
+  eventId: string,
+  from: InstagramAutoReplyDmStage,
+  changes: InstagramAutoReplyDmStageChanges
+): Promise<InstagramAutoReplyEventRecord | null> {
+  const [row] = await db
+    .update(instagramAutoReplyEvent)
+    .set(
+      filterUndefined({
+        dmStage: changes.dmStage,
+        dmSent: changes.dmSent,
+        error:
+          typeof changes.error === 'string'
+            ? clip(changes.error, INSTAGRAM_AUTO_REPLY_EVENT_ERROR_MAX_LENGTH)
+            : changes.error,
+        updatedAt: new Date(),
+      })
+    )
+    .where(and(eq(instagramAutoReplyEvent.id, eventId), eq(instagramAutoReplyEvent.dmStage, from)))
+    .returning()
+  return row ?? null
+}
+
+/**
+ * Deletes every auto-reply event recorded for one Instagram-scoped user, on every account, for a
+ * Meta data deletion request. Their link clicks go with them (`ON DELETE CASCADE`). Rules are not
+ * touched: they hold the business's own configuration, not the user's data.
+ *
+ * @returns How many events were deleted.
+ */
+export async function deleteEventsFromUser(fromId: string): Promise<number> {
+  const rows = await db
+    .delete(instagramAutoReplyEvent)
+    .where(eq(instagramAutoReplyEvent.fromId, fromId))
+    .returning({ id: instagramAutoReplyEvent.id })
+  return rows.length
 }
 
 /**

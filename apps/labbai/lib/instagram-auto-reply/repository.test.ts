@@ -12,14 +12,18 @@ import {
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   claimEvent,
+  deleteEventsFromUser,
   getEventById,
   getEventOutcomeBySource,
   getInstagramAccountUserId,
   hasPriorReply,
+  hasRecentAnswer,
   listLiveRulesForAccount,
   recordClick,
   retryFailedEvent,
+  setEventDmStage,
   setNextMediaId,
+  transitionEventDmStage,
   updateEventOutcome,
 } from '@/lib/instagram-auto-reply/repository'
 
@@ -261,6 +265,77 @@ describe('Instagram auto-reply repository', () => {
     it('rejects a row of another provider', async () => {
       queueTableRows(schemaMock.account, [{ accountId: 'g-1', providerId: 'google' }])
       await expect(getInstagramAccountUserId('account-row-1')).resolves.toBeNull()
+    })
+  })
+
+  describe('hasRecentAnswer', () => {
+    it('looks for an answered event of the account, user, and trigger since the cutoff', async () => {
+      queueTableRows(schemaMock.instagramAutoReplyEvent, [{ id: 'event-0' }])
+      const since = new Date('2026-11-17T12:00:00Z')
+
+      await expect(
+        hasRecentAnswer({
+          igAccountId: '1784',
+          fromId: 'user-9',
+          triggerType: 'story_mention',
+          since,
+        })
+      ).resolves.toBe(true)
+
+      const where = lastWhere()
+      expect(hasEq(where, EVENT.igAccountId, '1784')).toBe(true)
+      expect(hasEq(where, EVENT.fromId, 'user-9')).toBe(true)
+      expect(hasEq(where, EVENT.triggerType, 'story_mention')).toBe(true)
+      expect(flattenMockConditions(where)).toContainEqual({
+        type: 'gte',
+        left: EVENT.createdAt,
+        right: since,
+      })
+      expect(flattenMockConditions(where)).toContainEqual({
+        type: 'inArray',
+        column: EVENT.outcome,
+        values: ['replied', 'partial'],
+      })
+    })
+  })
+
+  describe('setEventDmStage and transitionEventDmStage', () => {
+    it('sets the stage of one event', async () => {
+      await setEventDmStage('event-1', 'opening')
+      expect(dbChainMockFns.set.mock.calls[0][0]).toMatchObject({ dmStage: 'opening' })
+      expect(hasEq(lastWhere(), EVENT.id, 'event-1')).toBe(true)
+    })
+
+    it('moves the stage only from the expected one, writing only the given fields', async () => {
+      dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'event-1', dmStage: 'delivered' }])
+
+      const moved = await transitionEventDmStage('event-1', 'opening', {
+        dmStage: 'delivered',
+        dmSent: true,
+      })
+
+      expect(moved).toEqual({ id: 'event-1', dmStage: 'delivered' })
+      const set = dbChainMockFns.set.mock.calls[0][0] as Record<string, unknown>
+      expect(set).toMatchObject({ dmStage: 'delivered', dmSent: true })
+      expect(set).not.toHaveProperty('error')
+      expect(hasEq(lastWhere(), EVENT.id, 'event-1')).toBe(true)
+      expect(hasEq(lastWhere(), EVENT.dmStage, 'opening')).toBe(true)
+    })
+
+    it('returns null when the stage already moved', async () => {
+      dbChainMockFns.returning.mockResolvedValueOnce([])
+      await expect(
+        transitionEventDmStage('event-1', 'opening', { dmStage: 'delivered' })
+      ).resolves.toBeNull()
+    })
+  })
+
+  describe('deleteEventsFromUser', () => {
+    it('deletes every event of the user and reports how many', async () => {
+      dbChainMockFns.returning.mockResolvedValueOnce([{ id: 'event-1' }, { id: 'event-2' }])
+
+      await expect(deleteEventsFromUser('user-9')).resolves.toBe(2)
+      expect(hasEq(lastWhere(), EVENT.fromId, 'user-9')).toBe(true)
     })
   })
 })
