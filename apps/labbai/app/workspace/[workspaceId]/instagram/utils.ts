@@ -1,5 +1,6 @@
 import type {
   CreateInstagramAutoReplyRuleBody,
+  InstagramAutoReplyEvent,
   InstagramAutoReplyKeywordModeValue,
   InstagramAutoReplyMediaScopeValue,
   InstagramAutoReplyRule,
@@ -75,9 +76,23 @@ export interface RuleDraft {
   dmText: string
   dmButtons: DmButtonDraft[]
   dmImageUrl: string
+  /** Faza 3: send an opening message with a button first; the DM follows the tap. */
+  openingDmEnabled: boolean
+  openingDmText: string
+  openingDmButtonTitle: string
+  /** Faza 3: before the DM, ask the user to follow the account. */
+  followGateEnabled: boolean
+  followGateText: string
+  followGateButtonTitle: string
   handoffToAgent: boolean
   oncePerUserPerPost: boolean
 }
+
+/** Button title a new opening message starts with. */
+export const DEFAULT_OPENING_DM_BUTTON_TITLE = 'Send me the link'
+
+/** Button title a new follow gate starts with. */
+export const DEFAULT_FOLLOW_GATE_BUTTON_TITLE = 'I’m following'
 
 /**
  * Error messages keyed by field. List fields use dotted keys for one entry, e.g.
@@ -85,11 +100,14 @@ export interface RuleDraft {
  */
 export type RuleDraftErrors = Record<string, string>
 
-/** A blank rule as the editor opens it. Once per user per post defaults to on. */
-export function newRuleDraft(): RuleDraft {
+/**
+ * A blank rule as the editor opens it. Once per user per post defaults to on; the opening
+ * message and the follow gate default to off.
+ */
+export function newRuleDraft(credentialId = ''): RuleDraft {
   return {
     name: '',
-    credentialId: '',
+    credentialId,
     triggerType: 'comment',
     mediaScope: 'specific',
     mediaIds: [],
@@ -101,6 +119,12 @@ export function newRuleDraft(): RuleDraft {
     dmText: '',
     dmButtons: [],
     dmImageUrl: '',
+    openingDmEnabled: false,
+    openingDmText: '',
+    openingDmButtonTitle: DEFAULT_OPENING_DM_BUTTON_TITLE,
+    followGateEnabled: false,
+    followGateText: '',
+    followGateButtonTitle: DEFAULT_FOLLOW_GATE_BUTTON_TITLE,
     handoffToAgent: false,
     oncePerUserPerPost: true,
   }
@@ -122,6 +146,12 @@ export function draftFromRule(rule: InstagramAutoReplyRule): RuleDraft {
     dmText: rule.dmMessage.text,
     dmButtons: rule.dmMessage.buttons.map((button) => ({ title: button.title, url: button.url })),
     dmImageUrl: rule.dmMessage.imageUrl ?? '',
+    openingDmEnabled: rule.openingDm !== null,
+    openingDmText: rule.openingDm?.text ?? '',
+    openingDmButtonTitle: rule.openingDm?.buttonTitle ?? DEFAULT_OPENING_DM_BUTTON_TITLE,
+    followGateEnabled: rule.followGate?.enabled ?? false,
+    followGateText: rule.followGate?.text ?? '',
+    followGateButtonTitle: rule.followGate?.buttonTitle || DEFAULT_FOLLOW_GATE_BUTTON_TITLE,
     handoffToAgent: rule.handoffToAgent,
     oncePerUserPerPost: rule.oncePerUserPerPost,
   }
@@ -151,6 +181,12 @@ export function isSameDraft(left: RuleDraft, right: RuleDraft): boolean {
         button.title === right.dmButtons[index].title && button.url === right.dmButtons[index].url
     ) &&
     left.dmImageUrl === right.dmImageUrl &&
+    left.openingDmEnabled === right.openingDmEnabled &&
+    left.openingDmText === right.openingDmText &&
+    left.openingDmButtonTitle === right.openingDmButtonTitle &&
+    left.followGateEnabled === right.followGateEnabled &&
+    left.followGateText === right.followGateText &&
+    left.followGateButtonTitle === right.followGateButtonTitle &&
     left.handoffToAgent === right.handoffToAgent &&
     left.oncePerUserPerPost === right.oncePerUserPerPost
   )
@@ -208,7 +244,26 @@ export function getFormatErrors(draft: RuleDraft): RuleDraftErrors {
   if (draft.dmImageUrl.trim() && !isHttpsUrl(draft.dmImageUrl.trim())) {
     errors.dmImageUrl = HTTPS_LINK_ERROR
   }
+  addPromptFormatErrors(errors, 'openingDm', draft.openingDmText, draft.openingDmButtonTitle)
+  addPromptFormatErrors(errors, 'followGate', draft.followGateText, draft.followGateButtonTitle)
   return errors
+}
+
+/** Over-length text or button title of the opening message or the follow gate. */
+function addPromptFormatErrors(
+  errors: RuleDraftErrors,
+  prefix: 'openingDm' | 'followGate',
+  text: string,
+  buttonTitle: string
+): void {
+  if (text.trim().length > INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH) {
+    errors[`${prefix}Text`] =
+      `Use ${INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH} characters or fewer`
+  }
+  if (buttonTitle.trim().length > INSTAGRAM_AUTO_REPLY_DM_BUTTON_TITLE_MAX_LENGTH) {
+    errors[`${prefix}ButtonTitle`] =
+      `Use ${INSTAGRAM_AUTO_REPLY_DM_BUTTON_TITLE_MAX_LENGTH} characters or fewer`
+  }
 }
 
 /** Everything a draft needs before it can be saved at all: a name, an account, whole buttons. */
@@ -220,6 +275,14 @@ export function getSaveErrors(draft: RuleDraft): RuleDraftErrors {
     if (!button.title.trim()) errors[`dmButtons.${index}.title`] = 'Add a button title'
     if (!button.url.trim()) errors[`dmButtons.${index}.url`] = 'Add the link this button opens'
   })
+  if (draft.openingDmEnabled) {
+    if (!draft.openingDmText.trim()) errors.openingDmText ??= 'Write the opening message'
+    if (!draft.openingDmButtonTitle.trim()) errors.openingDmButtonTitle ??= 'Add a button title'
+  }
+  if (draft.followGateEnabled) {
+    if (!draft.followGateText.trim()) errors.followGateText ??= 'Ask the user to follow you'
+    if (!draft.followGateButtonTitle.trim()) errors.followGateButtonTitle ??= 'Add a button title'
+  }
   return errors
 }
 
@@ -270,6 +333,8 @@ export interface RuleBody extends CreateInstagramAutoReplyRuleBody {
   keywords: string[]
   publicReplies: string[]
   dmMessage: { text: string; buttons: DmButtonDraft[]; imageUrl: string | null }
+  openingDm: { text: string; buttonTitle: string } | null
+  followGate: { enabled: boolean; text: string; buttonTitle: string } | null
 }
 
 /**
@@ -296,6 +361,17 @@ export function toRuleBody(draft: RuleDraft): RuleBody {
       })),
       imageUrl: draft.dmImageUrl.trim() || null,
     },
+    openingDm: draft.openingDmEnabled
+      ? { text: draft.openingDmText.trim(), buttonTitle: draft.openingDmButtonTitle.trim() }
+      : null,
+    followGate:
+      draft.followGateEnabled || draft.followGateText.trim()
+        ? {
+            enabled: draft.followGateEnabled,
+            text: draft.followGateText.trim(),
+            buttonTitle: draft.followGateButtonTitle.trim(),
+          }
+        : null,
     handoffToAgent: draft.handoffToAgent,
     oncePerUserPerPost: draft.oncePerUserPerPost,
   }
@@ -330,6 +406,93 @@ export function duplicateRuleBody(
     handoffToAgent: rule.handoffToAgent,
     oncePerUserPerPost: rule.oncePerUserPerPost,
   }
+}
+
+/**
+ * Switches a draft to another trigger type, keeping only settings that type supports. Only post
+ * comments can target chosen posts or the next post: stories and live videos cannot be picked in
+ * advance, so those rules apply to any story or live video. A story mention carries no text, so
+ * it matches any mention.
+ */
+export function withTriggerType(
+  draft: RuleDraft,
+  triggerType: InstagramAutoReplyTriggerTypeValue
+): RuleDraft {
+  if (triggerType === 'comment') return { ...draft, triggerType }
+  return {
+    ...draft,
+    triggerType,
+    mediaScope: 'any',
+    mediaIds: [],
+    keywordMode: triggerType === 'story_mention' ? 'any' : draft.keywordMode,
+  }
+}
+
+/** One message of the DM conversation the preview shows, in the order the user receives it. */
+export interface DmPreviewStep {
+  kind: 'opening' | 'follow_gate'
+  text: string
+  buttonTitle: string
+}
+
+/**
+ * The prompts sent before the final DM: the opening message, then the follow gate. Each one
+ * waits for the user to tap its button.
+ */
+export function previewDmPrompts(
+  draft: Pick<
+    RuleDraft,
+    | 'openingDmEnabled'
+    | 'openingDmText'
+    | 'openingDmButtonTitle'
+    | 'followGateEnabled'
+    | 'followGateText'
+    | 'followGateButtonTitle'
+  >
+): DmPreviewStep[] {
+  const steps: DmPreviewStep[] = []
+  if (draft.openingDmEnabled) {
+    steps.push({
+      kind: 'opening',
+      text: draft.openingDmText.trim(),
+      buttonTitle: draft.openingDmButtonTitle.trim(),
+    })
+  }
+  if (draft.followGateEnabled) {
+    steps.push({
+      kind: 'follow_gate',
+      text: draft.followGateText.trim(),
+      buttonTitle: draft.followGateButtonTitle.trim(),
+    })
+  }
+  return steps
+}
+
+/**
+ * What reached the user for one event: the public reply, the DM, or the prompt the DM waits
+ * behind. Null when nothing was sent.
+ */
+export function describeEventDelivery(
+  event: Pick<InstagramAutoReplyEvent, 'publicReplyId' | 'dmSent' | 'dmStage'>
+): string | null {
+  const parts: string[] = []
+  if (event.publicReplyId) parts.push('Replied publicly')
+  if (event.dmStage === 'opening') parts.push('Opening message sent, waiting for a tap')
+  else if (event.dmStage === 'follow_gate') parts.push('Asked to follow, waiting for a tap')
+  else if (event.dmSent) parts.push('DM sent')
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+/** Clicks per DM sent, as a whole percentage, or null before any DM was sent. */
+export function clickThroughRate(clicks: number, dmSent: number): number | null {
+  if (dmSent <= 0) return null
+  return Math.round((clicks / dmSent) * 100)
+}
+
+/** A click-through rate for display: `12%`, or an em dash before any DM was sent. */
+export function formatClickThroughRate(clicks: number, dmSent: number): string {
+  const rate = clickThroughRate(clicks, dmSent)
+  return rate === null ? '—' : `${rate}%`
 }
 
 /** Splits typed or pasted keyword text on commas, trimming and dropping empties. */

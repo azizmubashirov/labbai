@@ -5,24 +5,29 @@ import { Chip, ChipSwitch, cn, toast } from '@labbai/emcn'
 import { CircleAlert } from '@labbai/emcn/icons'
 import { getErrorMessage } from '@labbai/utils/errors'
 import { format, isSameDay } from 'date-fns'
+import { AutoReplyEventItem } from '@/app/workspace/[workspaceId]/inbox/components/auto-reply-event'
 import {
   ChannelIcon,
   INBOX_CHANNEL_LABELS,
 } from '@/app/workspace/[workspaceId]/inbox/components/channel-icon'
 import { MessageAttachments } from '@/app/workspace/[workspaceId]/inbox/components/message-attachments'
 import { ReplyBox } from '@/app/workspace/[workspaceId]/inbox/components/reply-box'
-import { conversationTitle } from '@/app/workspace/[workspaceId]/inbox/utils'
+import { buildThreadTimeline, conversationTitle } from '@/app/workspace/[workspaceId]/inbox/utils'
 import {
   type InboxConversation,
   type InboxMessage,
   useInboxThread,
   useUpdateInboxConversation,
 } from '@/hooks/queries/inbox'
+import { useInstagramAutoReplyEvents } from '@/hooks/queries/instagram-auto-reply'
 
 const AI_OPTIONS = [
   { value: 'on', label: 'AI on' },
   { value: 'off', label: 'AI off' },
 ] as const
+
+/** Auto-reply events shown in an Instagram thread: the most recent ones from this contact. */
+const THREAD_AUTO_REPLY_LIMIT = 20
 
 const AUTHOR_LABELS: Record<InboxMessage['author'], string> = {
   customer: 'Customer',
@@ -128,7 +133,10 @@ function ThreadHeader({ conversation, canEdit, isUpdating, onToggleAi }: ThreadH
   )
 }
 
-/** One conversation: its messages, the AI switch, and the operator reply box. */
+/**
+ * One conversation: its messages, the AI switch, and the operator reply box. An Instagram
+ * conversation also shows the contact's recent auto-replied comments in the timeline, read-only.
+ */
 export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }: ThreadProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastMarkedRef = useRef<string | null>(null)
@@ -150,6 +158,23 @@ export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }:
   }, [pages])
   const firstMessageId = messages[0]?.id
   const lastMessageId = messages[messages.length - 1]?.id
+
+  const isInstagram = conversation?.channel === 'instagram'
+  const { data: autoReplyData } = useInstagramAutoReplyEvents(
+    workspaceId,
+    { fromId: conversation?.externalChatId },
+    { enabled: isInstagram, limit: THREAD_AUTO_REPLY_LIMIT }
+  )
+  const autoReplyEvents = isInstagram ? autoReplyData?.pages[0]?.events : undefined
+  const timeline = useMemo(
+    () =>
+      buildThreadTimeline({
+        messages,
+        events: autoReplyEvents ?? [],
+        hasEarlierMessages: Boolean(hasNextPage),
+      }),
+    [messages, autoReplyEvents, hasNextPage]
+  )
 
   /** Opening a thread (or a new message arriving while it is open) marks it read on the server. */
   useEffect(() => {
@@ -225,17 +250,21 @@ export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }:
               </Chip>
             </div>
           )}
-          {messages.map((message, index) => {
-            const previous = messages[index - 1]
-            const showDay = !previous || !isSameDay(previous.createdAt, message.createdAt)
+          {timeline.map((item, index) => {
+            const previous = timeline[index - 1]
+            const showDay = !previous || !isSameDay(previous.createdAt, item.createdAt)
             return (
-              <div key={message.id} className='flex flex-col gap-3'>
+              <div key={`${item.kind}:${item.id}`} className='flex flex-col gap-3'>
                 {showDay && (
                   <p className='text-center text-[var(--text-muted)] text-caption'>
-                    {format(message.createdAt, 'd MMMM yyyy')}
+                    {format(item.createdAt, 'd MMMM yyyy')}
                   </p>
                 )}
-                <MessageBubble workspaceId={workspaceId} message={message} />
+                {item.kind === 'message' ? (
+                  <MessageBubble workspaceId={workspaceId} message={item.message} />
+                ) : (
+                  <AutoReplyEventItem event={item.event} />
+                )}
               </div>
             )
           })}

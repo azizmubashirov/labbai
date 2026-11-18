@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { type ReactNode, useId, useState } from 'react'
 import {
   Badge,
   Chip,
@@ -17,19 +17,27 @@ import type {
   InstagramAutoReplyKeywordModeValue,
   InstagramAutoReplyMediaScopeValue,
   InstagramAutoReplyRule,
+  InstagramAutoReplyTriggerTypeValue,
 } from '@/lib/api/contracts/instagram-auto-reply'
-import { INSTAGRAM_AUTO_REPLY_RULE_NAME_MAX_LENGTH } from '@/lib/instagram-auto-reply/constants'
-import { isStoryTriggerType, supportsPublicReply } from '@/lib/instagram-auto-reply/rule-validation'
+import {
+  INSTAGRAM_AUTO_REPLY_DM_BUTTON_TITLE_MAX_LENGTH,
+  INSTAGRAM_AUTO_REPLY_RULE_NAME_MAX_LENGTH,
+  INSTAGRAM_AUTO_REPLY_TRIGGER_TYPES,
+} from '@/lib/instagram-auto-reply/constants'
+import { supportsPublicReply } from '@/lib/instagram-auto-reply/rule-validation'
 import { Resource } from '@/app/workspace/[workspaceId]/components'
 import {
   InstagramMediaPicker,
   useInstagramMediaByIds,
 } from '@/app/workspace/[workspaceId]/instagram/components/media-picker'
 import { PhonePreview } from '@/app/workspace/[workspaceId]/instagram/components/phone-preview/phone-preview'
+import { RuleActivity } from '@/app/workspace/[workspaceId]/instagram/components/rule-activity/rule-activity'
+import { ConnectInstagram } from '@/app/workspace/[workspaceId]/instagram/components/rule-editor/connect-instagram'
 import { DmButtonsField } from '@/app/workspace/[workspaceId]/instagram/components/rule-editor/dm-buttons-field'
 import { EditorStep } from '@/app/workspace/[workspaceId]/instagram/components/rule-editor/editor-step'
 import { KeywordField } from '@/app/workspace/[workspaceId]/instagram/components/rule-editor/keyword-field'
 import { ReplyVariantsField } from '@/app/workspace/[workspaceId]/instagram/components/rule-editor/reply-variants-field'
+import { RuleStats } from '@/app/workspace/[workspaceId]/instagram/components/rule-stats/rule-stats'
 import { RuleStatusBadge } from '@/app/workspace/[workspaceId]/instagram/components/rule-status-badge'
 import type { InstagramPreviewTab } from '@/app/workspace/[workspaceId]/instagram/search-params'
 import {
@@ -42,11 +50,14 @@ import {
   isHttpsUrl,
   isSameDraft,
   newRuleDraft,
+  previewDmPrompts,
   previewPublicReply,
   type RuleDraft,
   type RuleDraftErrors,
   sampleCommentFor,
+  TRIGGER_TYPE_LABELS,
   toRuleBody,
+  withTriggerType,
 } from '@/app/workspace/[workspaceId]/instagram/utils'
 import {
   useCreateInstagramAutoReplyRule,
@@ -60,11 +71,53 @@ const MEDIA_SCOPE_OPTIONS = [
   { value: 'next', label: 'Next post' },
 ] as const satisfies readonly { value: InstagramAutoReplyMediaScopeValue; label: string }[]
 
-const KEYWORD_MODE_OPTIONS = [
-  { value: 'include', label: 'These words' },
-  { value: 'exclude', label: 'Not these words' },
-  { value: 'any', label: 'Any comment' },
-] as const satisfies readonly { value: InstagramAutoReplyKeywordModeValue; label: string }[]
+const TRIGGER_TYPE_OPTIONS = INSTAGRAM_AUTO_REPLY_TRIGGER_TYPES.map((value) => ({
+  value,
+  label: TRIGGER_TYPE_LABELS[value],
+}))
+
+/** What the customer sends, as the keyword step names it. */
+const MESSAGE_NOUNS = {
+  comment: 'comment',
+  live_comment: 'comment',
+  story_reply: 'reply',
+  story_mention: 'mention',
+} as const satisfies Record<InstagramAutoReplyTriggerTypeValue, string>
+
+/** The thing "once per user per …" counts per trigger. */
+const ONCE_PER_TITLES = {
+  comment: 'Once per user per post',
+  live_comment: 'Once per user per live video',
+  story_reply: 'Once per user per story',
+  story_mention: 'Once per user per story',
+} as const satisfies Record<InstagramAutoReplyTriggerTypeValue, string>
+
+function keywordModeOptions(triggerType: InstagramAutoReplyTriggerTypeValue) {
+  return [
+    { value: 'include', label: 'These words' },
+    { value: 'exclude', label: 'Not these words' },
+    { value: 'any', label: `Any ${MESSAGE_NOUNS[triggerType]}` },
+  ] as const satisfies readonly { value: InstagramAutoReplyKeywordModeValue; label: string }[]
+}
+
+interface EditorSectionProps {
+  title: string
+  children: ReactNode
+}
+
+/** A read-only block under the form (results, activity), with the page's section rhythm. */
+function EditorSection({ title, children }: EditorSectionProps) {
+  const titleId = useId()
+  return (
+    <section aria-labelledby={titleId} className='flex flex-col'>
+      <h2 id={titleId} className='text-[var(--text-muted)] text-small'>
+        {title}
+      </h2>
+      <div className='mt-[9px] mb-3 h-px bg-[var(--border)]' />
+      {children}
+    </section>
+  )
+}
 
 /** Which check a save attempt ran; its errors stay shown until the next successful save. */
 type SubmitIntent = 'draft' | 'live'
@@ -83,15 +136,21 @@ export interface RuleEditorProps {
   onClose: () => void
   /** A new rule was saved; the page switches to editing it. */
   onCreated: (rule: InstagramAutoReplyRule) => void
+  /** Account a new rule starts with, e.g. the one a workflow trigger listens on. */
+  defaultCredentialId?: string
+  /** The workflow the editor is open in, when opened from a trigger; connecting returns there. */
+  workflowId?: string
 }
 
 /**
  * The ManyChat-style rule editor: numbered steps on the left, a live phone preview on the right
- * (stacked on narrow screens), and Save draft / Go live (or Pause / Update) in the footer.
+ * (stacked on narrow screens), and Save draft / Go live (or Pause / Update) in the footer. A saved
+ * rule also shows its results and recent activity under the steps.
  *
  * The form is a local draft seeded from the rule. Length and link problems show while typing;
  * missing pieces show after a save attempt, using the same completeness check the server runs
- * before a rule goes live. Server refusals surface their message in the footer.
+ * before a rule goes live. A new rule goes live in one request, so it is never left behind as a
+ * draft that failed to go live. Server refusals surface their message in the footer.
  */
 export function RuleEditor({
   workspaceId,
@@ -103,13 +162,15 @@ export function RuleEditor({
   onPreviewTabChange,
   onClose,
   onCreated,
+  defaultCredentialId,
+  workflowId,
 }: RuleEditorProps) {
   const createRule = useCreateInstagramAutoReplyRule(workspaceId)
   const updateRule = useUpdateInstagramAutoReplyRule(workspaceId)
   const setStatus = useSetInstagramAutoReplyRuleStatus(workspaceId)
 
   const [storedDraft, setDraft] = useState<RuleDraft>(() =>
-    rule ? draftFromRule(rule) : newRuleDraft()
+    rule ? draftFromRule(rule) : newRuleDraft(defaultCredentialId)
   )
   const [submitted, setSubmitted] = useState<SubmitIntent | null>(null)
   const [footerError, setFooterError] = useState<string | null>(null)
@@ -135,7 +196,10 @@ export function RuleEditor({
         ? getSaveErrors(draft)
         : getFormatErrors(draft)
 
-  const firstMediaId = draft.mediaScope === 'specific' ? draft.mediaIds[0] : undefined
+  const firstMediaId =
+    draft.triggerType === 'comment' && draft.mediaScope === 'specific'
+      ? draft.mediaIds[0]
+      : undefined
   const { items: previewMedia } = useInstagramMediaByIds({
     credentialId: draft.credentialId || null,
     workspaceId,
@@ -194,17 +258,15 @@ export function RuleEditor({
 
   const handleGoLive = () =>
     run('live', 'live', async () => {
-      const { saved, created } = await persist()
-      try {
-        await setStatus.mutateAsync({ ruleId: saved.id, status: 'live' })
-      } catch (error) {
-        if (!created) throw error
-        toast.error(getErrorMessage(error, 'Saved as a draft, but it could not go live.'))
-        onCreated(saved)
+      if (!rule) {
+        const created = await createRule.mutateAsync({ ...toRuleBody(draft), status: 'live' })
+        toast.success('Auto-reply is live')
+        onCreated(created)
         return
       }
+      const { saved } = await persist()
+      await setStatus.mutateAsync({ ruleId: saved.id, status: 'live' })
       toast.success('Auto-reply is live')
-      if (created) onCreated(saved)
     })
 
   const handlePause = () =>
@@ -215,11 +277,25 @@ export function RuleEditor({
     })
 
   function requestClose() {
-    if (rule ? isDirty : !isSameDraft(draft, newRuleDraft())) setConfirmDiscard(true)
+    if (
+      rule
+        ? isDirty
+        : !isSameDraft(draft, newRuleDraft(fallbackCredentialId || defaultCredentialId))
+    )
+      setConfirmDiscard(true)
     else onClose()
   }
 
+  function changeTriggerType(triggerType: InstagramAutoReplyTriggerTypeValue) {
+    setDraft((current) => withTriggerType(current, triggerType))
+    setFooterError(null)
+  }
+
+  const isPostTrigger = draft.triggerType === 'comment'
+  const showKeywordStep = draft.triggerType !== 'story_mention'
   const showPublicReplyStep = supportsPublicReply(draft.triggerType)
+  const showDmPrompts = draft.dmEnabled && !draft.handoffToAgent
+  const messageNoun = MESSAGE_NOUNS[draft.triggerType]
   const dmLimit = dmTextLimit(draft.dmButtons.length)
   const dmLength = draft.dmText.trim().length
   let stepIndex = 0
@@ -272,65 +348,86 @@ export function RuleEditor({
                 dropdownWidth='trigger'
               />
               {!accountsLoading && accounts.length === 0 && (
-                <p className='text-[var(--text-muted)] text-caption'>
-                  No Instagram account is connected. Connect one with an Instagram block in the
-                  workflow builder.
-                </p>
-              )}
-            </EditorStep>
-
-            <EditorStep
-              index={nextStep()}
-              title='When someone comments on'
-              error={errors.mediaIds ?? errors.mediaScope}
-            >
-              <ChipSwitch
-                options={MEDIA_SCOPE_OPTIONS.map((option) => ({
-                  ...option,
-                  disabled: option.value === 'next' && isStoryTriggerType(draft.triggerType),
-                }))}
-                value={draft.mediaScope}
-                onChange={(value) => update('mediaScope', value)}
-                disabled={readOnly}
-                aria-label='Which posts'
-              />
-              {draft.mediaScope === 'specific' &&
-                (draft.credentialId ? (
-                  <InstagramMediaPicker
-                    credentialId={draft.credentialId}
-                    workspaceId={workspaceId}
-                    selectedIds={draft.mediaIds}
-                    onChange={(ids) => update('mediaIds', ids)}
-                  />
-                ) : (
+                <div className='flex flex-wrap items-center gap-2'>
                   <p className='text-[var(--text-muted)] text-caption'>
-                    Choose an account to see its posts.
+                    No Instagram account is connected.
                   </p>
-                ))}
-              {draft.mediaScope === 'next' && (
-                <p className='text-[var(--text-muted)] text-caption'>
-                  Applies to the first post or Reel you publish after going live.
-                </p>
+                  <ConnectInstagram
+                    workspaceId={workspaceId}
+                    workflowId={workflowId}
+                    disabled={!canEdit}
+                  />
+                </div>
               )}
             </EditorStep>
 
-            <EditorStep index={nextStep()} title='And the comment has' error={errors.keywords}>
+            <EditorStep index={nextStep()} title='Listen for'>
               <ChipSwitch
-                options={KEYWORD_MODE_OPTIONS}
-                value={draft.keywordMode}
-                onChange={(value) => update('keywordMode', value)}
+                options={TRIGGER_TYPE_OPTIONS}
+                value={draft.triggerType}
+                onChange={changeTriggerType}
                 disabled={readOnly}
-                aria-label='Keyword match'
+                aria-label='Listen for'
               />
-              {draft.keywordMode !== 'any' && (
-                <KeywordField
-                  keywords={draft.keywords}
-                  onChange={(keywords) => update('keywords', keywords)}
-                  disabled={readOnly}
-                  invalid={Boolean(errors.keywords)}
-                />
-              )}
             </EditorStep>
+
+            {isPostTrigger && (
+              <EditorStep
+                index={nextStep()}
+                title='When someone comments on'
+                error={errors.mediaIds ?? errors.mediaScope}
+              >
+                <ChipSwitch
+                  options={MEDIA_SCOPE_OPTIONS}
+                  value={draft.mediaScope}
+                  onChange={(value) => update('mediaScope', value)}
+                  disabled={readOnly}
+                  aria-label='Which posts'
+                />
+                {draft.mediaScope === 'specific' &&
+                  (draft.credentialId ? (
+                    <InstagramMediaPicker
+                      credentialId={draft.credentialId}
+                      workspaceId={workspaceId}
+                      selectedIds={draft.mediaIds}
+                      onChange={(ids) => update('mediaIds', ids)}
+                    />
+                  ) : (
+                    <p className='text-[var(--text-muted)] text-caption'>
+                      Choose an account to see its posts.
+                    </p>
+                  ))}
+                {draft.mediaScope === 'next' && (
+                  <p className='text-[var(--text-muted)] text-caption'>
+                    Applies to the first post or Reel you publish after going live.
+                  </p>
+                )}
+              </EditorStep>
+            )}
+
+            {showKeywordStep && (
+              <EditorStep
+                index={nextStep()}
+                title={`And the ${messageNoun} has`}
+                error={errors.keywords}
+              >
+                <ChipSwitch
+                  options={keywordModeOptions(draft.triggerType)}
+                  value={draft.keywordMode}
+                  onChange={(value) => update('keywordMode', value)}
+                  disabled={readOnly}
+                  aria-label='Keyword match'
+                />
+                {draft.keywordMode !== 'any' && (
+                  <KeywordField
+                    keywords={draft.keywords}
+                    onChange={(keywords) => update('keywords', keywords)}
+                    disabled={readOnly}
+                    invalid={Boolean(errors.keywords)}
+                  />
+                )}
+              </EditorStep>
+            )}
 
             {showPublicReplyStep && (
               <EditorStep
@@ -405,10 +502,82 @@ export function RuleEditor({
               />
             </EditorStep>
 
+            {showDmPrompts && (
+              <EditorStep
+                index={nextStep()}
+                title='Opening message first'
+                description='The DM is sent after the user taps the button.'
+                toggle={{
+                  value: draft.openingDmEnabled,
+                  onChange: (value) => update('openingDmEnabled', value),
+                  disabled: readOnly,
+                }}
+              >
+                <ChipModalField
+                  type='textarea'
+                  title='Opening message'
+                  value={draft.openingDmText}
+                  onChange={(value) => update('openingDmText', value)}
+                  placeholder='Thanks for your comment! Want the link?'
+                  rows={3}
+                  disabled={readOnly}
+                  error={errors.openingDmText}
+                  flush
+                />
+                <ChipModalField
+                  type='input'
+                  title='Button title'
+                  value={draft.openingDmButtonTitle}
+                  onChange={(value) => update('openingDmButtonTitle', value)}
+                  maxLength={INSTAGRAM_AUTO_REPLY_DM_BUTTON_TITLE_MAX_LENGTH}
+                  autoComplete='off'
+                  disabled={readOnly}
+                  error={errors.openingDmButtonTitle}
+                  flush
+                />
+              </EditorStep>
+            )}
+
+            {showDmPrompts && (
+              <EditorStep
+                index={nextStep()}
+                title='Ask to follow first'
+                description='Users who do not follow you get this prompt before the DM.'
+                toggle={{
+                  value: draft.followGateEnabled,
+                  onChange: (value) => update('followGateEnabled', value),
+                  disabled: readOnly,
+                }}
+              >
+                <ChipModalField
+                  type='textarea'
+                  title='Follow prompt'
+                  value={draft.followGateText}
+                  onChange={(value) => update('followGateText', value)}
+                  placeholder='Follow us, then tap the button to get the link.'
+                  rows={3}
+                  disabled={readOnly}
+                  error={errors.followGateText}
+                  flush
+                />
+                <ChipModalField
+                  type='input'
+                  title='Follow button title'
+                  value={draft.followGateButtonTitle}
+                  onChange={(value) => update('followGateButtonTitle', value)}
+                  maxLength={INSTAGRAM_AUTO_REPLY_DM_BUTTON_TITLE_MAX_LENGTH}
+                  autoComplete='off'
+                  disabled={readOnly}
+                  error={errors.followGateButtonTitle}
+                  flush
+                />
+              </EditorStep>
+            )}
+
             <EditorStep
               index={nextStep()}
               title='Hand off to agent'
-              description='Matching comments go to your Instagram comment workflows, and your agent replies instead.'
+              description='Matching comments and messages go to your Instagram workflows, and your agent replies instead.'
               toggle={{
                 value: draft.handoffToAgent,
                 onChange: (value) => update('handoffToAgent', value),
@@ -418,7 +587,7 @@ export function RuleEditor({
 
             <EditorStep
               index={nextStep()}
-              title='Once per user per post'
+              title={ONCE_PER_TITLES[draft.triggerType]}
               toggle={{
                 value: draft.oncePerUserPerPost,
                 onChange: (value) => update('oncePerUserPerPost', value),
@@ -426,6 +595,17 @@ export function RuleEditor({
               }}
             />
           </form>
+
+          {rule && (
+            <div className='mx-auto mt-7 flex w-full max-w-[640px] flex-col gap-7'>
+              <EditorSection title='Results'>
+                <RuleStats workspaceId={workspaceId} rule={rule} />
+              </EditorSection>
+              <EditorSection title='Recent activity'>
+                <RuleActivity workspaceId={workspaceId} ruleId={rule.id} />
+              </EditorSection>
+            </div>
+          )}
         </div>
 
         <aside
@@ -436,11 +616,13 @@ export function RuleEditor({
             tab={previewTab}
             onTabChange={onPreviewTabChange}
             accountName={accountName}
+            triggerType={draft.triggerType}
             mediaScope={draft.mediaScope}
             postThumbnailUrl={previewMedia[0]?.thumbnailUrl ?? null}
             comment={sampleCommentFor(draft)}
             publicReply={previewPublicReply(draft)}
             handoffToAgent={draft.handoffToAgent}
+            prompts={previewDmPrompts(draft)}
             dm={
               draft.dmEnabled
                 ? {

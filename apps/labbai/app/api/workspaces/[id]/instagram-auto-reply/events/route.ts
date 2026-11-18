@@ -19,6 +19,7 @@ export const GET = defineInternalJsonRoute({
   mapInput: ({ params, query }) => ({
     workspaceId: params.id,
     ruleId: query.ruleId,
+    fromId: query.fromId,
     cursor: query.cursor,
     limit: query.limit,
   }),

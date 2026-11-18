@@ -622,3 +622,62 @@ export async function recordClick(
     .returning()
   return row ?? null
 }
+
+/**
+ * The Instagram account each listed post was matched on, from the workspace's events. A post
+ * belongs to one account, so the first account found for it is the answer.
+ */
+export async function getMediaAccountIds(
+  workspaceId: string,
+  mediaIds: string[]
+): Promise<Map<string, string>> {
+  const accounts = new Map<string, string>()
+  if (mediaIds.length === 0) return accounts
+  const rows = await db
+    .selectDistinct({
+      mediaId: instagramAutoReplyEvent.mediaId,
+      igAccountId: instagramAutoReplyEvent.igAccountId,
+    })
+    .from(instagramAutoReplyEvent)
+    .where(
+      and(
+        eq(instagramAutoReplyEvent.workspaceId, workspaceId),
+        inArray(instagramAutoReplyEvent.mediaId, mediaIds)
+      )
+    )
+  for (const row of rows) {
+    if (row.mediaId && !accounts.has(row.mediaId)) accounts.set(row.mediaId, row.igAccountId)
+  }
+  return accounts
+}
+
+/**
+ * One page of the events from one Instagram-scoped user in a workspace, newest first, optionally
+ * for one rule. Paging works like {@link listWorkspaceEvents}: `cursor` is the last event of the
+ * previous page, and `limit + 1` rows come back so the caller can tell whether another exists.
+ */
+export async function listWorkspaceContactEvents(input: {
+  workspaceId: string
+  fromId: string
+  ruleId?: string
+  cursor?: string
+  limit: number
+}): Promise<InstagramAutoReplyEventRecord[]> {
+  const t = instagramAutoReplyEvent
+  const afterCursor = input.cursor
+    ? sql`(${t.createdAt}, ${t.id}) < (select c.created_at, c.id from ${t} as c where c.id = ${input.cursor} and c.workspace_id = ${input.workspaceId})`
+    : undefined
+  return db
+    .select()
+    .from(t)
+    .where(
+      and(
+        eq(t.workspaceId, input.workspaceId),
+        eq(t.fromId, input.fromId),
+        input.ruleId ? eq(t.ruleId, input.ruleId) : undefined,
+        afterCursor
+      )
+    )
+    .orderBy(desc(t.createdAt), desc(t.id))
+    .limit(input.limit + 1)
+}

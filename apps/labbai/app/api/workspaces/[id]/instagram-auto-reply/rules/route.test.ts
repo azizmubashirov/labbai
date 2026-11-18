@@ -146,6 +146,26 @@ describe('Instagram auto-reply rules collection route', () => {
       dmMessage: { text: 'Prices', buttons: [], imageUrl: null },
     })
     expect(call.input.values).not.toHaveProperty('igAccountId')
+    expect(call.input.status).toBe('draft')
+    expect(call.input.values).not.toHaveProperty('status')
+  })
+
+  it('passes a live create to the use case as the status, not a rule field', async () => {
+    mocks.create.mockResolvedValue({ rule: { ...RULE_VIEW, status: 'live' } })
+
+    const response = await POST(postRequest({ ...CREATE_BODY, status: 'live' }), context)
+
+    expect(response.status).toBe(200)
+    const call = mocks.create.mock.calls[0][0]
+    expect(call.input.status).toBe('live')
+    expect(call.input.values).not.toHaveProperty('status')
+  })
+
+  it('rejects a create that starts paused', async () => {
+    const response = await POST(postRequest({ ...CREATE_BODY, status: 'paused' }), context)
+
+    expect(response.status).toBe(400)
+    expect(mocks.create).not.toHaveBeenCalled()
   })
 
   it('returns 400 for a DM button with a non-https link without calling the use case', async () => {

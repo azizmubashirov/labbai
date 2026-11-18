@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { BinoraCrmConnection } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/crm/binora-crm-connection'
+import { InstagramAutoReplyRules } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/instagram/instagram-auto-reply-rules'
 import { NotificationRecipients } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/notifications/notification-recipients'
 import { NotificationRules } from '@/app/workspace/[workspaceId]/w/[workflowId]/components/panel/components/editor/components/sub-block/components/notifications/notification-rules'
 
@@ -32,6 +33,7 @@ export const MODAL_REGISTRY: Readonly<Record<string, ComponentType<ModalSubBlock
   'notification-recipients': NotificationRecipients,
   'notification-rules': NotificationRules,
   'binora-crm-connection': BinoraCrmConnection,
+  'instagram-auto-reply-rules': InstagramAutoReplyRules,
 }
 
 export type ModalId = keyof typeof MODAL_REGISTRY
