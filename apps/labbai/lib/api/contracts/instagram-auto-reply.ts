@@ -616,3 +616,25 @@ export const listInstagramAutoReplyEventsContract = defineRouteContract({
 export type InstagramAutoReplyEventsPage = z.output<
   typeof listInstagramAutoReplyEventsContract.response.schema
 >
+
+/**
+ * Params of the tracked DM link redirect. Only the event and the button position travel in the
+ * URL; the target is read from the event's DM snapshot, so the link cannot be pointed elsewhere.
+ * Any small index parses, and an index past the snapshot's buttons is a 404 rather than a 400.
+ */
+export const instagramAutoReplyClickParamsSchema = z.object({
+  eventId: idSchema('Event ID'),
+  buttonIndex: z
+    .string({ error: 'Button index is required' })
+    .regex(/^\d{1,2}$/, 'Button index must be a small whole number')
+    .transform(Number),
+})
+
+export type InstagramAutoReplyClickParams = z.input<typeof instagramAutoReplyClickParamsSchema>
+
+export const instagramAutoReplyClickContract = defineRouteContract({
+  method: 'GET',
+  path: '/api/instagram/r/[eventId]/[buttonIndex]',
+  params: instagramAutoReplyClickParamsSchema,
+  response: { mode: 'redirect' },
+})

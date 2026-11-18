@@ -90,3 +90,9 @@ export const INSTAGRAM_AUTO_REPLY_EVENTS_PAGE_MAX = 100
 export const INSTAGRAM_AUTO_REPLY_EVENTS_PAGE_DEFAULT = 50
 /** Posts listed in a stats breakdown, most matched first. */
 export const INSTAGRAM_AUTO_REPLY_STATS_MAX_MEDIA = 50
+/** Meta allows a private reply only within 7 days of the comment; older comments are `expired`. */
+export const INSTAGRAM_AUTO_REPLY_PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+/** Comments the engine answers at once across one whole webhook delivery. */
+export const INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY = 5
+/** Public path of the tracked DM link redirect; the event id and button index follow it. */
+export const INSTAGRAM_AUTO_REPLY_REDIRECT_PATH = '/api/instagram/r'

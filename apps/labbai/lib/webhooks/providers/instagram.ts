@@ -177,6 +177,47 @@ export function getInstagramComments(body: unknown): InstagramComment[] {
   return comments
 }
 
+/** Whether a `{ field, value }` change is a comment whose id is in `commentIds`. */
+function isListedComment(change: Record<string, unknown>, commentIds: ReadonlySet<string>) {
+  if (change.field !== 'comments') return false
+  const value = toRecord(change.value)
+  const commentId = toStringOrNull(value.id) ?? toStringOrNull(value.comment_id)
+  return commentId !== null && commentIds.has(commentId)
+}
+
+/**
+ * One account's delivery body without the given comments, for dispatch after the auto-reply
+ * engine consumed them. Direct messages and every other change are kept as they are. An entry
+ * left with nothing to carry is dropped.
+ *
+ * @returns The stripped body, or null when no entry is left, so there is nothing to dispatch.
+ */
+export function removeInstagramComments(
+  body: Record<string, unknown>,
+  commentIds: ReadonlySet<string>
+): Record<string, unknown> | null {
+  if (commentIds.size === 0) return body
+  const entries: Record<string, unknown>[] = []
+  for (const raw of toArray(body.entry)) {
+    let entry = toRecord(raw)
+    if (Array.isArray(entry.changes)) {
+      const changes = entry.changes.filter(
+        (change) => !isListedComment(toRecord(change), commentIds)
+      )
+      entry = changes.length > 0 ? { ...entry, changes } : omit(entry, ['changes'])
+    }
+    if (typeof entry.field === 'string' && isListedComment(entry, commentIds)) {
+      entry = omit(entry, ['field', 'value'])
+    }
+    const carriesEvents =
+      Array.isArray(entry.changes) ||
+      typeof entry.field === 'string' ||
+      toArray(entry.messaging).length > 0
+    if (carriesEvents) entries.push(entry)
+  }
+  return entries.length > 0 ? { ...body, entry: entries } : null
+}
+
 /** A delivery split by professional account, with a count of the entries that cannot be routed. */
 export interface InstagramDeliveryPartition {
   accounts: InstagramAccountDelivery[]

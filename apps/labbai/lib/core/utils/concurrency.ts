@@ -39,3 +39,35 @@ export async function mapWithConcurrency<T, R>(
 
 /** Default bound for per-row object-storage materialization fan-out. */
 export const MATERIALIZE_CONCURRENCY = 20
+
+/** Runs a task once a slot is free; see {@link createConcurrencyLimiter}. */
+export type ConcurrencyLimiter = <R>(task: () => Promise<R>) => Promise<R>
+
+/**
+ * A slot pool shared by independent callers: at most `limit` of the tasks passed to the returned
+ * function run at once, the rest wait in arrival order. Use it when the work to bound is spread
+ * over several `mapWithConcurrency` calls that run side by side, such as one delivery's
+ * per-account work that must stay under one delivery-wide cap. A task's rejection is passed to
+ * its own caller and frees the slot.
+ */
+export function createConcurrencyLimiter(limit: number): ConcurrencyLimiter {
+  const capacity = Math.max(1, Math.floor(limit))
+  const waiting: Array<() => void> = []
+  let active = 0
+
+  const release = (): void => {
+    const next = waiting.shift()
+    if (next) next()
+    else active--
+  }
+
+  return async <R>(task: () => Promise<R>): Promise<R> => {
+    if (active < capacity) active++
+    else await new Promise<void>((resolve) => waiting.push(resolve))
+    try {
+      return await task()
+    } finally {
+      release()
+    }
+  }
+}
