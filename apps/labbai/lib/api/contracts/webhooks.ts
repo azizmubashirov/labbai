@@ -311,6 +311,36 @@ export const quickBooksWebhookParamsSchema = z.object({
   appKey: z.string().regex(/^[A-Za-z0-9_-]{43}$/, 'Invalid QuickBooks webhook app key'),
 })
 
+/** Meta's handshake on the shared Instagram callback. */
+export const instagramWebhookVerificationQuerySchema = z.object({
+  'hub.mode': z.string().min(1, 'hub.mode is required').max(64),
+  'hub.verify_token': z.string().min(1, 'hub.verify_token is required').max(512),
+  'hub.challenge': z.string().min(1, 'hub.challenge is required').max(512),
+})
+
+export type InstagramWebhookVerificationQuery = z.input<
+  typeof instagramWebhookVerificationQuerySchema
+>
+
+export const instagramWebhookVerificationContract = defineRouteContract({
+  method: 'GET',
+  path: '/api/webhooks/instagram',
+  query: instagramWebhookVerificationQuerySchema,
+  response: { mode: 'text' },
+})
+
+/**
+ * What the shared Instagram callback answers a delivery with. The delivery itself is not parsed
+ * through a contract: it is authenticated against the raw bytes first, then read entry by entry
+ * so one malformed entry cannot reject the others.
+ */
+export const instagramWebhookResponseSchema = z.union([
+  z.object({ ok: z.literal(true), routed: z.number().int().nonnegative() }),
+  z.object({ error: z.string().min(1) }),
+])
+
+export type InstagramWebhookResponse = z.output<typeof instagramWebhookResponseSchema>
+
 export const quickBooksWebhookContract = defineRouteContract({
   method: 'POST',
   path: '/api/webhooks/quickbooks/[appKey]',

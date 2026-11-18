@@ -35,7 +35,7 @@ import {
   requiresPendingWebhookVerification,
 } from '@/lib/webhooks/pending-verification'
 import { getProviderHandler } from '@/lib/webhooks/providers'
-import type { WebhookProviderHandler } from '@/lib/webhooks/providers/types'
+import type { ScopedDeliveryBody, WebhookProviderHandler } from '@/lib/webhooks/providers/types'
 import { normalizeWebhookRegistrationPath } from '@/lib/webhooks/registration-identity'
 import { blockExistsInDeployment } from '@/lib/workflows/persistence/utils'
 import { LABBAI_TRIGGER_PROVIDER } from '@/lib/workspace-events/constants'
@@ -108,11 +108,15 @@ async function parseMultipartBody(
   return fields
 }
 
-export async function parseWebhookBody(
+/**
+ * Reads the raw webhook body under the shared byte cap without parsing it, so a provider can
+ * verify a signature over the exact bytes before anything interprets them. Returns a 413 or 400
+ * response when the body is too large or unreadable.
+ */
+export async function readWebhookRawBody(
   request: NextRequest,
   requestId: string
-): Promise<{ body: unknown; rawBody: string } | NextResponse> {
-  let rawBody: string | null = null
+): Promise<string | NextResponse> {
   try {
     assertContentLengthWithinLimit(request.headers, WEBHOOK_MAX_BODY_BYTES, WEBHOOK_BODY_LABEL)
 
@@ -120,11 +124,7 @@ export async function parseWebhookBody(
       maxBytes: WEBHOOK_MAX_BODY_BYTES,
       label: WEBHOOK_BODY_LABEL,
     })
-    rawBody = new TextDecoder().decode(buffer)
-
-    if (!rawBody || rawBody.length === 0) {
-      return { body: {}, rawBody: '' }
-    }
+    return new TextDecoder().decode(buffer)
   } catch (bodyError) {
     if (isPayloadSizeLimitError(bodyError)) {
       logger.warn(`[${requestId}] Rejected oversized webhook body`, {
@@ -137,6 +137,17 @@ export async function parseWebhookBody(
       error: toError(bodyError).message,
     })
     return new NextResponse('Failed to read request body', { status: 400 })
+  }
+}
+
+export async function parseWebhookBody(
+  request: NextRequest,
+  requestId: string
+): Promise<{ body: unknown; rawBody: string } | NextResponse> {
+  const rawBody = await readWebhookRawBody(request, requestId)
+  if (rawBody instanceof NextResponse) return rawBody
+  if (rawBody.length === 0) {
+    return { body: {}, rawBody: '' }
   }
 
   let body: unknown
@@ -285,6 +296,28 @@ export function shouldSkipWebhookEvent(
   return (
     handler.shouldSkipEvent?.({ webhook: webhookRecord, body, requestId, providerConfig }) ?? false
   )
+}
+
+/**
+ * Narrows a delivery to the part a webhook owns. Providers without a scope hook own the whole
+ * body. Returns null when the provider finds nothing in the delivery for this webhook.
+ */
+export async function scopeWebhookDeliveryBody(
+  webhookRecord: Record<string, unknown> & {
+    provider: string
+    providerConfig: Record<string, unknown>
+  },
+  body: unknown,
+  requestId: string
+): Promise<ScopedDeliveryBody | null> {
+  const handler = getProviderHandler(webhookRecord.provider)
+  if (!handler.scopeDeliveryBody) return { body }
+  return handler.scopeDeliveryBody({
+    webhook: webhookRecord,
+    body,
+    requestId,
+    providerConfig: webhookRecord.providerConfig,
+  })
 }
 
 /**
@@ -856,7 +889,7 @@ async function queueWebhookExecutionWithResult(
 export async function dispatchResolvedWebhookTarget(
   foundWebhook: typeof webhook.$inferSelect,
   foundWorkflow: typeof workflow.$inferSelect,
-  body: unknown,
+  deliveryBody: unknown,
   request: NextRequest,
   options: WebhookProcessorOptions
 ): Promise<WebhookDispatchResult> {
@@ -873,6 +906,16 @@ export async function dispatchResolvedWebhookTarget(
     provider: foundWebhook.provider,
     providerConfig: parseProviderConfig(foundWebhook.providerConfig),
   }
+
+  const scoped = await scopeWebhookDeliveryBody(webhookRecord, deliveryBody, options.requestId)
+  if (!scoped) {
+    return {
+      outcome: 'ignored',
+      response: NextResponse.json({ message: 'No events for this webhook in the delivery' }),
+      reason: 'event-mismatch',
+    }
+  }
+  const body = scoped.body
 
   if (shouldSkipWebhookEvent(webhookRecord, body, options.requestId)) {
     return {
