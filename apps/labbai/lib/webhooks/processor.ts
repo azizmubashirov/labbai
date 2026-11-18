@@ -170,7 +170,7 @@ export async function parseWebhookBody(
 }
 
 /** Providers that implement challenge/verification handling, checked before webhook lookup. */
-const CHALLENGE_PROVIDERS = ['whatsapp', 'zoom'] as const
+const CHALLENGE_PROVIDERS = ['whatsapp', 'instagram', 'zoom'] as const
 
 const DEFAULT_CHALLENGE_METHODS = ['POST'] as const
 

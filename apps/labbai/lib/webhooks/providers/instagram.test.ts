@@ -2,7 +2,25 @@
  * @vitest-environment node
  */
 import { hmacSha256Hex } from '@labbai/security/hmac'
-import { describe, expect, it } from 'vitest'
+import { dbChainMock, queueTableRows, schemaMock } from '@labbai/testing'
+import { NextRequest } from 'next/server'
+import { describe, expect, it, vi } from 'vitest'
+
+const { mockResolveBackgroundWebhookEnv } = vi.hoisted(() => ({
+  mockResolveBackgroundWebhookEnv: vi.fn(),
+}))
+
+vi.mock('@labbai/db', () => ({ ...dbChainMock, ...schemaMock }))
+
+vi.mock('@/lib/webhooks/env-resolver', () => ({
+  resolveBackgroundWebhookEnv: mockResolveBackgroundWebhookEnv,
+}))
+
+vi.mock('@/executor/utils/reference-validation', () => ({
+  resolveEnvVarReferences: (value: string, envVars: Record<string, string>) =>
+    value.replace(/\{\{([A-Z0-9_]+)\}\}/g, (match, name: string) => envVars[name] ?? match),
+}))
+
 import { instagramHandler } from '@/lib/webhooks/providers/instagram'
 
 const body = {
@@ -73,5 +91,75 @@ describe('instagramHandler', () => {
 
   it('derives a stable idempotency key from the message ids', () => {
     expect(instagramHandler.extractIdempotencyId?.(body)).toMatch(/^instagram:1:/)
+  })
+})
+
+describe('Instagram subscription handshake', () => {
+  function handshake(token: string): NextRequest {
+    return new NextRequest(
+      `http://localhost/api/webhooks/trigger/abc?hub.mode=subscribe&hub.verify_token=${token}&hub.challenge=4242`
+    )
+  }
+
+  function queueWebhook(verificationToken: string) {
+    queueTableRows(schemaMock.webhook, [
+      {
+        webhook: { id: 'wh_1', providerConfig: { verificationToken } },
+        workflowOwnerId: 'user-1',
+        workspaceId: 'ws-1',
+      },
+    ])
+  }
+
+  it('answers with the challenge when the token matches a literal value', async () => {
+    queueWebhook('plain-token')
+
+    const response = await instagramHandler.handleChallenge!(
+      {},
+      handshake('plain-token'),
+      'r1',
+      'abc'
+    )
+
+    expect(response?.status).toBe(200)
+    await expect(response?.text()).resolves.toBe('4242')
+  })
+
+  it('resolves a token kept in workspace secrets before comparing', async () => {
+    mockResolveBackgroundWebhookEnv.mockResolvedValueOnce({ IG_VERIFY_TOKEN: 'secret-token' })
+    queueWebhook('{{IG_VERIFY_TOKEN}}')
+
+    const response = await instagramHandler.handleChallenge!(
+      {},
+      handshake('secret-token'),
+      'r2',
+      'abc'
+    )
+
+    expect(mockResolveBackgroundWebhookEnv).toHaveBeenCalledWith('user-1', 'ws-1')
+    expect(response?.status).toBe(200)
+    await expect(response?.text()).resolves.toBe('4242')
+  })
+
+  it('rejects the literal reference text when the secret cannot be resolved', async () => {
+    mockResolveBackgroundWebhookEnv.mockResolvedValueOnce({})
+    queueWebhook('{{IG_VERIFY_TOKEN}}')
+
+    const response = await instagramHandler.handleChallenge!(
+      {},
+      handshake(encodeURIComponent('{{IG_VERIFY_TOKEN}}')),
+      'r3',
+      'abc'
+    )
+
+    expect(response?.status).toBe(403)
+  })
+
+  it('falls through when no Instagram webhook on the path expects a token', async () => {
+    queueTableRows(schemaMock.webhook, [])
+
+    const response = await instagramHandler.handleChallenge!({}, handshake('any'), 'r4', 'abc')
+
+    expect(response).toBeNull()
   })
 })
