@@ -42,6 +42,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { usePostHog } from 'posthog-js/react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceAccessRequestFeatures } from '@/components/access-requests/permission-access-boundary'
+import { InstagramIcon } from '@/components/icons'
 import { useDeploymentShape } from '@/lib/core/config/deployment-shape'
 import { MothershipHandoffStorage } from '@/lib/core/utils/browser-storage'
 import { getFolderPathNames } from '@/lib/folders/tree'
@@ -280,6 +281,12 @@ function SearchModalContent({
           name: 'Inbox',
           icon: MessageSquareText,
           href: `/workspace/${workspaceId}/inbox`,
+        },
+        {
+          id: 'instagram-auto-reply',
+          name: 'Instagram Auto-Reply',
+          icon: InstagramIcon,
+          href: `/workspace/${workspaceId}/instagram`,
         },
         {
           id: 'tables',

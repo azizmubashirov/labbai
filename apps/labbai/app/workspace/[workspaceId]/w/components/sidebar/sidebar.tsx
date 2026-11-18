@@ -40,6 +40,7 @@ import { createLogger } from '@labbai/logger'
 import { useParams, usePathname, useRouter } from 'next/navigation'
 import { usePostHog } from 'posthog-js/react'
 import { useWorkspaceAccessRequestFeatures } from '@/components/access-requests/permission-access-boundary'
+import { InstagramIcon } from '@/components/icons'
 import { useSession } from '@/lib/auth/auth-client'
 import { LABBAI_RESOURCES_DRAG_TYPE } from '@/lib/copilot/resource-types'
 import { useDeploymentShape } from '@/lib/core/config/deployment-shape'
@@ -757,6 +758,13 @@ export const Sidebar = memo(function Sidebar() {
           href: `/workspace/${workspaceId}/inbox`,
           restricted: false,
           badge: inboxUnread,
+        },
+        {
+          id: 'instagram-auto-reply',
+          label: 'Instagram Auto-Reply',
+          icon: InstagramIcon,
+          href: `/workspace/${workspaceId}/instagram`,
+          restricted: false,
         },
         {
           id: 'tables',
