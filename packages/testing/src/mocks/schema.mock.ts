@@ -1576,6 +1576,7 @@ export const schemaMock = {
     dmStage: 'instagramAutoReplyEvent.dmStage',
     dmSnapshot: 'instagramAutoReplyEvent.dmSnapshot',
     error: 'instagramAutoReplyEvent.error',
+    retryable: 'instagramAutoReplyEvent.retryable',
     createdAt: 'instagramAutoReplyEvent.createdAt',
     updatedAt: 'instagramAutoReplyEvent.updatedAt',
   },

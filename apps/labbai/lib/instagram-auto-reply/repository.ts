@@ -12,12 +12,27 @@ import {
 import { generateId } from '@labbai/utils/id'
 import { filterUndefined } from '@labbai/utils/object'
 import { truncateAtCodePoint } from '@labbai/utils/string'
-import { and, asc, count, desc, eq, gte, inArray, isNull, type SQL, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm'
 import {
   INSTAGRAM_AUTO_REPLY_ANSWERED_OUTCOMES,
   INSTAGRAM_AUTO_REPLY_EVENT_ERROR_MAX_LENGTH,
   INSTAGRAM_AUTO_REPLY_EVENT_TEXT_MAX_LENGTH,
   INSTAGRAM_AUTO_REPLY_MAX_RULES,
+  INSTAGRAM_AUTO_REPLY_PENDING_STALE_MS,
   INSTAGRAM_AUTO_REPLY_STATS_MAX_MEDIA,
 } from '@/lib/instagram-auto-reply/constants'
 
@@ -177,6 +192,29 @@ export async function writeWorkspaceRuleOrder(
         .where(ruleScope(workspaceId, entry.id))
     }
   })
+}
+
+/**
+ * Whether a workspace other than `workspaceId` has a live rule for this Instagram account. The
+ * engine matches every live rule of an account, whatever its workspace, so two workspaces live on
+ * one account would share one pool of rules.
+ */
+export async function hasLiveRuleInOtherWorkspace(
+  igAccountId: string,
+  workspaceId: string
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: instagramAutoReplyRule.id })
+    .from(instagramAutoReplyRule)
+    .where(
+      and(
+        eq(instagramAutoReplyRule.igAccountId, igAccountId),
+        eq(instagramAutoReplyRule.status, 'live'),
+        ne(instagramAutoReplyRule.workspaceId, workspaceId)
+      )
+    )
+    .limit(1)
+  return Boolean(row)
 }
 
 /**
@@ -445,7 +483,7 @@ export async function claimEvent(
 }
 
 /** Identifies the already-claimed source a Meta retry redelivered. */
-export interface RetryFailedInstagramAutoReplyEventInput {
+export interface ReopenInstagramAutoReplyEventInput {
   igAccountId: string
   sourceId: string
   /** The rule that matched this time, when it differs from the stored one. */
@@ -455,21 +493,32 @@ export interface RetryFailedInstagramAutoReplyEventInput {
 }
 
 /**
- * Re-claims a source whose earlier attempt failed: moves the row from `failed` back to `pending`
- * and clears its error, in one conditional update. Only one concurrent retry wins; rows in any
- * other outcome are left alone.
+ * Re-claims a redelivered source whose earlier attempt did not finish, in one conditional update,
+ * so only one concurrent redelivery wins. Two kinds of row are re-opened to `pending`:
  *
- * @returns The re-claimed event, or null when the row is missing or not `failed`.
+ * - `failed` with `retryable`: nothing was sent and the failure was transient. A permanent
+ *   failure (`retryable` false) is never retried.
+ * - `pending` untouched for {@link INSTAGRAM_AUTO_REPLY_PENDING_STALE_MS}: the run that claimed
+ *   it stopped between the claim and its outcome (a crash or a lost connection). Live runs finish
+ *   well inside that time, and every write they make refreshes `updated_at`.
+ *
+ * The error and `retryable` are cleared. `public_reply_id`, `dm_sent`, and `dm_stage` are kept,
+ * so the engine skips every step the earlier attempt already recorded as sent.
+ *
+ * @returns The re-claimed event, or null when the row is missing or in any other state.
  */
-export async function retryFailedEvent(
-  input: RetryFailedInstagramAutoReplyEventInput
+export async function reopenEvent(
+  input: ReopenInstagramAutoReplyEventInput
 ): Promise<InstagramAutoReplyEventRecord | null> {
+  const t = instagramAutoReplyEvent
+  const staleBefore = new Date(Date.now() - INSTAGRAM_AUTO_REPLY_PENDING_STALE_MS)
   const [row] = await db
-    .update(instagramAutoReplyEvent)
+    .update(t)
     .set(
       filterUndefined({
         outcome: 'pending' as const,
         error: null,
+        retryable: false,
         ruleId: input.ruleId,
         dmSnapshot: input.dmSnapshot,
         updatedAt: new Date(),
@@ -477,41 +526,67 @@ export async function retryFailedEvent(
     )
     .where(
       and(
-        eq(instagramAutoReplyEvent.igAccountId, input.igAccountId),
-        eq(instagramAutoReplyEvent.sourceId, input.sourceId),
-        eq(instagramAutoReplyEvent.outcome, 'failed')
+        eq(t.igAccountId, input.igAccountId),
+        eq(t.sourceId, input.sourceId),
+        or(
+          and(eq(t.outcome, 'failed'), eq(t.retryable, true)),
+          and(eq(t.outcome, 'pending'), lt(t.updatedAt, staleBefore))
+        )
       )
     )
     .returning()
   return row ?? null
 }
 
-/**
- * Whether this user already got an answer (`replied` or `partial`) from this rule on this post,
- * for "once per user per post".
- *
- * @param mediaId - The post; null matches events recorded without one.
- */
-export async function hasPriorReply(
-  ruleId: string,
-  mediaId: string | null,
+/** The event a "once per user per post" check is made for. */
+export interface ClaimOncePerUserInput {
+  /** The event being answered; it never counts against itself. */
+  eventId: string
+  ruleId: string
+  /** The post; null matches events recorded without one. */
+  mediaId: string | null
   fromId: string
-): Promise<boolean> {
-  const [row] = await db
-    .select({ id: instagramAutoReplyEvent.id })
-    .from(instagramAutoReplyEvent)
-    .where(
-      and(
-        eq(instagramAutoReplyEvent.ruleId, ruleId),
-        mediaId === null
-          ? isNull(instagramAutoReplyEvent.mediaId)
-          : eq(instagramAutoReplyEvent.mediaId, mediaId),
-        eq(instagramAutoReplyEvent.fromId, fromId),
-        inArray(instagramAutoReplyEvent.outcome, [...INSTAGRAM_AUTO_REPLY_ANSWERED_OUTCOMES])
+}
+
+/**
+ * "Once per user per post", safe across concurrent deliveries. Under a transaction-scoped
+ * advisory lock on `(rule, post, user)`, looks for another event of the same rule, post, and user
+ * that is `pending` (being answered right now, or stopped mid-way) or answered (`replied`,
+ * `partial`). When one exists, this event is marked `skipped_duplicate` inside the same
+ * transaction.
+ *
+ * Deciding and marking under one lock is what makes it hold: of two concurrent events of one
+ * user, the first to take the lock either finds the other still `pending` and steps aside (and
+ * is no longer `pending` when the other looks), or finds nothing and stays `pending`, which the
+ * other then sees. Exactly one of them is answered.
+ *
+ * @returns True when this event is a duplicate and was marked `skipped_duplicate`.
+ */
+export async function claimOncePerUser(input: ClaimOncePerUserInput): Promise<boolean> {
+  const t = instagramAutoReplyEvent
+  const lockKey = `instagram-auto-reply:once:${input.ruleId}:${input.mediaId ?? ''}:${input.fromId}`
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`)
+    const [other] = await tx
+      .select({ id: t.id })
+      .from(t)
+      .where(
+        and(
+          eq(t.ruleId, input.ruleId),
+          input.mediaId === null ? isNull(t.mediaId) : eq(t.mediaId, input.mediaId),
+          eq(t.fromId, input.fromId),
+          ne(t.id, input.eventId),
+          inArray(t.outcome, ['pending', ...INSTAGRAM_AUTO_REPLY_ANSWERED_OUTCOMES])
+        )
       )
-    )
-    .limit(1)
-  return Boolean(row)
+      .limit(1)
+    if (!other) return false
+    await tx
+      .update(t)
+      .set({ outcome: 'skipped_duplicate', retryable: false, updatedAt: new Date() })
+      .where(eq(t.id, input.eventId))
+    return true
+  })
 }
 
 /** The result of processing a claimed event. Omitted fields are left unchanged. */
@@ -522,6 +597,8 @@ export interface InstagramAutoReplyEventOutcomeUpdate {
   dmStage?: InstagramAutoReplyDmStage | null
   /** Truncated to 500 characters before it is stored; null clears it. */
   error?: string | null
+  /** Whether a redelivery may re-open a `failed` event; see {@link reopenEvent}. */
+  retryable?: boolean
 }
 
 /**
@@ -545,12 +622,32 @@ export async function updateEventOutcome(
           typeof update.error === 'string'
             ? clip(update.error, INSTAGRAM_AUTO_REPLY_EVENT_ERROR_MAX_LENGTH)
             : update.error,
+        retryable: update.retryable,
         updatedAt: new Date(),
       })
     )
     .where(eq(instagramAutoReplyEvent.id, eventId))
     .returning()
   return row ?? null
+}
+
+/** A send that just went out for a claimed event. */
+export type InstagramAutoReplySendProgress =
+  | { publicReplyId: string }
+  | { dmSent: true; dmStage: 'delivered' }
+
+/**
+ * Records one send the moment it succeeds, before the event's final outcome is written, so a
+ * retry of the event (see {@link reopenEvent}) skips it instead of sending it again.
+ */
+export async function recordEventSend(
+  eventId: string,
+  progress: InstagramAutoReplySendProgress
+): Promise<void> {
+  await db
+    .update(instagramAutoReplyEvent)
+    .set({ ...progress, updatedAt: new Date() })
+    .where(eq(instagramAutoReplyEvent.id, eventId))
 }
 
 /**
@@ -683,32 +780,54 @@ export async function transitionEventDmStage(
   return row ?? null
 }
 
-/**
- * Deletes every auto-reply event recorded for one Instagram-scoped user, on every account, for a
- * Meta data deletion request. Their link clicks go with them (`ON DELETE CASCADE`). Rules are not
- * touched: they hold the business's own configuration, not the user's data.
- *
- * @returns How many events were deleted.
- */
-export async function deleteEventsFromUser(fromId: string): Promise<number> {
-  const rows = await db
-    .delete(instagramAutoReplyEvent)
-    .where(eq(instagramAutoReplyEvent.fromId, fromId))
-    .returning({ id: instagramAutoReplyEvent.id })
-  return rows.length
+/** How many rows a data deletion request removed. */
+export interface InstagramAutoReplyDeletedCounts {
+  rules: number
+  events: number
 }
 
 /**
- * Records a tap on a tracked DM link button, attributed to the event's rule.
+ * Deletes the auto-reply data tied to one Instagram id, for a Meta data deletion request, in one
+ * transaction:
  *
- * @returns The click, or null when the event does not exist.
+ * - every event whose account (`ig_account_id`) or sender (`from_id`) is that id, on every
+ *   workspace, and by cascade their link clicks;
+ * - every rule of that account (`ig_account_id`), whatever its workspace.
+ *
+ * Events go first and by account, so a deleted rule leaves no event behind with `rule_id`
+ * cleared.
+ *
+ * @returns How many rules and events were deleted.
+ */
+export async function deleteAutoReplyDataForInstagramId(
+  instagramId: string
+): Promise<InstagramAutoReplyDeletedCounts> {
+  return db.transaction(async (tx) => {
+    const events = await tx
+      .delete(instagramAutoReplyEvent)
+      .where(
+        or(
+          eq(instagramAutoReplyEvent.igAccountId, instagramId),
+          eq(instagramAutoReplyEvent.fromId, instagramId)
+        )
+      )
+      .returning({ id: instagramAutoReplyEvent.id })
+    const rules = await tx
+      .delete(instagramAutoReplyRule)
+      .where(eq(instagramAutoReplyRule.igAccountId, instagramId))
+      .returning({ id: instagramAutoReplyRule.id })
+    return { rules: rules.length, events: events.length }
+  })
+}
+
+/**
+ * Records a tap on a tracked DM link button, attributed to the event's rule. The caller passes
+ * the event it already loaded, so it is not read twice.
  */
 export async function recordClick(
-  eventId: string,
+  event: Pick<InstagramAutoReplyEventRecord, 'id' | 'ruleId'>,
   buttonIndex: number
 ): Promise<InstagramAutoReplyClickRecord | null> {
-  const event = await getEventById(eventId)
-  if (!event) return null
   const [row] = await db
     .insert(instagramAutoReplyClick)
     .values({ id: generateId(), eventId: event.id, ruleId: event.ruleId, buttonIndex })

@@ -17,9 +17,11 @@ interface DataDeletionStatusPageProps {
 
 /**
  * Public status page for a Meta data deletion request. The callback
- * (`POST /api/instagram/data-deletion`) deletes the data before it answers, so a code it issued
- * always means the request was processed. The code is checked against the app secret, so the page
- * confirms only codes this deployment issued.
+ * (`POST /api/instagram/data-deletion`) deletes the Instagram Auto-Reply data before it answers, so
+ * a code it issued always means the request was processed. The code is checked against the app
+ * secret, so the page confirms only codes this deployment issued. The wording names exactly what
+ * the callback deletes (`deleteInstagramUserData`) and what it leaves to workspace deletion or
+ * support: Inbox conversations and workflow run logs.
  */
 export default async function DataDeletionStatusPage({
   searchParams,
@@ -52,12 +54,21 @@ export default async function DataDeletionStatusPage({
 
   return (
     <MessageShell
-      title='Your data was deleted'
+      title='Your request was processed'
       description={
         <>
-          We processed your data deletion request. Labbai deleted the Instagram Auto-Reply data it
-          stored about you: your comments and messages, your Instagram user ID and username, and the
-          links you tapped. Confirmation code:{' '}
+          Labbai deleted the Instagram Auto-Reply data linked to the Instagram account that sent
+          this request: its auto-reply rules, and the comments, messages, Instagram user IDs,
+          usernames, and link taps those auto-replies recorded on that account or from it. Inbox
+          conversations and workflow run logs are not part of this request. They are deleted when
+          the business deletes its Labbai workspace, or on request to our support team, as the{' '}
+          <a
+            href={INSTAGRAM_DATA_DELETION_INSTRUCTIONS_PATH}
+            className='text-[var(--text-primary)] underline underline-offset-2'
+          >
+            data deletion instructions
+          </a>{' '}
+          explain. Confirmation code:{' '}
           <span className='break-all font-mono text-[var(--text-primary)]'>{code}</span>
         </>
       }

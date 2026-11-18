@@ -13,9 +13,9 @@ import type {
 const repo = vi.hoisted(() => ({
   listLiveRulesForAccount: vi.fn(),
   claimEvent: vi.fn(),
-  retryFailedEvent: vi.fn(),
+  reopenEvent: vi.fn(),
   getEventOutcomeBySource: vi.fn(),
-  hasPriorReply: vi.fn(),
+  claimOncePerUser: vi.fn(),
   updateEventOutcome: vi.fn(),
   setNextMediaId: vi.fn(),
   getWorkspaceRule: vi.fn(),
@@ -23,6 +23,7 @@ const repo = vi.hoisted(() => ({
   hasRecentAnswer: vi.fn(),
   setEventDmStage: vi.fn(),
   transitionEventDmStage: vi.fn(),
+  recordEventSend: vi.fn(),
 }))
 
 const graph = vi.hoisted(() => ({
@@ -119,9 +120,12 @@ function run(...comments: InstagramComment[]) {
   })
 }
 
-function claimed(id = 'event-1', outcome = 'pending') {
-  return { id, outcome }
+function claimed(id = 'event-1', outcome = 'pending', fields: Record<string, unknown> = {}) {
+  return { id, outcome, publicReplyId: null, dmSent: false, dmStage: null, ...fields }
 }
+
+/** The shared send budget every Graph call of one source carries. */
+const WITH_SIGNAL = { signal: expect.any(AbortSignal) }
 
 /** The last outcome stored for an event. */
 function storedOutcome(eventId = 'event-1') {
@@ -136,9 +140,9 @@ beforeEach(() => {
   urlsMockFns.mockGetBaseUrl.mockReturnValue('https://app.test')
   repo.listLiveRulesForAccount.mockResolvedValue([rule()])
   repo.claimEvent.mockResolvedValue(claimed())
-  repo.retryFailedEvent.mockResolvedValue(null)
+  repo.reopenEvent.mockResolvedValue(null)
   repo.getEventOutcomeBySource.mockResolvedValue(null)
-  repo.hasPriorReply.mockResolvedValue(false)
+  repo.claimOncePerUser.mockResolvedValue(false)
   repo.updateEventOutcome.mockResolvedValue({ id: 'event-1' })
   repo.setNextMediaId.mockResolvedValue(true)
   repo.getWorkspaceRule.mockResolvedValue(null)
@@ -162,6 +166,7 @@ beforeEach(() => {
   repo.hasRecentAnswer.mockResolvedValue(false)
   repo.setEventDmStage.mockResolvedValue(undefined)
   repo.transitionEventDmStage.mockResolvedValue({ id: 'event-1' })
+  repo.recordEventSend.mockResolvedValue(undefined)
 })
 
 describe('runInstagramAutoReply — matching', () => {
@@ -329,7 +334,7 @@ describe('runInstagramAutoReply — claim and guards', () => {
 
     const result = await run(comment())
 
-    expect(repo.retryFailedEvent).toHaveBeenCalledWith(
+    expect(repo.reopenEvent).toHaveBeenCalledWith(
       expect.objectContaining({ igAccountId: ACCOUNT, sourceId: 'C1', ruleId: 'rule-1' })
     )
     expect(result.results[0]).toMatchObject({ status: 'already_claimed', consumed: true })
@@ -340,7 +345,7 @@ describe('runInstagramAutoReply — claim and guards', () => {
 
   it('re-claims a previously failed event and answers it', async () => {
     repo.claimEvent.mockResolvedValue(null)
-    repo.retryFailedEvent.mockResolvedValue(claimed('event-old'))
+    repo.reopenEvent.mockResolvedValue(claimed('event-old'))
 
     const result = await run(comment())
 
@@ -349,25 +354,30 @@ describe('runInstagramAutoReply — claim and guards', () => {
   })
 
   it('records skipped_duplicate when the user already got an answer on this post', async () => {
-    repo.hasPriorReply.mockResolvedValue(true)
+    repo.claimOncePerUser.mockResolvedValue(true)
 
     const result = await run(comment())
 
-    expect(repo.hasPriorReply).toHaveBeenCalledWith('rule-1', 'M1', 'U1')
+    expect(repo.claimOncePerUser).toHaveBeenCalledWith({
+      eventId: 'event-1',
+      ruleId: 'rule-1',
+      mediaId: 'M1',
+      fromId: 'U1',
+    })
     expect(result.results[0]).toMatchObject({ status: 'skipped_duplicate', consumed: true })
-    expect(storedOutcome()).toEqual({ outcome: 'skipped_duplicate' })
+    expect(storedOutcome()).toEqual({ outcome: 'skipped_duplicate', retryable: false })
     expect(graph.sendPublicReply).not.toHaveBeenCalled()
   })
 
   it('does not check prior replies when once-per-user is off', async () => {
     repo.listLiveRulesForAccount.mockResolvedValue([rule({ oncePerUserPerPost: false })])
     await run(comment())
-    expect(repo.hasPriorReply).not.toHaveBeenCalled()
+    expect(repo.claimOncePerUser).not.toHaveBeenCalled()
   })
 
   it('answers one user’s comments on one post in order, so only the first is answered', async () => {
     let answered = false
-    repo.hasPriorReply.mockImplementation(async () => answered)
+    repo.claimOncePerUser.mockImplementation(async () => answered)
     repo.updateEventOutcome.mockImplementation(async (_id: string, update: { outcome: string }) => {
       if (update.outcome === 'replied') answered = true
       return {}
@@ -387,7 +397,7 @@ describe('runInstagramAutoReply — claim and guards', () => {
 
     expect(result.results[0]).toMatchObject({ status: 'expired', consumed: true })
     expect(repo.claimEvent).toHaveBeenCalled()
-    expect(storedOutcome()).toEqual({ outcome: 'expired' })
+    expect(storedOutcome()).toEqual({ outcome: 'expired', retryable: false })
     expect(graph.sendPrivateReply).not.toHaveBeenCalled()
   })
 
@@ -401,11 +411,17 @@ describe('runInstagramAutoReply — sending and outcomes', () => {
   it('sends the public reply and a private reply with tracked link buttons', async () => {
     const result = await run(comment())
 
-    expect(graph.sendPublicReply).toHaveBeenCalledWith('token-1', 'C1', 'DM yubordik!')
-    expect(graph.sendPrivateReply).toHaveBeenCalledWith('token-1', ACCOUNT, 'C1', {
-      text: 'Narxlar shu yerda',
-      buttons: [{ title: 'Katalog', url: 'https://app.test/api/instagram/r/event-1/0' }],
-    })
+    expect(graph.sendPublicReply).toHaveBeenCalledWith('token-1', 'C1', 'DM yubordik!', WITH_SIGNAL)
+    expect(graph.sendPrivateReply).toHaveBeenCalledWith(
+      'token-1',
+      ACCOUNT,
+      'C1',
+      {
+        text: 'Narxlar shu yerda',
+        buttons: [{ title: 'Katalog', url: 'https://app.test/api/instagram/r/event-1/0' }],
+      },
+      WITH_SIGNAL
+    )
     expect(result.results[0]).toMatchObject({ status: 'replied', consumed: true, retryable: false })
     expect(storedOutcome()).toEqual({
       outcome: 'replied',
@@ -413,6 +429,7 @@ describe('runInstagramAutoReply — sending and outcomes', () => {
       dmSent: true,
       dmStage: 'delivered',
       error: null,
+      retryable: false,
     })
   })
 
@@ -432,7 +449,7 @@ describe('runInstagramAutoReply — sending and outcomes', () => {
     ])
     vi.spyOn(Math, 'random').mockReturnValue(0.99)
     await run(comment())
-    expect(graph.sendPublicReply).toHaveBeenCalledWith('token-1', 'C1', 'Ikkinchi')
+    expect(graph.sendPublicReply).toHaveBeenCalledWith('token-1', 'C1', 'Ikkinchi', WITH_SIGNAL)
   })
 
   it('sends only the DM when public replies are off', async () => {
@@ -440,7 +457,8 @@ describe('runInstagramAutoReply — sending and outcomes', () => {
     const result = await run(comment())
     expect(graph.sendPublicReply).not.toHaveBeenCalled()
     expect(result.results[0].status).toBe('replied')
-    expect(storedOutcome()).toMatchObject({ publicReplyId: null, dmSent: true })
+    expect(storedOutcome()).toMatchObject({ dmSent: true })
+    expect(storedOutcome()).not.toHaveProperty('publicReplyId')
   })
 
   it('records partial when one of the two sends failed, never retryable', async () => {
@@ -458,9 +476,8 @@ describe('runInstagramAutoReply — sending and outcomes', () => {
     expect(storedOutcome()).toEqual({
       outcome: 'partial',
       publicReplyId: 'reply-1',
-      dmSent: false,
-      dmStage: null,
       error: 'DM: Rate limited',
+      retryable: false,
     })
   })
 
@@ -488,6 +505,7 @@ describe('runInstagramAutoReply — sending and outcomes', () => {
     expect(storedOutcome()).toMatchObject({
       outcome: 'failed',
       error: 'Public reply: Timeout; DM: Permission denied',
+      retryable: true,
     })
 
     graph.sendPublicReply.mockResolvedValue({
@@ -513,6 +531,7 @@ describe('runInstagramAutoReply — sending and outcomes', () => {
     expect(storedOutcome()).toEqual({
       outcome: 'failed',
       error: 'The Instagram account needs to be reconnected before Labbai can reply.',
+      retryable: false,
     })
     expect(graph.sendPublicReply).not.toHaveBeenCalled()
   })
@@ -706,7 +725,8 @@ describe('runInstagramAutoReply — opening DM', () => {
       'token-1',
       ACCOUNT,
       { commentId: 'C1' },
-      { text: OPENING.text, buttonTitle: OPENING.buttonTitle, payload: 'iar:event-1:open' }
+      { text: OPENING.text, buttonTitle: OPENING.buttonTitle, payload: 'iar:event-1:open' },
+      WITH_SIGNAL
     )
     expect(graph.sendPrivateReply).not.toHaveBeenCalled()
     expect(graph.sendPublicReply).toHaveBeenCalled()
@@ -782,7 +802,8 @@ describe('runInstagramAutoReply — postbacks', () => {
       {
         text: 'Narxlar shu yerda',
         buttons: [{ title: 'Katalog', url: 'https://app.test/api/instagram/r/event-1/0' }],
-      }
+      },
+      WITH_SIGNAL
     )
   })
 
@@ -874,7 +895,7 @@ describe('runInstagramAutoReply — follow gate', () => {
 
     const result = await runSources({ kind: 'postback', postback: postback('iar:event-1:open') })
 
-    expect(graph.getUserFollowsBusiness).toHaveBeenCalledWith('token-1', 'U1')
+    expect(graph.getUserFollowsBusiness).toHaveBeenCalledWith('token-1', 'U1', WITH_SIGNAL)
     expect(result.results[0].status).toBe('replied')
     expect(graph.sendLinkMessage).toHaveBeenCalledTimes(1)
     expect(graph.sendPostbackPrompt).not.toHaveBeenCalled()
@@ -894,7 +915,8 @@ describe('runInstagramAutoReply — follow gate', () => {
       'token-1',
       ACCOUNT,
       { userId: 'U1' },
-      { text: GATE.text, buttonTitle: GATE.buttonTitle, payload: 'iar:event-1:followed' }
+      { text: GATE.text, buttonTitle: GATE.buttonTitle, payload: 'iar:event-1:followed' },
+      WITH_SIGNAL
     )
     expect(graph.sendLinkMessage).not.toHaveBeenCalled()
   })
@@ -957,7 +979,8 @@ describe('runInstagramAutoReply — follow gate', () => {
       'token-1',
       ACCOUNT,
       { userId: 'U1' },
-      expect.objectContaining({ payload: 'iar:event-1:followed' })
+      expect.objectContaining({ payload: 'iar:event-1:followed' }),
+      WITH_SIGNAL
     )
     expect(graph.sendLinkMessage).not.toHaveBeenCalled()
   })
@@ -986,7 +1009,8 @@ describe('runInstagramAutoReply — follow gate', () => {
       'token-1',
       ACCOUNT,
       { commentId: 'C1' },
-      expect.objectContaining({ payload: 'iar:event-1:followed' })
+      expect.objectContaining({ payload: 'iar:event-1:followed' }),
+      WITH_SIGNAL
     )
   })
 
@@ -1028,7 +1052,8 @@ describe('runInstagramAutoReply — story replies and mentions', () => {
       'token-1',
       ACCOUNT,
       { userId: 'U1' },
-      expect.objectContaining({ text: 'Narxlar shu yerda' })
+      expect.objectContaining({ text: 'Narxlar shu yerda' }),
+      WITH_SIGNAL
     )
     expect(storedOutcome()).toMatchObject({ dmSent: true, dmStage: 'delivered' })
   })
@@ -1060,7 +1085,7 @@ describe('runInstagramAutoReply — story replies and mentions', () => {
       triggerType: 'story_mention',
       since: new Date(NOW - 24 * 60 * 60 * 1000),
     })
-    expect(repo.hasPriorReply).not.toHaveBeenCalled()
+    expect(repo.claimOncePerUser).not.toHaveBeenCalled()
   })
 
   it('answers a user’s mentions at most once per 24 hours', async () => {
@@ -1102,7 +1127,8 @@ describe('runInstagramAutoReply — story replies and mentions', () => {
       'token-1',
       ACCOUNT,
       { userId: 'U1' },
-      expect.objectContaining({ payload: 'iar:event-1:followed' })
+      expect.objectContaining({ payload: 'iar:event-1:followed' }),
+      WITH_SIGNAL
     )
     expect(graph.sendLinkMessage).not.toHaveBeenCalled()
   })
@@ -1127,7 +1153,196 @@ describe('runInstagramAutoReply — live comments', () => {
       'token-1',
       ACCOUNT,
       'LC1',
-      expect.objectContaining({ text: 'Narxlar shu yerda' })
+      expect.objectContaining({ text: 'Narxlar shu yerda' }),
+      WITH_SIGNAL
     )
+  })
+})
+
+describe('runInstagramAutoReply — retries never resend', () => {
+  it('records the public reply the moment it is posted, before the outcome', async () => {
+    await run(comment())
+
+    expect(repo.recordEventSend).toHaveBeenCalledWith('event-1', { publicReplyId: 'reply-1' })
+    expect(repo.recordEventSend).toHaveBeenCalledWith('event-1', {
+      dmSent: true,
+      dmStage: 'delivered',
+    })
+    const recorded = repo.recordEventSend.mock.invocationCallOrder[0]
+    expect(recorded).toBeLessThan(repo.updateEventOutcome.mock.invocationCallOrder[0])
+  })
+
+  it('a re-opened event whose public reply went out sends only the DM', async () => {
+    repo.claimEvent.mockResolvedValue(null)
+    repo.reopenEvent.mockResolvedValue(claimed('event-old', 'pending', { publicReplyId: 'r-0' }))
+
+    const result = await run(comment())
+
+    expect(graph.sendPublicReply).not.toHaveBeenCalled()
+    expect(graph.sendPrivateReply).toHaveBeenCalledTimes(1)
+    expect(result.results[0]).toMatchObject({ status: 'replied', eventId: 'event-old' })
+    expect(storedOutcome('event-old')).not.toHaveProperty('publicReplyId')
+  })
+
+  it('a re-opened event whose DM went out sends only the public reply', async () => {
+    repo.claimEvent.mockResolvedValue(null)
+    repo.reopenEvent.mockResolvedValue(claimed('event-old', 'pending', { dmSent: true }))
+
+    const result = await run(comment())
+
+    expect(graph.sendPublicReply).toHaveBeenCalledTimes(1)
+    expect(graph.sendPrivateReply).not.toHaveBeenCalled()
+    expect(result.results[0].status).toBe('replied')
+  })
+
+  it('a re-opened event whose prompt stage was recorded never resends the DM', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ openingDm: OPENING })])
+    repo.claimEvent.mockResolvedValue(null)
+    repo.reopenEvent.mockResolvedValue(claimed('event-old', 'pending', { dmStage: 'opening' }))
+
+    await run(comment())
+
+    expect(graph.sendPostbackPrompt).not.toHaveBeenCalled()
+    expect(repo.setEventDmStage).not.toHaveBeenCalled()
+  })
+
+  it('a re-opened event with every step recorded sends nothing and is replied', async () => {
+    repo.claimEvent.mockResolvedValue(null)
+    repo.reopenEvent.mockResolvedValue(
+      claimed('event-old', 'pending', { publicReplyId: 'r-0', dmSent: true })
+    )
+
+    const result = await run(comment())
+
+    expect(graph.sendPublicReply).not.toHaveBeenCalled()
+    expect(graph.sendPrivateReply).not.toHaveBeenCalled()
+    expect(mockResolveRuleAccessToken).not.toHaveBeenCalled()
+    expect(result.results[0]).toMatchObject({ status: 'replied', retryable: false })
+  })
+
+  it('a failed DM after a recorded public reply is partial, never retryable', async () => {
+    repo.claimEvent.mockResolvedValue(null)
+    repo.reopenEvent.mockResolvedValue(claimed('event-old', 'pending', { publicReplyId: 'r-0' }))
+    graph.sendPrivateReply.mockResolvedValue({
+      ok: false,
+      error: 'Timeout',
+      code: null,
+      retryable: true,
+    })
+
+    const result = await run(comment())
+
+    expect(result.results[0]).toMatchObject({ status: 'partial', retryable: false })
+    expect(storedOutcome('event-old')).toMatchObject({ outcome: 'partial', retryable: false })
+  })
+
+  it('a sent public reply is never retryable even when every write fails', async () => {
+    repo.recordEventSend.mockRejectedValue(new Error('connection reset'))
+    repo.updateEventOutcome.mockRejectedValue(new Error('connection reset'))
+    graph.sendPrivateReply.mockResolvedValue({
+      ok: false,
+      error: 'Timeout',
+      code: null,
+      retryable: true,
+    })
+
+    const result = await run(comment())
+
+    expect(graph.sendPublicReply).toHaveBeenCalledTimes(1)
+    expect(result.results[0]).toMatchObject({ status: 'partial', consumed: true, retryable: false })
+    expect(result.retryableFailures).toBe(0)
+  })
+
+  it('a failed stage write before the prompt sends no DM and is retryable alone', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([
+      rule({ openingDm: OPENING, publicReplyEnabled: false }),
+    ])
+    repo.setEventDmStage.mockRejectedValueOnce(new Error('connection reset'))
+
+    const result = await run(comment())
+
+    expect(graph.sendPostbackPrompt).not.toHaveBeenCalled()
+    expect(result.results[0]).toMatchObject({ status: 'failed', retryable: true })
+    expect(storedOutcome()).toMatchObject({ outcome: 'failed', retryable: true })
+  })
+
+  it('a failed stage write is not retryable once the public reply went out', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([rule({ openingDm: OPENING })])
+    repo.setEventDmStage.mockRejectedValueOnce(new Error('connection reset'))
+
+    const result = await run(comment())
+
+    expect(graph.sendPublicReply).toHaveBeenCalledTimes(1)
+    expect(result.results[0]).toMatchObject({ status: 'partial', retryable: false })
+  })
+
+  it('keeps the stage and sends no fallback when it cannot be cleared after a failed prompt', async () => {
+    repo.listLiveRulesForAccount.mockResolvedValue([
+      rule({ openingDm: OPENING, publicReplyEnabled: false }),
+    ])
+    graph.sendPostbackPrompt.mockResolvedValue({
+      ok: false,
+      error: 'Invalid parameter',
+      code: 100,
+      retryable: false,
+    })
+    repo.setEventDmStage
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('connection reset'))
+
+    const result = await run(comment())
+
+    expect(graph.sendPrivateReply).not.toHaveBeenCalled()
+    expect(result.results[0]).toMatchObject({ status: 'failed', retryable: false })
+  })
+})
+
+describe('runInstagramAutoReply — send timing', () => {
+  it('sends the public reply and the DM side by side', async () => {
+    let releasePublic: () => void = () => {}
+    graph.sendPublicReply.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releasePublic = () => resolve({ ok: true, data: { replyId: 'reply-1' } })
+        })
+    )
+    graph.sendPrivateReply.mockImplementation(async () => {
+      releasePublic()
+      return { ok: true, data: { messageId: 'mid-1', usedTextFallback: false } }
+    })
+
+    const result = await run(comment())
+
+    expect(graph.sendPrivateReply).toHaveBeenCalledTimes(1)
+    expect(result.results[0].status).toBe('replied')
+  })
+
+  it('gives both sends of one source the same budget signal', async () => {
+    await run(comment())
+
+    const publicSignal = graph.sendPublicReply.mock.calls[0][3].signal
+    const dmSignal = graph.sendPrivateReply.mock.calls[0][4].signal
+    expect(publicSignal).toBeInstanceOf(AbortSignal)
+    expect(dmSignal).toBe(publicSignal)
+  })
+})
+
+describe('runInstagramAutoReply — postback sender', () => {
+  it('ignores a tap from a user other than the one the event answered', async () => {
+    repo.getWorkspaceRule.mockResolvedValue(rule({ openingDm: OPENING }))
+    repo.getEventById.mockResolvedValue(waitingEvent('opening'))
+
+    const result = await runSources({
+      kind: 'postback',
+      postback: postback('iar:event-1:open', { senderId: 'U-OTHER' }),
+    })
+
+    expect(result.results[0]).toMatchObject({
+      status: 'ignored',
+      consumed: true,
+      eventId: 'event-1',
+    })
+    expect(repo.transitionEventDmStage).not.toHaveBeenCalled()
+    expect(graph.sendLinkMessage).not.toHaveBeenCalled()
   })
 })

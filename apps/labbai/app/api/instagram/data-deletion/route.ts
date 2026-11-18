@@ -65,9 +65,11 @@ async function readFields(request: NextRequest): Promise<Record<string, unknown>
  * form field. The request is public and authenticated only by the HMAC-SHA256 signature inside
  * `signed_request`, checked against the same app secrets the Instagram webhook ingress uses.
  *
- * A verified request deletes the Instagram Auto-Reply events stored for that user, and their
- * link clicks, then answers `{ url, confirmation_code }`: the status page Meta shows the user and
- * a code it can quote. A bad or missing signature is a 400 and deletes nothing.
+ * A verified request deletes the Instagram Auto-Reply rules and events tied to that Instagram id,
+ * and their link clicks (see `deleteInstagramUserData`, which documents why the id is matched as
+ * both the account and the sender, and that the mapping is unverified until a live Meta test),
+ * then answers `{ url, confirmation_code }`: the status page Meta shows the user and a code it can
+ * quote. A bad or missing signature is a 400 and deletes nothing.
  */
 export const POST = withRouteHandler(async (request: NextRequest) => {
   const secrets = getInstagramWebhookAppSecrets()

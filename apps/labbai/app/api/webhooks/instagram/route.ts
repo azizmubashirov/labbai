@@ -154,6 +154,11 @@ function autoReplySources(body: Record<string, unknown>): InstagramAutoReplySour
 /**
  * One account's body without the events the engine consumed: comments and live comments by
  * comment id, story events and `iar:` taps by message `mid`. Null when nothing is left.
+ *
+ * A consumed story reply or story mention therefore never reaches the account's DM workflows, so
+ * it does not appear in the Inbox thread with that user either. This is intended: the engine
+ * answered it, and it shows in the Inbox's auto-reply timeline for that contact, which reads the
+ * stored event. Only unmatched and handed-off story events reach the Inbox as messages.
  */
 function withoutConsumed(
   body: Record<string, unknown>,
@@ -252,11 +257,13 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
     /**
      * Auto-reply and the HTTP status. A comment the engine claimed but could not answer for a
      * transient reason (Graph 5xx, timeout, rate limit, a failed claim write) asks Meta to
-     * redeliver, the same as a failed dispatch: the redelivery re-opens only `failed` events
-     * (`retryFailedEvent`), every other claimed comment is a no-op through its unique claim,
-     * and the stripped body comes out the same, so each webhook's idempotency key deduplicates
-     * its dispatch. Permanent failures (no token, a comment Meta refuses) are stored as `failed`
-     * without a retry, because Meta would retry them for 36 hours to the same end.
+     * redeliver, the same as a failed dispatch: the redelivery re-opens only retryable `failed`
+     * events and `pending` events stopped mid-way (`reopenEvent`), skipping any send they already
+     * recorded; every other claimed comment is a no-op through its unique claim, and the
+     * stripped body comes out the same, so each webhook's idempotency key deduplicates its
+     * dispatch. Permanent failures (no token, a comment Meta refuses) are stored as `failed`
+     * with `retryable` false and are never re-opened, because Meta would retry them for 36 hours
+     * to the same end.
      *
      * When the engine could not process an account at all (its rules were unreadable, or the
      * deadline passed mid-way), it is unknown which comments the engine owns. Dispatching then

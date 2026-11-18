@@ -35,6 +35,15 @@ const RETRYABLE_GRAPH_CODES: ReadonlySet<number> = new Set([1, 2, 4, 17, 32, 613
 /** Graph's "invalid parameter" code, which a template the endpoint does not accept returns. */
 const GRAPH_INVALID_PARAMETER_CODE = 100
 
+/** Options every send helper takes. */
+export interface InstagramGraphCallOptions {
+  /**
+   * A deadline shared by several calls (see `INSTAGRAM_AUTO_REPLY_SOURCE_SEND_BUDGET_MS`). Each
+   * call still times out on its own after {@link INSTAGRAM_AUTO_REPLY_GRAPH_TIMEOUT_MS}.
+   */
+  signal?: AbortSignal
+}
+
 /** The outcome of one Graph call. `retryable` marks failures a later delivery may fix. */
 export type InstagramGraphResult<T> =
   | { ok: true; data: T }
@@ -44,13 +53,15 @@ async function callGraph<T>(
   url: string,
   init: RequestInit,
   label: string,
-  read: (body: unknown) => T | null
+  read: (body: unknown) => T | null,
+  options: InstagramGraphCallOptions = {}
 ): Promise<InstagramGraphResult<T>> {
+  const timeout = AbortSignal.timeout(INSTAGRAM_AUTO_REPLY_GRAPH_TIMEOUT_MS)
   let response: Response
   try {
     response = await fetch(url, {
       ...init,
-      signal: AbortSignal.timeout(INSTAGRAM_AUTO_REPLY_GRAPH_TIMEOUT_MS),
+      signal: options.signal ? AbortSignal.any([timeout, options.signal]) : timeout,
     })
   } catch (error) {
     return {
@@ -104,7 +115,8 @@ async function callGraph<T>(
 export function sendPublicReply(
   accessToken: string,
   commentId: string,
-  message: string
+  message: string,
+  options: InstagramGraphCallOptions = {}
 ): Promise<InstagramGraphResult<{ replyId: string }>> {
   return callGraph(
     graphUrl(`/${encodeURIComponent(commentId)}/replies`),
@@ -117,7 +129,8 @@ export function sendPublicReply(
     (body) => {
       const replyId = idString(toRecord(body).id)
       return replyId ? { replyId } : null
-    }
+    },
+    options
   )
 }
 
@@ -149,7 +162,8 @@ function postMessage(
   accessToken: string,
   igAccountId: string,
   recipient: InstagramMessageRecipient,
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  options: InstagramGraphCallOptions
 ): Promise<InstagramGraphResult<{ messageId: string }>> {
   return callGraph(
     graphUrl(`/${encodeURIComponent(igAccountId)}/messages`),
@@ -162,7 +176,8 @@ function postMessage(
     (body) => {
       const messageId = idString(toRecord(body).message_id)
       return messageId ? { messageId } : null
-    }
+    },
+    options
   )
 }
 
@@ -196,9 +211,10 @@ export function sendPrivateReply(
   accessToken: string,
   igAccountId: string,
   commentId: string,
-  message: InstagramPrivateReplyMessage
+  message: InstagramPrivateReplyMessage,
+  options: InstagramGraphCallOptions = {}
 ): Promise<InstagramGraphResult<InstagramPrivateReplySent>> {
-  return sendLinkMessage(accessToken, igAccountId, { commentId }, message)
+  return sendLinkMessage(accessToken, igAccountId, { commentId }, message, options)
 }
 
 /**
@@ -213,39 +229,54 @@ export async function sendLinkMessage(
   accessToken: string,
   igAccountId: string,
   recipient: InstagramMessageRecipient,
-  message: InstagramPrivateReplyMessage
+  message: InstagramPrivateReplyMessage,
+  options: InstagramGraphCallOptions = {}
 ): Promise<InstagramGraphResult<InstagramPrivateReplySent>> {
   if (message.buttons.length === 0) {
-    const result = await postMessage(accessToken, igAccountId, recipient, {
-      text: truncateAtCodePoint(message.text, INSTAGRAM_AUTO_REPLY_DM_TEXT_MAX_LENGTH, ''),
-    })
+    const result = await postMessage(
+      accessToken,
+      igAccountId,
+      recipient,
+      { text: truncateAtCodePoint(message.text, INSTAGRAM_AUTO_REPLY_DM_TEXT_MAX_LENGTH, '') },
+      options
+    )
     return result.ok ? { ok: true, data: { ...result.data, usedTextFallback: false } } : result
   }
 
-  const template = await postMessage(accessToken, igAccountId, recipient, {
-    attachment: {
-      type: 'template',
-      payload: {
-        template_type: 'button',
-        text: truncateAtCodePoint(
-          message.text,
-          INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH,
-          ''
-        ),
-        buttons: message.buttons.map((button) => ({
-          type: 'web_url',
-          url: button.url,
-          title: button.title,
-        })),
+  const template = await postMessage(
+    accessToken,
+    igAccountId,
+    recipient,
+    {
+      attachment: {
+        type: 'template',
+        payload: {
+          template_type: 'button',
+          text: truncateAtCodePoint(
+            message.text,
+            INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH,
+            ''
+          ),
+          buttons: message.buttons.map((button) => ({
+            type: 'web_url',
+            url: button.url,
+            title: button.title,
+          })),
+        },
       },
     },
-  })
+    options
+  )
   if (template.ok) return { ok: true, data: { ...template.data, usedTextFallback: false } }
   if (!isTemplateRejected(template)) return template
 
-  const text = await postMessage(accessToken, igAccountId, recipient, {
-    text: buildTextFallback(message),
-  })
+  const text = await postMessage(
+    accessToken,
+    igAccountId,
+    recipient,
+    { text: buildTextFallback(message) },
+    options
+  )
   if (text.ok) return { ok: true, data: { ...text.data, usedTextFallback: true } }
   return { ...text, error: `${text.error} (after the button template was rejected)` }
 }
@@ -277,34 +308,47 @@ export async function sendPostbackPrompt(
   accessToken: string,
   igAccountId: string,
   recipient: InstagramMessageRecipient,
-  prompt: InstagramPostbackPrompt
+  prompt: InstagramPostbackPrompt,
+  options: InstagramGraphCallOptions = {}
 ): Promise<InstagramGraphResult<InstagramPostbackPromptSent>> {
   const title = truncateAtCodePoint(
     prompt.buttonTitle.trim(),
     INSTAGRAM_AUTO_REPLY_PROMPT_TITLE_MAX_LENGTH,
     ''
   )
-  const template = await postMessage(accessToken, igAccountId, recipient, {
-    attachment: {
-      type: 'template',
-      payload: {
-        template_type: 'button',
-        text: truncateAtCodePoint(
-          prompt.text,
-          INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH,
-          ''
-        ),
-        buttons: [{ type: 'postback', title, payload: prompt.payload }],
+  const template = await postMessage(
+    accessToken,
+    igAccountId,
+    recipient,
+    {
+      attachment: {
+        type: 'template',
+        payload: {
+          template_type: 'button',
+          text: truncateAtCodePoint(
+            prompt.text,
+            INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH,
+            ''
+          ),
+          buttons: [{ type: 'postback', title, payload: prompt.payload }],
+        },
       },
     },
-  })
+    options
+  )
   if (template.ok) return { ok: true, data: { ...template.data, usedQuickReply: false } }
   if (!isTemplateRejected(template)) return template
 
-  const quickReply = await postMessage(accessToken, igAccountId, recipient, {
-    text: truncateAtCodePoint(prompt.text, INSTAGRAM_AUTO_REPLY_DM_TEXT_MAX_LENGTH, ''),
-    quick_replies: [{ content_type: 'text', title, payload: prompt.payload }],
-  })
+  const quickReply = await postMessage(
+    accessToken,
+    igAccountId,
+    recipient,
+    {
+      text: truncateAtCodePoint(prompt.text, INSTAGRAM_AUTO_REPLY_DM_TEXT_MAX_LENGTH, ''),
+      quick_replies: [{ content_type: 'text', title, payload: prompt.payload }],
+    },
+    options
+  )
   if (quickReply.ok) return { ok: true, data: { ...quickReply.data, usedQuickReply: true } }
   return { ...quickReply, error: `${quickReply.error} (after the button template was rejected)` }
 }
@@ -319,7 +363,8 @@ export async function sendPostbackPrompt(
  */
 export async function getUserFollowsBusiness(
   accessToken: string,
-  userId: string
+  userId: string,
+  options: InstagramGraphCallOptions = {}
 ): Promise<InstagramGraphResult<{ follows: boolean | null }>> {
   return callGraph(
     graphUrl(`/${encodeURIComponent(userId)}`, { fields: 'is_user_follow_business' }),
@@ -328,7 +373,8 @@ export async function getUserFollowsBusiness(
     (body) => {
       const value = toRecord(body).is_user_follow_business
       return { follows: typeof value === 'boolean' ? value : null }
-    }
+    },
+    options
   )
 }
 

@@ -4,12 +4,15 @@
 import { createHmac } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockDeleteEventsFromUser } = vi.hoisted(() => ({
-  mockDeleteEventsFromUser: vi.fn(),
+const { mockDeleteAutoReplyData, mockLogger } = vi.hoisted(() => ({
+  mockDeleteAutoReplyData: vi.fn(),
+  mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }))
 
+vi.mock('@labbai/logger', () => ({ createLogger: () => mockLogger }))
+
 vi.mock('@/lib/instagram-auto-reply/repository', () => ({
-  deleteEventsFromUser: mockDeleteEventsFromUser,
+  deleteAutoReplyDataForInstagramId: mockDeleteAutoReplyData,
 }))
 
 import {
@@ -109,9 +112,23 @@ describe('deletion confirmation codes', () => {
 })
 
 describe('deleteInstagramUserData', () => {
-  it('deletes the user’s events through the repository', async () => {
-    mockDeleteEventsFromUser.mockResolvedValue(3)
-    await expect(deleteInstagramUserData('17841400000000001')).resolves.toBe(3)
-    expect(mockDeleteEventsFromUser).toHaveBeenCalledWith('17841400000000001')
+  it('deletes the rules and events tied to the id through the repository', async () => {
+    mockDeleteAutoReplyData.mockResolvedValue({ rules: 2, events: 3 })
+    await expect(deleteInstagramUserData('17841400000000001')).resolves.toEqual({
+      rules: 2,
+      events: 3,
+    })
+    expect(mockDeleteAutoReplyData).toHaveBeenCalledWith('17841400000000001')
+  })
+
+  it('logs only the deleted counts, never the id', async () => {
+    mockDeleteAutoReplyData.mockResolvedValue({ rules: 0, events: 1 })
+    await deleteInstagramUserData('17841400000000001')
+
+    expect(mockLogger.info).toHaveBeenCalledWith('Processed an Instagram data deletion request', {
+      deletedRules: 0,
+      deletedEvents: 1,
+    })
+    expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain('17841400000000001')
   })
 })

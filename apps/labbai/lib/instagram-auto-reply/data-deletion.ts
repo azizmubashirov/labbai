@@ -4,7 +4,10 @@ import { hmacSha256Hex } from '@labbai/security/hmac'
 import { toStringOrNull } from '@labbai/utils/coerce'
 import { generateShortId } from '@labbai/utils/id'
 import { toRecord } from '@labbai/utils/object'
-import { deleteEventsFromUser } from '@/lib/instagram-auto-reply/repository'
+import {
+  deleteAutoReplyDataForInstagramId,
+  type InstagramAutoReplyDeletedCounts,
+} from '@/lib/instagram-auto-reply/repository'
 
 const logger = createLogger('InstagramDataDeletion')
 
@@ -22,7 +25,11 @@ const CONFIRMATION_CONTEXT = 'instagram-data-deletion:'
 
 /** A `signed_request` whose signature checked out, reduced to what the callback uses. */
 export interface InstagramSignedRequest {
-  /** The user the request is for, as Meta identifies them to this app. */
+  /**
+   * The person who removed the app, as Meta identifies them to this app (possibly app-scoped).
+   * For this app that is expected to be the connected business account; see
+   * {@link deleteInstagramUserData}.
+   */
   userId: string
   /** Seconds since the epoch, when Meta sent it. */
   issuedAt: number | null
@@ -116,19 +123,35 @@ export function isValidDeletionConfirmationCode(code: string, secrets: readonly 
 }
 
 /**
- * Deletes what the Instagram Auto-Reply engine stored about one Instagram user: every event row
- * whose `from_id` is that user (the comment or message text, username, and ids), on every
- * account, and, by cascade, the link clicks recorded against those events.
+ * Deletes the Instagram Auto-Reply data tied to the Instagram id of a Meta data deletion request,
+ * in one transaction:
  *
- * `userId` is the `user_id` of a verified `signed_request`. Meta documents it as the app-scoped
- * id of the user who removed the app. Events store the Instagram-scoped id Meta sends in webhooks
- * (`from.id`, `sender.id`); whether those are the same value for an Instagram Login app is not
- * stated by Meta, so a request whose id matches no event deletes nothing and still succeeds.
+ * - the account's auto-reply rules (`ig_account_id` = `userId`), in every workspace;
+ * - every auto-reply event recorded on that account or sent by that id (`ig_account_id` or
+ *   `from_id` = `userId`): comment and message text, usernames, and ids;
+ * - by cascade, the link clicks recorded against those events.
  *
- * @returns How many events were deleted.
+ * Inbox conversations and workflow run logs are not touched; they belong to the workspace and are
+ * removed by its normal deletion or on request to support, as the public pages say.
+ *
+ * Who `userId` is: Meta sends this callback when a person removes the app from their account. For
+ * this app that is the business account owner who connected Instagram, so the id is expected to
+ * name the business account, and it may be app-scoped. Rules and events store the professional
+ * account id (`user_id` from `/me`, the webhook `entry.id`) as `ig_account_id`, and the
+ * Instagram-scoped ids from webhooks (`from.id`, `sender.id`) as `from_id`. Matching both columns
+ * covers either reading. Meta does not document whether `signed_request.user_id` equals either of
+ * them for an Instagram Login app, so this mapping is UNVERIFIED until a live Meta test. A request
+ * whose id matches nothing deletes nothing and still succeeds, and the counts in the log show it.
+ *
+ * @returns How many rules and events were deleted.
  */
-export async function deleteInstagramUserData(userId: string): Promise<number> {
-  const deleted = await deleteEventsFromUser(userId)
-  logger.info('Processed an Instagram data deletion request', { deletedEvents: deleted })
+export async function deleteInstagramUserData(
+  userId: string
+): Promise<InstagramAutoReplyDeletedCounts> {
+  const deleted = await deleteAutoReplyDataForInstagramId(userId)
+  logger.info('Processed an Instagram data deletion request', {
+    deletedRules: deleted.rules,
+    deletedEvents: deleted.events,
+  })
   return deleted
 }

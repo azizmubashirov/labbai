@@ -4,13 +4,18 @@ import { getEventById, recordClick } from '@/lib/instagram-auto-reply/repository
 
 const logger = createLogger('InstagramAutoReplyClick')
 
-/** Whether a stored button target is an absolute `https:` URL, the only kind ever redirected to. */
-function isHttpsUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false
+/**
+ * A stored button target as the serialized `href` of an absolute `https:` URL, the only kind ever
+ * redirected to. Null for anything else. Redirecting to the parsed `href` rather than the stored
+ * string means the `Location` header always carries a normalized, percent-encoded URL.
+ */
+function toHttpsHref(value: unknown): string | null {
+  if (typeof value !== 'string') return null
   try {
-    return new URL(value).protocol === 'https:'
+    const url = new URL(value)
+    return url.protocol === 'https:' ? url.href : null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -22,7 +27,8 @@ function isHttpsUrl(value: unknown): value is string {
  * index past the snapshot, and a stored target that is not `https:` all resolve to null.
  *
  * Recording is best effort: a failed write is logged and the visitor is still sent on. Pass
- * `record: false` to resolve without counting, as the route does for a client over its rate limit.
+ * `record: false` to resolve without counting, as the route does for a client over its rate limit
+ * (decided before this lookup). The event is read once and handed to the click write.
  *
  * This is a public, unauthenticated read by design: the event id is an unguessable UUID that only
  * the DM recipient received, and the only thing it discloses is the link they were already sent.
@@ -36,11 +42,12 @@ export async function followTrackedLink(input: {
 }): Promise<string | null> {
   const event = await getEventById(input.eventId)
   const button = event?.dmSnapshot?.dmMessage?.buttons?.[input.buttonIndex]
-  if (!event || !button || !isHttpsUrl(button.url)) return null
+  const target = button ? toHttpsHref(button.url) : null
+  if (!event || !target) return null
 
   if (input.record) {
     try {
-      await recordClick(event.id, input.buttonIndex)
+      await recordClick(event, input.buttonIndex)
     } catch (error) {
       logger.warn('Could not record an auto-reply link click', {
         eventId: event.id,
@@ -48,5 +55,5 @@ export async function followTrackedLink(input: {
       })
     }
   }
-  return button.url
+  return target
 }

@@ -54,8 +54,28 @@ describe('GET /api/instagram/r/[eventId]/[buttonIndex]', () => {
     expect(response.status).toBe(302)
     expect(response.headers.get('location')).toBe('https://shop.example.com/prices?ref=ig')
     expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(mocks.getEventById).toHaveBeenCalledTimes(1)
     expect(mocks.getEventById).toHaveBeenCalledWith(EVENT_ID)
-    expect(mocks.recordClick).toHaveBeenCalledWith(EVENT_ID, 1)
+    expect(mocks.recordClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: EVENT_ID, ruleId: 'rule-1' }),
+      1
+    )
+  })
+
+  it('checks the IP rate limit before reading the event', async () => {
+    await click(EVENT_ID, '0')
+    expect(mocks.enforceIpRateLimit.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.getEventById.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('redirects to the normalized href of the stored URL', async () => {
+    mocks.getEventById.mockResolvedValueOnce(
+      event([{ title: 'Space', url: 'https://Shop.Example.com/a b?q=x y#top' }])
+    )
+    const response = await click(EVENT_ID, '0')
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('https://shop.example.com/a%20b?q=x%20y#top')
   })
 
   it('returns 404 for an unknown event or a button past the snapshot', async () => {

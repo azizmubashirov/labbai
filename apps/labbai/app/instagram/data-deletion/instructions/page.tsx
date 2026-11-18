@@ -28,8 +28,11 @@ const LINK_CLASS = 'text-[var(--text-primary)] underline underline-offset-2'
 
 /**
  * Public data deletion instructions for the Meta app review (the "Data Deletion Instructions
- * URL" in the app settings). Static: it explains what Instagram Auto-Reply stores about people who
- * interact with a connected account, and how to have it deleted.
+ * URL" in the app settings). Static: it explains what Instagram Auto-Reply stores about connected
+ * accounts and the people who interact with them, how each can have it deleted, and what a
+ * request leaves to workspace deletion or support (Inbox conversations, workflow run logs). The
+ * Meta callback is triggered by the account owner removing the app, so that path is described
+ * for business accounts; commenters are pointed to support.
  */
 export default function DataDeletionInstructionsPage() {
   const { supportEmail, privacyUrl } = getBrandConfig()
@@ -61,36 +64,50 @@ export default function DataDeletionInstructionsPage() {
             <li>which links in those replies you tapped.</li>
           </ul>
           <p>
+            For a connected business account, Labbai also stores the auto-reply rules set up for it.
             Labbai does not store your password, your email address, or your phone number. It keeps
             this data only so the business can see which replies went out.
           </p>
         </Section>
 
-        <Section title='How to ask for deletion'>
+        <Section title='If you connected a business account'>
           <ol className='flex list-decimal flex-col gap-2 pl-5'>
             <li>
               Open Instagram and go to your settings. Find <strong>Apps and websites</strong>, then
-              remove the app. Instagram then sends Labbai a deletion request for you.
+              remove the app. Instagram then sends Labbai a deletion request for your account.
             </li>
             <li>
-              Labbai deletes the data listed above as soon as the request arrives. You get a
-              confirmation code and a link to a page that confirms the deletion.
+              Labbai deletes the account&apos;s auto-reply rules and every auto-reply record on it:
+              the comments, messages, Instagram user IDs, usernames, and link taps listed above. You
+              get a confirmation code and a link to a page that confirms the request.
             </li>
-            {supportEmail ? (
-              <li>
-                You can also email{' '}
-                <a href={`mailto:${supportEmail}`} className={LINK_CLASS}>
-                  {supportEmail}
-                </a>{' '}
-                with your Instagram username and ask us to delete your data.
-              </li>
-            ) : (
-              <li>
-                You can also ask the business you talked to on Instagram to contact the Labbai team
-                and request the deletion for you.
-              </li>
-            )}
           </ol>
+        </Section>
+
+        <Section title='If you commented on or messaged a business'>
+          {supportEmail ? (
+            <p>
+              Email{' '}
+              <a href={`mailto:${supportEmail}`} className={LINK_CLASS}>
+                {supportEmail}
+              </a>{' '}
+              with your Instagram username and ask us to delete your data. We delete the auto-reply
+              records stored about you.
+            </p>
+          ) : (
+            <p>
+              Ask the business you talked to on Instagram to contact the Labbai team and request the
+              deletion for you. We delete the auto-reply records stored about you.
+            </p>
+          )}
+        </Section>
+
+        <Section title='What a request does not cover'>
+          <p>
+            Inbox conversations and workflow run logs belong to the business&apos;s Labbai
+            workspace. They are deleted when the business deletes its workspace, or when you ask our
+            support team{supportEmail ? ' at the address above' : ''}.
+          </p>
           <p>
             Deleting this data does not delete your comments or messages on Instagram itself. To
             remove those, delete them in Instagram.

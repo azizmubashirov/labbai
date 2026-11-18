@@ -18,6 +18,7 @@ import {
   INSTAGRAM_AUTO_REPLY_PRIVATE_REPLY_WINDOW_MS,
   INSTAGRAM_AUTO_REPLY_REDIRECT_PATH,
   INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY,
+  INSTAGRAM_AUTO_REPLY_SOURCE_SEND_BUDGET_MS,
 } from '@/lib/instagram-auto-reply/constants'
 import {
   matchesKeywords,
@@ -33,16 +34,18 @@ import {
 } from '@/lib/instagram-auto-reply/payload'
 import {
   claimEvent,
+  claimOncePerUser,
   getEventById,
   getEventOutcomeBySource,
   getWorkspaceRule,
-  hasPriorReply,
   hasRecentAnswer,
   type InstagramAutoReplyEventOutcomeUpdate,
   type InstagramAutoReplyEventRecord,
   type InstagramAutoReplyRuleRecord,
+  type InstagramAutoReplySendProgress,
   listLiveRulesForAccount,
-  retryFailedEvent,
+  recordEventSend,
+  reopenEvent,
   setEventDmStage,
   setNextMediaId,
   transitionEventDmStage,
@@ -51,6 +54,7 @@ import {
 import { supportsPublicReply } from '@/lib/instagram-auto-reply/rule-validation'
 import {
   getUserFollowsBusiness,
+  type InstagramGraphResult,
   type InstagramMessageRecipient,
   isTemplateRejected,
   listRecentMedia,
@@ -94,7 +98,7 @@ export type InstagramAutoReplySource =
  * - `handoff`: a rule matched and hands the source to the workflows.
  * - `replied`, `partial`, `skipped_duplicate`, `expired`, `failed`: the stored event outcome. For
  *   a postback, `replied` means its follow-up went out.
- * - `already_claimed`: an earlier delivery claimed this source and it was not a failed retry, or
+ * - `already_claimed`: an earlier delivery claimed this source and it could not be re-opened, or
  *   (postbacks) the button was already handled.
  * - `ignored`: an `iar:` postback the engine owns but has nothing to do for: a malformed payload,
  *   or an event that is gone or belongs to another account.
@@ -297,8 +301,9 @@ function result(
  * then oldest) whose keywords and media scope match wins; story mentions match any keywords. A
  * rule with `handoffToAgent` records a `handoff` event and leaves the source for the workflows.
  * Otherwise the source is claimed by inserting its event row (a redelivery finds the row and
- * stops, unless the earlier attempt `failed`, which is re-claimed once), then checked for
- * duplicates (once per user per post; a mention once per user per 24 hours) and the reply window
+ * stops, unless the earlier attempt failed retryably or stopped mid-way, which is re-claimed once;
+ * see `reopenEvent`), then checked for duplicates (once per user per post, under a lock that
+ * holds across concurrent deliveries; a mention once per user per 24 hours) and the reply window
  * (7 days for a private reply to a comment, 24 hours for a DM), then answered. Sources no rule
  * matches are not stored.
  *
@@ -307,8 +312,9 @@ function result(
  * as a `postback` source, which sends the next step to the user who tapped.
  *
  * Bounds: at most {@link INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY} sources in flight across the
- * delivery (through `limiter`), every Graph call times out after 10 seconds, and no source is
- * started after `deadlineAt`.
+ * delivery (through `limiter`), every Graph call times out after 10 seconds, the public reply and
+ * the DM go out side by side under one {@link INSTAGRAM_AUTO_REPLY_SOURCE_SEND_BUDGET_MS} budget
+ * per source, and no source is started after `deadlineAt`.
  *
  * Only the provider ingress (`/api/webhooks/instagram`) calls this. The legacy per-path route
  * (`/api/webhooks/trigger/{path}`) never does: it carries one webhook's copy of a delivery, so
@@ -600,10 +606,10 @@ async function handOff(
   try {
     const claimed =
       (await claimEvent({ ...claimInput(rule, inbound), outcome: 'handoff' })) ??
-      (await retryFailedEvent({ igAccountId: inbound.accountId, sourceId: id, ruleId: rule.id }))
+      (await reopenEvent({ igAccountId: inbound.accountId, sourceId: id, ruleId: rule.id }))
     if (!claimed) return await alreadyClaimed(ctx, id, rule.id)
     if (claimed.outcome !== 'handoff') {
-      await updateEventOutcome(claimed.id, { outcome: 'handoff', error: null })
+      await updateEventOutcome(claimed.id, { outcome: 'handoff', error: null, retryable: false })
     }
     return result(id, 'handoff', { ruleId: rule.id, eventId: claimed.id })
   } catch (error) {
@@ -633,7 +639,7 @@ async function reply(
   try {
     event =
       (await claimEvent({ ...claimInput(rule, inbound), dmSnapshot: snapshot })) ??
-      (await retryFailedEvent({
+      (await reopenEvent({
         igAccountId: inbound.accountId,
         sourceId: id,
         ruleId: rule.id,
@@ -651,23 +657,26 @@ async function reply(
     })
   }
 
+  const progress: SendProgress = { sent: false }
   let decision: AnswerDecision
   try {
-    decision = await answer(ctx, rule, inbound, event, snapshot)
+    decision = await answer(ctx, rule, inbound, event, snapshot, progress)
   } catch (error) {
+    /** Retrying is safe only when nothing went out before the error. */
     decision = {
       update: { outcome: 'failed', error: getErrorMessage(error, 'Auto-reply failed') },
-      retryable: true,
+      retryable: !progress.sent,
     }
   }
 
   const status = decision.update.outcome === 'pending' ? 'failed' : decision.update.outcome
   try {
-    await updateEventOutcome(event.id, decision.update)
+    await updateEventOutcome(event.id, { ...decision.update, retryable: decision.retryable })
   } catch (error) {
     /**
-     * Sends may already have gone out, and the row stays `pending`, which a redelivery does not
-     * re-open, so this is never reported as retryable.
+     * Sends may already have gone out, so this is never reported as retryable. The row stays
+     * `pending`; should Meta redeliver anyway, `reopenEvent` re-opens it only once it is stale,
+     * and every send that went out was recorded the moment it succeeded, so it is skipped.
      */
     logger.error(`[${ctx.requestId}] Could not store an auto-reply outcome`, {
       eventId: event.id,
@@ -740,8 +749,16 @@ function replyWindowMs(triggerType: InstagramAutoReplyTriggerType): number {
     : INSTAGRAM_AUTO_REPLY_MESSAGING_WINDOW_MS
 }
 
-/** Whether this user was already answered for this event, by the rule's duplicate policy. */
-async function isDuplicate(rule: InstagramAutoReplyRuleRecord, inbound: InboundEvent) {
+/**
+ * Whether this user was already answered, or is being answered, for this event by the rule's
+ * duplicate policy. "Once per user per post" is decided under a lock and marks this event
+ * `skipped_duplicate` itself (see `claimOncePerUser`), so it holds across concurrent deliveries.
+ */
+async function isDuplicate(
+  rule: InstagramAutoReplyRuleRecord,
+  inbound: InboundEvent,
+  event: InstagramAutoReplyEventRecord
+): Promise<boolean> {
   if (inbound.triggerType === 'story_mention') {
     return hasRecentAnswer({
       igAccountId: inbound.accountId,
@@ -750,7 +767,40 @@ async function isDuplicate(rule: InstagramAutoReplyRuleRecord, inbound: InboundE
       since: new Date(Date.now() - INSTAGRAM_AUTO_REPLY_MENTION_COOLDOWN_MS),
     })
   }
-  return rule.oncePerUserPerPost && hasPriorReply(rule.id, inbound.mediaId, inbound.fromId)
+  if (!rule.oncePerUserPerPost) return false
+  return claimOncePerUser({
+    eventId: event.id,
+    ruleId: rule.id,
+    mediaId: inbound.mediaId,
+    fromId: inbound.fromId,
+  })
+}
+
+/** Whether anything went out for the source being answered, so a later error is not retried. */
+interface SendProgress {
+  sent: boolean
+}
+
+/** One send of an answer: whether it went out, and whether a failure is transient. */
+type SendAttempt = { ok: true } | { ok: false; error: string; retryable: boolean }
+
+/**
+ * Records a send the moment it succeeds. A failed write is logged and swallowed: the send went
+ * out either way, and the final outcome write carries the same fields.
+ */
+async function recordSend(
+  ctx: RunContext,
+  eventId: string,
+  sent: InstagramAutoReplySendProgress
+): Promise<void> {
+  try {
+    await recordEventSend(eventId, sent)
+  } catch (error) {
+    logger.error(`[${ctx.requestId}] Could not record an auto-reply send`, {
+      eventId,
+      error: getErrorMessage(error),
+    })
+  }
 }
 
 /**
@@ -758,20 +808,27 @@ async function isDuplicate(rule: InstagramAutoReplyRuleRecord, inbound: InboundE
  * then the reply window, then the token, then the public reply (post comments only) and the
  * first DM step.
  *
- * Outcome: every attempted send succeeded → `replied`; some → `partial`; none → `failed`. Only a
- * `failed` outcome can be retried (the claim re-opens `failed` rows only), and only when one of
- * its failures was transient, so a `partial` never resends the half that went out.
+ * The public reply and the first DM step go out side by side (their order does not matter),
+ * under one abort signal of {@link INSTAGRAM_AUTO_REPLY_SOURCE_SEND_BUDGET_MS}. Each is recorded
+ * on the event the moment it succeeds: `public_reply_id`; `dm_sent` with stage `delivered`; or
+ * the prompt stage, which is written before the prompt goes out. A re-opened event skips every
+ * step it already recorded, so a retry never sends anything twice.
  *
- * Throws only on a database error before anything was sent.
+ * Outcome, counting steps an earlier attempt recorded as sent: every step sent → `replied`;
+ * some → `partial`; none → `failed`. Only a `failed` outcome with nothing sent can be retried,
+ * and only when one of its failures was transient.
+ *
+ * Throws only on a database error before anything was sent; `progress.sent` tells the caller.
  */
 async function answer(
   ctx: RunContext,
   rule: InstagramAutoReplyRuleRecord,
   inbound: InboundEvent,
   event: InstagramAutoReplyEventRecord,
-  snapshot: InstagramAutoReplyDmSnapshot
+  snapshot: InstagramAutoReplyDmSnapshot,
+  progress: SendProgress
 ): Promise<AnswerDecision> {
-  if (await isDuplicate(rule, inbound)) {
+  if (await isDuplicate(rule, inbound, event)) {
     return { update: { outcome: 'skipped_duplicate' }, retryable: false }
   }
   if (
@@ -781,9 +838,14 @@ async function answer(
     return { update: { outcome: 'expired' }, retryable: false }
   }
 
-  const publicReply = 'commentId' in inbound.recipient ? pickPublicReply(rule) : null
-  const dm = rule.dmEnabled && snapshot.dmMessage.text.trim() ? snapshot.dmMessage : null
+  const publicReplyDone = Boolean(event.publicReplyId)
+  const dmDone = event.dmSent || Boolean(event.dmStage)
+  const alreadySent = (publicReplyDone ? 1 : 0) + (dmDone ? 1 : 0)
+  const publicReply =
+    !publicReplyDone && 'commentId' in inbound.recipient ? pickPublicReply(rule) : null
+  const dm = !dmDone && rule.dmEnabled && snapshot.dmMessage.text.trim() ? snapshot.dmMessage : null
   if (!publicReply && !dm) {
+    if (alreadySent > 0) return { update: { outcome: 'replied', error: null }, retryable: false }
     return {
       update: { outcome: 'failed', error: 'The rule has no public reply or DM to send.' },
       retryable: false,
@@ -792,63 +854,67 @@ async function answer(
 
   const token = await getRuleToken(ctx, rule)
   if (!token.ok) {
-    return { update: { outcome: 'failed', error: token.error }, retryable: false }
-  }
-
-  const errors: string[] = []
-  let attempted = 0
-  let succeeded = 0
-  let retryable = false
-  let publicReplyId: string | null = null
-  let dmFields: Pick<InstagramAutoReplyEventOutcomeUpdate, 'dmSent' | 'dmStage'> = {
-    dmSent: false,
-    dmStage: null,
-  }
-
-  if (publicReply) {
-    attempted++
-    const sent = await sendPublicReply(token.accessToken, inbound.sourceId, publicReply)
-    if (sent.ok) {
-      succeeded++
-      publicReplyId = sent.data.replyId
-    } else {
-      errors.push(`Public reply: ${sent.error}`)
-      retryable ||= sent.retryable
+    return {
+      update: { outcome: alreadySent > 0 ? 'partial' : 'failed', error: token.error },
+      retryable: false,
     }
   }
 
-  if (dm) {
-    attempted++
+  const signal = AbortSignal.timeout(INSTAGRAM_AUTO_REPLY_SOURCE_SEND_BUDGET_MS)
+  const fields: Pick<InstagramAutoReplyEventOutcomeUpdate, 'publicReplyId' | 'dmSent' | 'dmStage'> =
+    {}
+
+  const sendPublic = async (message: string): Promise<SendAttempt> => {
+    const sent = await sendPublicReply(token.accessToken, inbound.sourceId, message, { signal })
+    if (!sent.ok) {
+      return { ok: false, error: `Public reply: ${sent.error}`, retryable: sent.retryable }
+    }
+    progress.sent = true
+    fields.publicReplyId = sent.data.replyId
+    await recordSend(ctx, event.id, { publicReplyId: sent.data.replyId })
+    return { ok: true }
+  }
+
+  const sendDm = async (): Promise<SendAttempt> => {
     const step = await sendFirstDmStep(ctx, {
       accessToken: token.accessToken,
       igAccountId: rule.igAccountId,
       recipient: inbound.recipient,
       eventId: event.id,
       snapshot,
+      signal,
     })
-    if (step.ok) {
-      succeeded++
-      /**
-       * After a prompt the stage was written before it went out, and a quick tap may already have
-       * moved it on, so the final write leaves the stage and `dm_sent` alone.
-       */
-      dmFields = step.stage === 'delivered' ? { dmSent: true, dmStage: 'delivered' } : {}
-    } else {
-      errors.push(`DM: ${step.error}`)
-      retryable ||= step.retryable
+    if (!step.ok) return { ok: false, error: `DM: ${step.error}`, retryable: step.retryable }
+    progress.sent = true
+    /**
+     * After a prompt the stage was written before it went out, and a quick tap may already have
+     * moved it on, so neither this nor the final write touches the stage or `dm_sent`.
+     */
+    if (step.stage === 'delivered') {
+      fields.dmSent = true
+      fields.dmStage = 'delivered'
+      await recordSend(ctx, event.id, { dmSent: true, dmStage: 'delivered' })
     }
+    return { ok: true }
   }
 
+  const attempts = await Promise.all([
+    ...(publicReply ? [sendPublic(publicReply)] : []),
+    ...(dm ? [sendDm()] : []),
+  ])
+
+  const failures = attempts.flatMap((attempt) => (attempt.ok ? [] : [attempt]))
+  const succeeded = alreadySent + attempts.length - failures.length
   const outcome: InstagramAutoReplyEventOutcome =
-    succeeded === attempted ? 'replied' : succeeded > 0 ? 'partial' : 'failed'
+    failures.length === 0 ? 'replied' : succeeded > 0 ? 'partial' : 'failed'
   return {
     update: {
       outcome,
-      publicReplyId,
-      ...dmFields,
-      error: errors.length > 0 ? errors.join('; ') : null,
+      ...fields,
+      error: failures.length > 0 ? failures.map((failure) => failure.error).join('; ') : null,
     },
-    retryable: outcome === 'failed' && retryable,
+    retryable:
+      outcome === 'failed' && !progress.sent && failures.some((failure) => failure.retryable),
   }
 }
 
@@ -859,6 +925,8 @@ interface DmStepTarget {
   recipient: InstagramMessageRecipient
   eventId: string
   snapshot: InstagramAutoReplyDmSnapshot
+  /** The send budget shared by every Graph call of this source. */
+  signal: AbortSignal
 }
 
 /** A DM step that went out, and the stage the event is at after it. */
@@ -869,6 +937,9 @@ type DmStepResult =
 function stepFailure(sent: { error: string; retryable: boolean }): DmStepResult {
   return { ok: false, error: sent.error, retryable: sent.retryable }
 }
+
+/** A Graph call that failed. */
+type GraphFailure = Extract<InstagramGraphResult<unknown>, { ok: false }>
 
 /** The rule's opening DM, when it has one worth sending. */
 function openingPrompt(snapshot: InstagramAutoReplyDmSnapshot) {
@@ -894,17 +965,24 @@ async function deliverMainDm(ctx: RunContext, target: DmStepTarget): Promise<DmS
           target.accessToken,
           target.igAccountId,
           target.recipient.commentId,
-          message
+          message,
+          { signal: target.signal }
         )
-      : await sendLinkMessage(target.accessToken, target.igAccountId, target.recipient, message)
+      : await sendLinkMessage(target.accessToken, target.igAccountId, target.recipient, message, {
+          signal: target.signal,
+        })
   return sent.ok ? { ok: true, stage: 'delivered' } : stepFailure(sent)
 }
 
 /**
  * Sends a prompt whose button continues the event, after recording the stage it puts the event
- * in, so the tap always finds it. On failure the stage is cleared again. When Graph takes neither
- * a postback button nor a quick reply on this recipient, the main DM goes out instead, so the user
- * still gets it.
+ * in, so the tap always finds it and a retry of the event knows the DM step started. When that
+ * write fails nothing is sent, and the step fails retryably.
+ *
+ * On a failed send the stage is cleared again. If clearing fails too, the stage stays and the step
+ * fails without a retry, so a retry skips the DM rather than risk sending it twice. When Graph
+ * takes neither a postback button nor a quick reply on this recipient, the main DM goes out
+ * instead, so the user still gets it.
  */
 async function sendPromptStep(
   ctx: RunContext,
@@ -913,15 +991,31 @@ async function sendPromptStep(
   stage: Exclude<InstagramAutoReplyDmStage, 'delivered'>,
   action: InstagramAutoReplyPostbackAction
 ): Promise<DmStepResult> {
-  await setEventDmStage(target.eventId, stage)
-  const sent = await sendPostbackPrompt(target.accessToken, target.igAccountId, target.recipient, {
-    text: prompt.text,
-    buttonTitle: prompt.buttonTitle,
-    payload: buildAutoReplyPayload(target.eventId, action),
-  })
+  try {
+    await setEventDmStage(target.eventId, stage)
+  } catch (error) {
+    return {
+      ok: false,
+      error: `The DM step could not be recorded: ${getErrorMessage(error)}`,
+      retryable: true,
+    }
+  }
+  const sent = await sendPostbackPrompt(
+    target.accessToken,
+    target.igAccountId,
+    target.recipient,
+    {
+      text: prompt.text,
+      buttonTitle: prompt.buttonTitle,
+      payload: buildAutoReplyPayload(target.eventId, action),
+    },
+    { signal: target.signal }
+  )
   if (sent.ok) return { ok: true, stage }
 
-  await setEventDmStage(target.eventId, null)
+  if (!(await clearPromptStage(ctx, target.eventId, sent))) {
+    return { ok: false, error: sent.error, retryable: false }
+  }
   if (!isTemplateRejected(sent)) return stepFailure(sent)
   logger.warn(`[${ctx.requestId}] Instagram took no button on this DM; sending the main DM`, {
     eventId: target.eventId,
@@ -931,12 +1025,36 @@ async function sendPromptStep(
 }
 
 /**
+ * Clears the stage a prompt recorded before it failed to send. False when the write failed: the
+ * stage then stays, and the caller sends nothing else for the step.
+ */
+async function clearPromptStage(
+  ctx: RunContext,
+  eventId: string,
+  sent: GraphFailure
+): Promise<boolean> {
+  try {
+    await setEventDmStage(eventId, null)
+    return true
+  } catch (error) {
+    logger.error(`[${ctx.requestId}] Could not clear the DM stage after a failed prompt`, {
+      eventId,
+      sendError: sent.error,
+      error: getErrorMessage(error),
+    })
+    return false
+  }
+}
+
+/**
  * Whether the user follows the account, or null when Graph cannot say: the profile field needs
  * the user's consent (a message or a tap), and an error never blocks the user.
  */
 async function followsAccount(ctx: RunContext, target: DmStepTarget): Promise<boolean | null> {
   if (!('userId' in target.recipient)) return null
-  const follows = await getUserFollowsBusiness(target.accessToken, target.recipient.userId)
+  const follows = await getUserFollowsBusiness(target.accessToken, target.recipient.userId, {
+    signal: target.signal,
+  })
   if (follows.ok) return follows.data.follows
   logger.info(`[${ctx.requestId}] Follow status unavailable; skipping the follow gate`, {
     eventId: target.eventId,
@@ -973,8 +1091,10 @@ async function sendFirstDmStep(ctx: RunContext, target: DmStepTarget): Promise<D
 
 /**
  * Continues an event after the user tapped one of its buttons. The event must belong to the
- * account the tap arrived for; anything else is ignored. The follow-up goes to the user who
- * tapped (`recipient.id`), which the tap's 24-hour window allows.
+ * account the tap arrived for, and the tap must come from the user the event answered (its
+ * `from_id`); anything else is ignored, so a forwarded or replayed payload cannot pull the
+ * event's DM to someone else. The follow-up goes to the user who tapped (`recipient.id`), which
+ * the tap's 24-hour window allows.
  *
  * - `open` (stage `opening`): the follow gate when the rule gates and the user does not follow,
  *   else the main DM.
@@ -1012,9 +1132,10 @@ async function processPostback(
     return result(id, 'ignored', { consumed: true })
   }
   if (event.fromId && event.fromId !== postback.senderId) {
-    logger.warn(`[${ctx.requestId}] Auto-reply postback came from another user than the event`, {
+    logger.warn(`[${ctx.requestId}] Ignoring an auto-reply postback from another user`, {
       eventId: event.id,
     })
+    return result(id, 'ignored', { ruleId: event.ruleId, eventId: event.id, consumed: true })
   }
 
   const fields = { ruleId: event.ruleId, eventId: event.id, consumed: true }
@@ -1059,6 +1180,7 @@ async function continueEvent(
     recipient: { userId },
     eventId: event.id,
     snapshot,
+    signal: AbortSignal.timeout(INSTAGRAM_AUTO_REPLY_SOURCE_SEND_BUDGET_MS),
   }
 
   const gate = followGatePrompt(snapshot)
@@ -1075,7 +1197,8 @@ async function continueEvent(
         text: gate.text,
         buttonTitle: gate.buttonTitle,
         payload: buildAutoReplyPayload(event.id, 'followed'),
-      }
+      },
+      { signal: target.signal }
     )
     if (sent.ok) return result(id, 'replied', fields)
     await transitionEventDmStage(event.id, 'follow_gate', { dmStage: from, error: sent.error })
