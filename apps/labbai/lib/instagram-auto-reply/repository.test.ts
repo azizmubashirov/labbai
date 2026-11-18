@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   claimEvent,
   getEventById,
+  getEventOutcomeBySource,
   getInstagramAccountUserId,
   hasPriorReply,
   listLiveRulesForAccount,
@@ -217,6 +218,19 @@ describe('Instagram auto-reply repository', () => {
     it('is false when another resolution already won', async () => {
       dbChainMockFns.returning.mockResolvedValueOnce([])
       await expect(setNextMediaId('rule-1', 'media-7')).resolves.toBe(false)
+    })
+  })
+
+  describe('getEventOutcomeBySource', () => {
+    it('reads the outcome of the event that claimed a source of an account', async () => {
+      queueTableRows(schemaMock.instagramAutoReplyEvent, [{ outcome: 'handoff' }])
+      await expect(getEventOutcomeBySource('1784', 'comment-1')).resolves.toBe('handoff')
+      expect(hasEq(lastWhere(), EVENT.igAccountId, '1784')).toBe(true)
+      expect(hasEq(lastWhere(), EVENT.sourceId, 'comment-1')).toBe(true)
+    })
+
+    it('is null when nothing claimed the source', async () => {
+      await expect(getEventOutcomeBySource('1784', 'comment-1')).resolves.toBeNull()
     })
   })
 

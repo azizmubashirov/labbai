@@ -6,10 +6,17 @@ import { resetEnvMock, setEnv } from '@labbai/testing'
 import { NextRequest, NextResponse } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockFindWebhooksByRoutingKey, mockDispatch, mockRelease } = vi.hoisted(() => ({
-  mockFindWebhooksByRoutingKey: vi.fn(),
-  mockDispatch: vi.fn(),
-  mockRelease: vi.fn(),
+const { mockFindWebhooksByRoutingKey, mockDispatch, mockRelease, mockRunAutoReply } = vi.hoisted(
+  () => ({
+    mockFindWebhooksByRoutingKey: vi.fn(),
+    mockDispatch: vi.fn(),
+    mockRelease: vi.fn(),
+    mockRunAutoReply: vi.fn(),
+  })
+)
+
+vi.mock('@/lib/instagram-auto-reply/engine', () => ({
+  runInstagramAutoReply: mockRunAutoReply,
 }))
 
 vi.mock('@/lib/core/admission/gate', () => ({
@@ -89,10 +96,53 @@ function dispatchedEntryAccounts(): Record<string, string[]> {
   return byWebhook
 }
 
+function comment(accountId: string, commentId: string, fromId = `fan-of-${accountId}`) {
+  return {
+    id: accountId,
+    time: 1_790_000_000,
+    changes: [
+      {
+        field: 'comments',
+        value: {
+          id: commentId,
+          text: `comment ${commentId}`,
+          from: { id: fromId, username: fromId },
+          media: { id: 'MEDIA1' },
+        },
+      },
+    ],
+  }
+}
+
+/** An engine result consuming the given comment ids. */
+function engineResult(
+  consumed: string[] = [],
+  extra: { retryableFailures?: number; accountError?: string | null } = {}
+) {
+  return {
+    consumedSourceIds: new Set(consumed),
+    results: [],
+    retryableFailures: extra.retryableFailures ?? 0,
+    accountError: extra.accountError ?? null,
+  }
+}
+
+/** Comment ids in the body handed to each dispatched webhook. */
+function dispatchedCommentIds(): Record<string, string[]> {
+  const byWebhook: Record<string, string[]> = {}
+  for (const [webhook, , body] of mockDispatch.mock.calls) {
+    byWebhook[webhook.id] = (body.entry as Array<{ changes?: Array<{ value: { id: string } }> }>)
+      .flatMap((entry) => entry.changes ?? [])
+      .map((change) => change.value.id)
+  }
+  return byWebhook
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   resetEnvMock()
   setEnv({ INSTAGRAM_CLIENT_SECRET: APP_SECRET, INSTAGRAM_WEBHOOK_VERIFY_TOKEN: 'verify-me' })
+  mockRunAutoReply.mockResolvedValue(engineResult())
   mockDispatch.mockResolvedValue({
     outcome: 'queued',
     response: new NextResponse(null, { status: 200 }),
@@ -328,5 +378,105 @@ describe('POST /api/webhooks/instagram', () => {
 
     expect(response.status).toBe(500)
     expect(mockDispatch).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('POST /api/webhooks/instagram — auto-reply engine', () => {
+  it('runs the engine on each account’s comments only, with a shared limiter and deadline', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([])
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(5_000_000)
+
+    await POST(
+      signedPost({
+        object: 'instagram',
+        entry: [comment('IG1', 'C1'), dm('IG1', 'm1'), comment('IG2', 'C2'), dm('IG3', 'm3')],
+      })
+    )
+    clock.mockRestore()
+
+    const calls = mockRunAutoReply.mock.calls.map(([input]) => input)
+    expect(calls.map((input) => input.accountId)).toEqual(['IG1', 'IG2', 'IG3'])
+    expect(
+      calls.map((input) =>
+        input.sources.map((source: { comment: { commentId: string } }) => source.comment.commentId)
+      )
+    ).toEqual([['C1'], ['C2'], []])
+    expect(calls.every((input) => input.limiter === calls[0].limiter)).toBe(true)
+    expect(calls[0].deadlineAt).toBe(5_000_000 + INSTAGRAM_DISPATCH_DEADLINE_MS)
+  })
+
+  it('removes consumed comments, keeps unmatched and handed-off ones, and leaves DMs', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1')])
+    mockRunAutoReply.mockResolvedValue(engineResult(['C1']))
+
+    const response = await POST(
+      signedPost({
+        object: 'instagram',
+        entry: [comment('IG1', 'C1'), comment('IG1', 'C2', 'fan-2'), dm('IG1', 'm1')],
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(dispatchedCommentIds()).toEqual({ 'wh-a1': ['C2'] })
+    const [, , body] = mockDispatch.mock.calls[0]
+    expect(JSON.stringify(body)).toContain('"mid":"m1"')
+    expect(JSON.stringify(body)).not.toContain('"C1"')
+  })
+
+  it('skips dispatch for an account whose events the engine consumed entirely', async () => {
+    mockFindWebhooksByRoutingKey.mockImplementation(async (accountId: string) => [
+      target(`wh-${accountId}`, accountId),
+    ])
+    mockRunAutoReply.mockImplementation(async ({ accountId }: { accountId: string }) =>
+      accountId === 'IG1' ? engineResult(['C1']) : engineResult()
+    )
+
+    const response = await POST(
+      signedPost({ object: 'instagram', entry: [comment('IG1', 'C1'), comment('IG2', 'C2')] })
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ ok: true, routed: 1 })
+    expect(dispatchedCommentIds()).toEqual({ 'wh-IG2': ['C2'] })
+  })
+
+  it('runs the engine even for an account without any workflow webhook', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([])
+    mockRunAutoReply.mockResolvedValue(engineResult(['C1']))
+
+    const response = await POST(signedPost({ object: 'instagram', entry: [comment('IG1', 'C1')] }))
+
+    expect(response.status).toBe(200)
+    expect(mockRunAutoReply).toHaveBeenCalledTimes(1)
+    expect(mockDispatch).not.toHaveBeenCalled()
+  })
+
+  it('asks Meta to retry a transient engine failure but still dispatches the rest', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-a1', 'IG1')])
+    mockRunAutoReply.mockResolvedValue(engineResult(['C1'], { retryableFailures: 1 }))
+
+    const response = await POST(
+      signedPost({ object: 'instagram', entry: [comment('IG1', 'C1'), dm('IG1', 'm1')] })
+    )
+
+    expect(response.status).toBe(500)
+    expect(mockDispatch).toHaveBeenCalledTimes(1)
+    expect(dispatchedCommentIds()).toEqual({ 'wh-a1': [] })
+  })
+
+  it('does not dispatch an account the engine could not process, and keeps the others', async () => {
+    mockFindWebhooksByRoutingKey.mockImplementation(async (accountId: string) => [
+      target(`wh-${accountId}`, accountId),
+    ])
+    mockRunAutoReply.mockImplementation(async ({ accountId }: { accountId: string }) =>
+      accountId === 'IG1' ? engineResult([], { accountError: 'db down' }) : engineResult()
+    )
+
+    const response = await POST(
+      signedPost({ object: 'instagram', entry: [comment('IG1', 'C1'), dm('IG2', 'm2')] })
+    )
+
+    expect(response.status).toBe(500)
+    expect(dispatchedEntryAccounts()).toEqual({ 'wh-IG2': ['IG2'] })
   })
 })

@@ -77,14 +77,37 @@ interface InstagramGraphErrorBody {
     code?: number
     error_subcode?: number
     fbtrace_id?: string
+    is_transient?: boolean
   }
 }
 
-export async function readGraphError(response: Response): Promise<string> {
+/** A Graph error response read into its message and the codes callers branch on. */
+export interface InstagramGraphErrorDetails {
+  /** The Graph message with its type, code, subcode, and trace appended, or the raw body. */
+  message: string
+  code: number | null
+  subcode: number | null
+  /** Graph's own `is_transient` hint; false when absent. */
+  isTransient: boolean
+}
+
+/**
+ * Reads a failed Graph response into its message and error codes. The body is read with a size
+ * cap; a body that is not a Graph error envelope becomes the message as-is.
+ */
+export async function readGraphErrorDetails(
+  response: Response
+): Promise<InstagramGraphErrorDetails> {
   const text = await readResponseTextWithLimit(response, {
     maxBytes: DEFAULT_MAX_ERROR_BODY_BYTES,
     label: 'Instagram Graph error response',
   }).catch(() => '')
+  const fallback: InstagramGraphErrorDetails = {
+    message: text || response.statusText,
+    code: null,
+    subcode: null,
+    isTransient: false,
+  }
 
   try {
     const graphError = (JSON.parse(text) as InstagramGraphErrorBody).error
@@ -96,15 +119,25 @@ export async function readGraphError(response: Response): Promise<string> {
         graphError.fbtrace_id ? `trace ${graphError.fbtrace_id}` : null,
       ].filter((value): value is string => value !== null)
 
-      return diagnostics.length > 0
-        ? `${graphError.message} (${diagnostics.join(', ')})`
-        : graphError.message
+      return {
+        message:
+          diagnostics.length > 0
+            ? `${graphError.message} (${diagnostics.join(', ')})`
+            : graphError.message,
+        code: typeof graphError.code === 'number' ? graphError.code : null,
+        subcode: typeof graphError.error_subcode === 'number' ? graphError.error_subcode : null,
+        isTransient: graphError.is_transient === true,
+      }
     }
   } catch {
-    return text || response.statusText
+    return fallback
   }
 
-  return text || response.statusText
+  return fallback
+}
+
+export async function readGraphError(response: Response): Promise<string> {
+  return (await readGraphErrorDetails(response)).message
 }
 
 /**

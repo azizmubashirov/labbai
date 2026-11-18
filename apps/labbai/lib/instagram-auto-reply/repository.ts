@@ -574,6 +574,27 @@ export async function setNextMediaId(ruleId: string, mediaId: string): Promise<b
   return rows.length > 0
 }
 
+/**
+ * The outcome of the event that already claimed a source, for a redelivery whose claim and
+ * failed-retry both found the row taken. Null when no event claimed the source.
+ */
+export async function getEventOutcomeBySource(
+  igAccountId: string,
+  sourceId: string
+): Promise<InstagramAutoReplyEventOutcome | null> {
+  const [row] = await db
+    .select({ outcome: instagramAutoReplyEvent.outcome })
+    .from(instagramAutoReplyEvent)
+    .where(
+      and(
+        eq(instagramAutoReplyEvent.igAccountId, igAccountId),
+        eq(instagramAutoReplyEvent.sourceId, sourceId)
+      )
+    )
+    .limit(1)
+  return row?.outcome ?? null
+}
+
 /** Loads one event by id, with its DM snapshot. Null when it does not exist. */
 export async function getEventById(eventId: string): Promise<InstagramAutoReplyEventRecord | null> {
   const [row] = await db

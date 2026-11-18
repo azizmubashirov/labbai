@@ -55,6 +55,7 @@ import {
   getInstagramComments,
   instagramHandler,
   partitionInstagramDelivery,
+  removeInstagramComments,
   scopeInstagramDelivery,
   splitInstagramDeliveryByAccount,
 } from '@/lib/webhooks/providers/instagram'
@@ -286,6 +287,64 @@ describe('Instagram idempotency', () => {
         entry: [{ id: 'IG1', changes: [commentChange('R1', 'IG1')] }],
       })
     ).toBeNull()
+  })
+})
+
+describe('removeInstagramComments', () => {
+  const dmEvent = {
+    sender: { id: 'U1' },
+    recipient: { id: 'IG1' },
+    message: { mid: 'm1', text: 'Salom' },
+  }
+
+  it('drops only the listed comments and keeps DMs and other comments', () => {
+    const stripped = removeInstagramComments(
+      {
+        object: 'instagram',
+        entry: [
+          {
+            id: 'IG1',
+            changes: [commentChange('C1', 'U1'), commentChange('C2', 'U2')],
+            messaging: [dmEvent],
+          },
+          { id: 'IG1', field: 'comments', value: commentChange('C3', 'U3').value },
+        ],
+      },
+      new Set(['C1', 'C3'])
+    )
+    expect(stripped).not.toBeNull()
+    expect(getInstagramComments(stripped).map((comment) => comment.commentId)).toEqual(['C2'])
+    expect(stripped?.object).toBe('instagram')
+    expect(stripped?.entry).toEqual([
+      { id: 'IG1', changes: [commentChange('C2', 'U2')], messaging: [dmEvent] },
+    ])
+  })
+
+  it('keeps an entry whose only remaining events are DMs', () => {
+    const stripped = removeInstagramComments(
+      { entry: [{ id: 'IG1', changes: [commentChange('C1', 'U1')], messaging: [dmEvent] }] },
+      new Set(['C1'])
+    )
+    expect(stripped?.entry).toEqual([{ id: 'IG1', messaging: [dmEvent] }])
+  })
+
+  it('returns null when every event was consumed', () => {
+    expect(
+      removeInstagramComments(
+        {
+          entry: [
+            { id: 'IG1', changes: [commentChange('C1', 'U1')] },
+            { id: 'IG1', field: 'comments', value: { comment_id: 'C2', from: { id: 'U2' } } },
+          ],
+        },
+        new Set(['C1', 'C2'])
+      )
+    ).toBeNull()
+  })
+
+  it('returns the body unchanged when nothing was consumed', () => {
+    const original = { entry: [{ id: 'IG1', changes: [commentChange('C1', 'U1')] }] }
+    expect(removeInstagramComments(original, new Set())).toBe(original)
   })
 })
 

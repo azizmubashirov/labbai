@@ -9,19 +9,23 @@ import {
 import { parseRequest } from '@/lib/api/server'
 import { admissionRejectedResponse, tryAdmit } from '@/lib/core/admission/gate'
 import { env } from '@/lib/core/config/env'
-import { mapWithConcurrency } from '@/lib/core/utils/concurrency'
+import { createConcurrencyLimiter, mapWithConcurrency } from '@/lib/core/utils/concurrency'
 import { generateRequestId } from '@/lib/core/utils/request'
 import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
+import { INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY } from '@/lib/instagram-auto-reply/constants'
+import { runInstagramAutoReply } from '@/lib/instagram-auto-reply/engine'
 import {
   dispatchResolvedWebhookTarget,
   findWebhooksByRoutingKey,
   readWebhookRawBody,
 } from '@/lib/webhooks/processor'
 import {
+  getInstagramComments,
   getInstagramWebhookAppSecrets,
   type InstagramAccountDelivery,
   isValidInstagramSignature,
   partitionInstagramDelivery,
+  removeInstagramComments,
 } from '@/lib/webhooks/providers/instagram'
 
 const logger = createLogger('InstagramWebhookIngress')
@@ -98,6 +102,11 @@ export const GET = withRouteHandler(async (request: NextRequest) => {
  * Every connected account's Instagram events arrive here. The delivery is authenticated once
  * with the app secret, split by `entry.id`, and each part is dispatched only to the webhooks
  * whose `routingKey` is that account, through the same lifecycle as the per-path route.
+ *
+ * Before dispatch, each account's comments go through the auto-reply engine
+ * (`runInstagramAutoReply`). Comments it answers, skips, or fails after claiming are removed from
+ * the body the account's workflows receive; unmatched and handed-off comments stay, and DMs are
+ * never touched. Only this ingress runs the engine; the legacy per-path route does not.
  */
 export const POST = withRouteHandler(async (request: NextRequest) => {
   const ticket = tryAdmit()
@@ -171,35 +180,86 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
 
   let failed = 0
 
+  /** One limiter for the whole delivery, so every account's auto-replies share its send cap. */
+  const autoReplyLimiter = createConcurrencyLimiter(INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY)
+  const deadlineAt = receivedAt + INSTAGRAM_DISPATCH_DEADLINE_MS
+
   const lookups = await mapWithConcurrency(
     accounts.slice(0, INSTAGRAM_MAX_ACCOUNTS_PER_DELIVERY),
     INSTAGRAM_DELIVERY_CONCURRENCY,
     async (delivery) => {
-      try {
-        const targets = await findWebhooksByRoutingKey(delivery.accountId, requestId, 'instagram')
-        return { delivery, targets }
-      } catch (error) {
-        logger.error(`[${requestId}] Instagram webhook lookup failed for an account`, {
-          error: getErrorMessage(error),
-        })
-        return { delivery, targets: null }
-      }
+      const [autoReply, targets] = await Promise.all([
+        runInstagramAutoReply({
+          accountId: delivery.accountId,
+          sources: getInstagramComments(delivery.body).map((comment) => ({
+            kind: 'comment' as const,
+            comment,
+          })),
+          requestId,
+          deadlineAt,
+          limiter: autoReplyLimiter,
+        }),
+        findWebhooksByRoutingKey(delivery.accountId, requestId, 'instagram').catch(
+          (error: unknown) => {
+            logger.error(`[${requestId}] Instagram webhook lookup failed for an account`, {
+              error: getErrorMessage(error),
+            })
+            return null
+          }
+        ),
+      ])
+      return { delivery, targets, autoReply }
     }
   )
 
+  let autoReplied = 0
   const jobs: DispatchJob[] = []
-  for (const { delivery, targets } of lookups) {
+  for (const { delivery, targets, autoReply } of lookups) {
+    /**
+     * Auto-reply and the HTTP status. A comment the engine claimed but could not answer for a
+     * transient reason (Graph 5xx, timeout, rate limit, a failed claim write) asks Meta to
+     * redeliver, the same as a failed dispatch: the redelivery re-opens only `failed` events
+     * (`retryFailedEvent`), every other claimed comment is a no-op through its unique claim,
+     * and the stripped body comes out the same, so each webhook's idempotency key deduplicates
+     * its dispatch. Permanent failures (no token, a comment Meta refuses) are stored as `failed`
+     * without a retry, because Meta would retry them for 36 hours to the same end.
+     *
+     * When the engine could not process an account at all (its rules were unreadable, or the
+     * deadline passed mid-way), it is unknown which comments the engine owns. Dispatching then
+     * could let an agent answer a comment that the redelivery's engine run answers too, so the
+     * account is not dispatched and the delivery is retried as a whole.
+     */
+    if (autoReply.accountError) {
+      logger.warn(`[${requestId}] Instagram auto-reply could not process an account, retrying`, {
+        error: autoReply.accountError,
+      })
+      failed++
+      continue
+    }
+    if (autoReply.retryableFailures > 0) failed++
+    autoReplied += autoReply.consumedSourceIds.size
+
     if (targets === null) {
       failed++
       continue
     }
+    const body = removeInstagramComments(delivery.body, autoReply.consumedSourceIds)
+    if (!body) {
+      logger.info(`[${requestId}] Auto-reply consumed every event of an account, not dispatching`)
+      continue
+    }
     if (targets.length === 0) {
       logger.info(`[${requestId}] No Instagram webhook for an account in the delivery, dropping`, {
-        entries: Array.isArray(delivery.body.entry) ? delivery.body.entry.length : 0,
+        entries: Array.isArray(body.entry) ? body.entry.length : 0,
       })
       continue
     }
-    for (const target of targets) jobs.push({ delivery, target })
+    for (const target of targets) {
+      jobs.push({ delivery: { accountId: delivery.accountId, body }, target })
+    }
+  }
+  if (autoReplied > 0) {
+    logger.info(`[${requestId}] Instagram auto-reply consumed comments`, { autoReplied })
   }
   if (jobs.length > INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY) {
     logger.error(`[${requestId}] Instagram delivery exceeds the per-delivery dispatch bound`, {
