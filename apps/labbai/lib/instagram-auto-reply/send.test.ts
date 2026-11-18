@@ -4,7 +4,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildTextFallback,
+  getUserFollowsBusiness,
+  isTemplateRejected,
   listRecentMedia,
+  sendLinkMessage,
+  sendPostbackPrompt,
   sendPrivateReply,
   sendPublicReply,
 } from '@/lib/instagram-auto-reply/send'
@@ -182,5 +186,114 @@ describe('listRecentMedia', () => {
     expect(url.pathname).toMatch(/\/IG1\/media$/)
     expect(url.searchParams.get('fields')).toBe('id,timestamp')
     expect(mockFetch.mock.calls[0][1].method).toBe('GET')
+  })
+})
+
+describe('sendLinkMessage', () => {
+  it('messages a user by id inside the window', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ recipient_id: 'U1', message_id: 'mid-1' }))
+
+    const result = await sendLinkMessage('t', 'IG1', { userId: 'U1' }, { text: 'Hi', buttons: [] })
+
+    expect(result).toEqual({ ok: true, data: { messageId: 'mid-1', usedTextFallback: false } })
+    expect(sentBody(0)).toEqual({ recipient: { id: 'U1' }, message: { text: 'Hi' } })
+  })
+})
+
+describe('sendPostbackPrompt', () => {
+  const prompt = {
+    text: 'Tap to get the link',
+    buttonTitle: 'Send me the link please',
+    payload: 'iar:ev-1:open',
+  }
+
+  it('sends a button template with one postback button, title cut to 20 characters', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ message_id: 'mid-1' }))
+
+    const result = await sendPostbackPrompt('t', 'IG1', { commentId: 'C1' }, prompt)
+
+    expect(result).toEqual({ ok: true, data: { messageId: 'mid-1', usedQuickReply: false } })
+    expect(sentBody(0)).toEqual({
+      recipient: { comment_id: 'C1' },
+      message: {
+        attachment: {
+          type: 'template',
+          payload: {
+            template_type: 'button',
+            text: 'Tap to get the link',
+            buttons: [
+              { type: 'postback', title: 'Send me the link ple', payload: 'iar:ev-1:open' },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('falls back to a quick reply carrying the same payload when the template is rejected', async () => {
+    mockFetch
+      .mockResolvedValueOnce(graphError(100, 'Invalid parameter'))
+      .mockResolvedValueOnce(jsonResponse({ message_id: 'mid-2' }))
+
+    const result = await sendPostbackPrompt('t', 'IG1', { userId: 'U1' }, prompt)
+
+    expect(result).toEqual({ ok: true, data: { messageId: 'mid-2', usedQuickReply: true } })
+    expect(sentBody(1)).toEqual({
+      recipient: { id: 'U1' },
+      message: {
+        text: 'Tap to get the link',
+        quick_replies: [
+          { content_type: 'text', title: 'Send me the link ple', payload: 'iar:ev-1:open' },
+        ],
+      },
+    })
+  })
+
+  it('reports a rejection the caller can recognise when no button format is accepted', async () => {
+    mockFetch
+      .mockResolvedValueOnce(graphError(100, 'Invalid parameter'))
+      .mockResolvedValueOnce(graphError(100, 'Invalid parameter'))
+
+    const result = await sendPostbackPrompt('t', 'IG1', { commentId: 'C1' }, prompt)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(isTemplateRejected(result)).toBe(true)
+  })
+
+  it('does not retry another format on a transient failure', async () => {
+    mockFetch.mockResolvedValueOnce(graphError(2, 'Service temporarily unavailable', 503))
+
+    const result = await sendPostbackPrompt('t', 'IG1', { commentId: 'C1' }, prompt)
+
+    expect(result).toMatchObject({ ok: false, retryable: true })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getUserFollowsBusiness', () => {
+  it('reads is_user_follow_business from the user profile', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ is_user_follow_business: false, id: 'U1' }))
+
+    const result = await getUserFollowsBusiness('t', 'U1')
+
+    expect(result).toEqual({ ok: true, data: { follows: false } })
+    const url = new URL(mockFetch.mock.calls[0][0])
+    expect(url.pathname).toMatch(/\/U1$/)
+    expect(url.searchParams.get('fields')).toBe('is_user_follow_business')
+  })
+
+  it('reports an unknown status when the field is missing', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: 'U1' }))
+    await expect(getUserFollowsBusiness('t', 'U1')).resolves.toEqual({
+      ok: true,
+      data: { follows: null },
+    })
+  })
+
+  it('returns Graph’s error when consent is missing', async () => {
+    mockFetch.mockResolvedValueOnce(
+      graphError(230, 'User consent is required to access user profile')
+    )
+    await expect(getUserFollowsBusiness('t', 'U1')).resolves.toMatchObject({ ok: false })
   })
 })

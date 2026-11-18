@@ -13,19 +13,26 @@ import { createConcurrencyLimiter, mapWithConcurrency } from '@/lib/core/utils/c
 import { generateRequestId } from '@/lib/core/utils/request'
 import { withRouteHandler } from '@/lib/core/utils/with-route-handler'
 import { INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY } from '@/lib/instagram-auto-reply/constants'
-import { runInstagramAutoReply } from '@/lib/instagram-auto-reply/engine'
+import {
+  type InstagramAutoReplySource,
+  runInstagramAutoReply,
+} from '@/lib/instagram-auto-reply/engine'
 import {
   dispatchResolvedWebhookTarget,
   findWebhooksByRoutingKey,
   readWebhookRawBody,
 } from '@/lib/webhooks/processor'
 import {
+  getInstagramAutoReplyPostbacks,
   getInstagramComments,
+  getInstagramLiveComments,
+  getInstagramStoryEvents,
   getInstagramWebhookAppSecrets,
   type InstagramAccountDelivery,
   isValidInstagramSignature,
   partitionInstagramDelivery,
   removeInstagramComments,
+  removeInstagramMessages,
 } from '@/lib/webhooks/providers/instagram'
 
 const logger = createLogger('InstagramWebhookIngress')
@@ -103,10 +110,12 @@ export const GET = withRouteHandler(async (request: NextRequest) => {
  * with the app secret, split by `entry.id`, and each part is dispatched only to the webhooks
  * whose `routingKey` is that account, through the same lifecycle as the per-path route.
  *
- * Before dispatch, each account's comments go through the auto-reply engine
- * (`runInstagramAutoReply`). Comments it answers, skips, or fails after claiming are removed from
- * the body the account's workflows receive; unmatched and handed-off comments stay, and DMs are
- * never touched. Only this ingress runs the engine; the legacy per-path route does not.
+ * Before dispatch, each account's comments, live comments, story replies, story mentions, and
+ * taps on the engine's own `iar:` buttons go through the auto-reply engine
+ * (`runInstagramAutoReply`). Events it answers, skips, or fails after claiming, and every `iar:`
+ * tap, are removed from the body the account's workflows receive; unmatched and handed-off events
+ * stay, and ordinary DMs and other postbacks are never touched. Only this ingress runs the
+ * engine; the legacy per-path route does not.
  */
 export const POST = withRouteHandler(async (request: NextRequest) => {
   const ticket = tryAdmit()
@@ -125,6 +134,34 @@ interface DispatchJob {
 }
 
 type DispatchOutcome = 'queued' | 'ignored' | 'failed'
+
+/** Everything in one account's part of a delivery that the auto-reply engine may act on. */
+function autoReplySources(body: Record<string, unknown>): InstagramAutoReplySource[] {
+  return [
+    ...getInstagramComments(body).map((comment) => ({ kind: 'comment' as const, comment })),
+    ...getInstagramLiveComments(body).map((comment) => ({
+      kind: 'live_comment' as const,
+      comment,
+    })),
+    ...getInstagramStoryEvents(body).map((story) => ({ kind: 'story' as const, story })),
+    ...getInstagramAutoReplyPostbacks(body).map((postback) => ({
+      kind: 'postback' as const,
+      postback,
+    })),
+  ]
+}
+
+/**
+ * One account's body without the events the engine consumed: comments and live comments by
+ * comment id, story events and `iar:` taps by message `mid`. Null when nothing is left.
+ */
+function withoutConsumed(
+  body: Record<string, unknown>,
+  consumed: ReadonlySet<string>
+): Record<string, unknown> | null {
+  const withoutComments = removeInstagramComments(body, consumed)
+  return withoutComments ? removeInstagramMessages(withoutComments, consumed) : null
+}
 
 /**
  * Reads the JSON of a delivery whose signature has already been checked. Returns `undefined`
@@ -191,10 +228,7 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
       const [autoReply, targets] = await Promise.all([
         runInstagramAutoReply({
           accountId: delivery.accountId,
-          sources: getInstagramComments(delivery.body).map((comment) => ({
-            kind: 'comment' as const,
-            comment,
-          })),
+          sources: autoReplySources(delivery.body),
           requestId,
           deadlineAt,
           limiter: autoReplyLimiter,
@@ -243,7 +277,7 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
       failed++
       continue
     }
-    const body = removeInstagramComments(delivery.body, autoReply.consumedSourceIds)
+    const body = withoutConsumed(delivery.body, autoReply.consumedSourceIds)
     if (!body) {
       logger.info(`[${requestId}] Auto-reply consumed every event of an account, not dispatching`)
       continue
@@ -259,7 +293,7 @@ async function handleDelivery(request: NextRequest): Promise<NextResponse> {
     }
   }
   if (autoReplied > 0) {
-    logger.info(`[${requestId}] Instagram auto-reply consumed comments`, { autoReplied })
+    logger.info(`[${requestId}] Instagram auto-reply consumed events`, { autoReplied })
   }
   if (jobs.length > INSTAGRAM_MAX_DISPATCHES_PER_DELIVERY) {
     logger.error(`[${requestId}] Instagram delivery exceeds the per-delivery dispatch bound`, {

@@ -96,3 +96,18 @@ export const INSTAGRAM_AUTO_REPLY_PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1
 export const INSTAGRAM_AUTO_REPLY_SEND_CONCURRENCY = 5
 /** Public path of the tracked DM link redirect; the event id and button index follow it. */
 export const INSTAGRAM_AUTO_REPLY_REDIRECT_PATH = '/api/instagram/r'
+/**
+ * Inside Meta's 24-hour messaging window a story reply or mention can be answered by DM. Past it
+ * (a Meta redelivery can arrive up to 36 hours late) the event is `expired`.
+ */
+export const INSTAGRAM_AUTO_REPLY_MESSAGING_WINDOW_MS = 24 * 60 * 60 * 1000
+/** A story mention is answered at most once per user in this period. */
+export const INSTAGRAM_AUTO_REPLY_MENTION_COOLDOWN_MS = 24 * 60 * 60 * 1000
+/** Prefix of every postback and quick-reply payload the engine sends and owns. */
+export const INSTAGRAM_AUTO_REPLY_PAYLOAD_PREFIX = 'iar:'
+/** Meta's limit on a postback button or quick-reply title. */
+export const INSTAGRAM_AUTO_REPLY_PROMPT_TITLE_MAX_LENGTH = 20
+/** Public path of the Meta data deletion status page; `?code=` carries the confirmation code. */
+export const INSTAGRAM_DATA_DELETION_STATUS_PATH = '/instagram/data-deletion'
+/** Public path of the data deletion instructions page linked from the Meta app settings. */
+export const INSTAGRAM_DATA_DELETION_INSTRUCTIONS_PATH = '/instagram/data-deletion/instructions'

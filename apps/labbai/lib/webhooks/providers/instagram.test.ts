@@ -52,10 +52,14 @@ vi.mock('@/executor/utils/reference-validation', () => ({
 }))
 
 import {
+  getInstagramAutoReplyPostbacks,
   getInstagramComments,
+  getInstagramLiveComments,
+  getInstagramStoryEvents,
   instagramHandler,
   partitionInstagramDelivery,
   removeInstagramComments,
+  removeInstagramMessages,
   scopeInstagramDelivery,
   splitInstagramDeliveryByAccount,
 } from '@/lib/webhooks/providers/instagram'
@@ -346,6 +350,202 @@ describe('removeInstagramComments', () => {
     const original = { entry: [{ id: 'IG1', changes: [commentChange('C1', 'U1')] }] }
     expect(removeInstagramComments(original, new Set())).toBe(original)
   })
+
+  it('drops consumed live comments too', () => {
+    const live = { field: 'live_comments', value: { comment_id: 'LC1', from: { id: 'U1' } } }
+    const stripped = removeInstagramComments(
+      { entry: [{ id: 'IG1', changes: [live, commentChange('C1', 'U1')] }] },
+      new Set(['LC1'])
+    )
+    expect(stripped?.entry).toEqual([{ id: 'IG1', changes: [commentChange('C1', 'U1')] }])
+  })
+})
+
+describe('getInstagramLiveComments', () => {
+  it('reads live comments by comment_id and skips the account’s own', () => {
+    const delivery = {
+      entry: [
+        {
+          id: 'IG1',
+          time: 1_790_000_000,
+          changes: [
+            {
+              field: 'live_comments',
+              value: {
+                comment_id: 'LC1',
+                text: 'narx?',
+                from: { id: 'U1', username: 'fan' },
+                media: { id: 'LIVE1', media_product_type: 'LIVE' },
+              },
+            },
+            { field: 'live_comments', value: { comment_id: 'LC2', from: { id: 'IG1' } } },
+            commentChange('C1', 'U2'),
+          ],
+        },
+      ],
+    }
+    const live = getInstagramLiveComments(delivery)
+    expect(live.map((comment) => [comment.commentId, comment.mediaId, comment.fromId])).toEqual([
+      ['LC1', 'LIVE1', 'U1'],
+    ])
+    expect(getInstagramComments(delivery).map((comment) => comment.commentId)).toEqual(['C1'])
+  })
+})
+
+/** One `messaging` event from a customer to IG1. */
+function messaging(message: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  return {
+    sender: { id: 'U1' },
+    recipient: { id: 'IG1' },
+    timestamp: 1_790_000_000_000,
+    message,
+    ...extra,
+  }
+}
+
+describe('getInstagramStoryEvents', () => {
+  it('reads story replies and mentions and ignores plain DMs and echoes', () => {
+    const delivery = {
+      entry: [
+        {
+          id: 'IG1',
+          messaging: [
+            messaging({
+              mid: 'm-reply',
+              text: 'Narx?',
+              reply_to: { story: { id: 'S1', url: 'https://cdn.example.com/s1' } },
+            }),
+            messaging({
+              mid: 'm-mention',
+              attachments: [
+                { type: 'story_mention', payload: { url: 'https://cdn.example.com/s2' } },
+              ],
+            }),
+            messaging({ mid: 'm-dm', text: 'Salom' }),
+            messaging({ mid: 'm-reply-to-dm', text: 'ok', reply_to: { mid: 'm-dm' } }),
+            messaging(
+              { mid: 'm-echo', is_echo: true, reply_to: { story: { id: 'S1' } } },
+              { sender: { id: 'IG1' } }
+            ),
+          ],
+        },
+      ],
+    }
+    expect(getInstagramStoryEvents(delivery)).toEqual([
+      {
+        kind: 'story_reply',
+        messageId: 'm-reply',
+        accountId: 'IG1',
+        senderId: 'U1',
+        text: 'Narx?',
+        storyId: 'S1',
+        storyUrl: 'https://cdn.example.com/s1',
+        timestamp: 1_790_000_000_000,
+      },
+      {
+        kind: 'story_mention',
+        messageId: 'm-mention',
+        accountId: 'IG1',
+        senderId: 'U1',
+        text: null,
+        storyId: null,
+        storyUrl: 'https://cdn.example.com/s2',
+        timestamp: 1_790_000_000_000,
+      },
+    ])
+  })
+})
+
+describe('getInstagramAutoReplyPostbacks', () => {
+  it('reads iar: postbacks and quick replies and leaves every other tap alone', () => {
+    const delivery = {
+      entry: [
+        {
+          id: 'IG1',
+          messaging: [
+            {
+              sender: { id: 'U1' },
+              recipient: { id: 'IG1' },
+              timestamp: 1,
+              postback: { mid: 'p-1', title: 'Send it', payload: 'iar:ev-1:open' },
+            },
+            {
+              sender: { id: 'U1' },
+              recipient: { id: 'IG1' },
+              postback: { mid: 'p-2', title: 'Menu', payload: 'MENU_MAIN' },
+            },
+            messaging({
+              mid: 'q-1',
+              text: 'I followed',
+              quick_reply: { payload: 'iar:ev-1:followed' },
+            }),
+            messaging({ mid: 'q-2', text: 'Yes', quick_reply: { payload: 'YES' } }),
+          ],
+        },
+      ],
+    }
+    expect(getInstagramAutoReplyPostbacks(delivery)).toEqual([
+      {
+        messageId: 'p-1',
+        accountId: 'IG1',
+        senderId: 'U1',
+        payload: 'iar:ev-1:open',
+        source: 'postback',
+        timestamp: 1,
+      },
+      {
+        messageId: 'q-1',
+        accountId: 'IG1',
+        senderId: 'U1',
+        payload: 'iar:ev-1:followed',
+        source: 'quick_reply',
+        timestamp: 1_790_000_000_000,
+      },
+    ])
+  })
+})
+
+describe('removeInstagramMessages', () => {
+  const tap = {
+    sender: { id: 'U1' },
+    recipient: { id: 'IG1' },
+    postback: { mid: 'p-1', payload: 'iar:ev-1:open' },
+  }
+  const otherTap = {
+    sender: { id: 'U1' },
+    recipient: { id: 'IG1' },
+    postback: { mid: 'p-2', payload: 'MENU_MAIN' },
+  }
+  const storyReply = messaging({ mid: 'm-story', reply_to: { story: { id: 'S1' } } })
+  const dm = messaging({ mid: 'm-dm', text: 'Salom' })
+
+  it('drops consumed postbacks and story events and keeps DMs, other taps and comments', () => {
+    const stripped = removeInstagramMessages(
+      {
+        object: 'instagram',
+        entry: [
+          { id: 'IG1', messaging: [tap, storyReply, dm, otherTap] },
+          { id: 'IG1', changes: [commentChange('C1', 'U2')] },
+        ],
+      },
+      new Set(['p-1', 'm-story'])
+    )
+    expect(stripped).toEqual({
+      object: 'instagram',
+      entry: [
+        { id: 'IG1', messaging: [dm, otherTap] },
+        { id: 'IG1', changes: [commentChange('C1', 'U2')] },
+      ],
+    })
+  })
+
+  it('returns null when every event was consumed, and the body itself when none was', () => {
+    expect(
+      removeInstagramMessages({ entry: [{ id: 'IG1', messaging: [tap] }] }, new Set(['p-1']))
+    ).toBeNull()
+    const original = { entry: [{ id: 'IG1', messaging: [tap] }] }
+    expect(removeInstagramMessages(original, new Set())).toBe(original)
+  })
 })
 
 describe('Instagram per-account scoping', () => {
@@ -546,7 +746,7 @@ describe('Instagram deployment', () => {
     ).rejects.toThrow('could not be read')
   })
 
-  it('subscribes the account to messages and comments on deploy', async () => {
+  it('subscribes the account to messages, postbacks, comments and live comments on deploy', async () => {
     mockGetCredentialOwner.mockResolvedValueOnce({ userId: 'user-1', accountId: 'acct-row-1' })
     mockRefreshAccessTokenIfNeeded.mockResolvedValueOnce('token-1')
     const fetchMock = vi
@@ -563,7 +763,7 @@ describe('Instagram deployment', () => {
 
     const [url, init] = fetchMock.mock.calls[0]
     expect(String(url)).toBe(
-      'https://graph.instagram.com/v25.0/me/subscribed_apps?subscribed_fields=messages%2Ccomments'
+      'https://graph.instagram.com/v25.0/me/subscribed_apps?subscribed_fields=messages%2Cmessaging_postbacks%2Ccomments%2Clive_comments'
     )
     expect(init).toMatchObject({ method: 'POST', headers: { Authorization: 'Bearer token-1' } })
     fetchMock.mockRestore()

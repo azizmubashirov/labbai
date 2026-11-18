@@ -480,3 +480,116 @@ describe('POST /api/webhooks/instagram — auto-reply engine', () => {
     expect(dispatchedEntryAccounts()).toEqual({ 'wh-IG2': ['IG2'] })
   })
 })
+
+describe('POST /api/webhooks/instagram — stories, live comments and postbacks', () => {
+  /** IG1 entry with a story reply, a mention, two taps (one ours), and a normal DM. */
+  const messagingEntry = {
+    id: 'IG1',
+    time: 1_790_000_000,
+    messaging: [
+      {
+        sender: { id: 'fan-1' },
+        recipient: { id: 'IG1' },
+        timestamp: 1_790_000_000_000,
+        message: { mid: 'm-story', text: 'narx?', reply_to: { story: { id: 'S1', url: 'u' } } },
+      },
+      {
+        sender: { id: 'fan-2' },
+        recipient: { id: 'IG1' },
+        timestamp: 1_790_000_000_000,
+        message: { mid: 'm-mention', attachments: [{ type: 'story_mention', payload: {} }] },
+      },
+      {
+        sender: { id: 'fan-1' },
+        recipient: { id: 'IG1' },
+        timestamp: 1_790_000_000_000,
+        postback: { mid: 'p-iar', title: 'Send it', payload: 'iar:event-1:open' },
+      },
+      {
+        sender: { id: 'fan-3' },
+        recipient: { id: 'IG1' },
+        timestamp: 1_790_000_000_000,
+        postback: { mid: 'p-menu', title: 'Menu', payload: 'MENU' },
+      },
+      {
+        sender: { id: 'fan-4' },
+        recipient: { id: 'IG1' },
+        timestamp: 1_790_000_000_000,
+        message: { mid: 'm-dm', text: 'Salom' },
+      },
+    ],
+  }
+  const liveEntry = {
+    id: 'IG1',
+    time: 1_790_000_000,
+    changes: [
+      {
+        field: 'live_comments',
+        value: { comment_id: 'LC1', text: 'hi', from: { id: 'fan-5' }, media: { id: 'LIVE1' } },
+      },
+    ],
+  }
+
+  /** The `mid` of every messaging event handed to each dispatched webhook. */
+  function dispatchedMessageIds(): Record<string, string[]> {
+    const byWebhook: Record<string, string[]> = {}
+    for (const [webhook, , body] of mockDispatch.mock.calls) {
+      byWebhook[webhook.id] = (
+        body.entry as Array<{
+          messaging?: Array<{ message?: { mid: string }; postback?: { mid: string } }>
+        }>
+      )
+        .flatMap((entry) => entry.messaging ?? [])
+        .map((event) => event.message?.mid ?? event.postback?.mid ?? '')
+    }
+    return byWebhook
+  }
+
+  it('hands live comments, story events and iar: postbacks to the engine', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([])
+
+    await POST(signedPost({ object: 'instagram', entry: [liveEntry, messagingEntry] }))
+
+    const [input] = mockRunAutoReply.mock.calls[0]
+    expect(
+      input.sources.map((source: Record<string, Record<string, string>>) => [
+        source.kind,
+        source.comment?.commentId ?? source.story?.messageId ?? source.postback?.messageId,
+      ])
+    ).toEqual([
+      ['live_comment', 'LC1'],
+      ['story', 'm-story'],
+      ['story', 'm-mention'],
+      ['postback', 'p-iar'],
+    ])
+  })
+
+  it('removes consumed postbacks and story events but keeps normal DMs and other taps', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-dm', 'IG1')])
+    mockRunAutoReply.mockResolvedValue(engineResult(['p-iar', 'm-story', 'LC1']))
+
+    const response = await POST(
+      signedPost({ object: 'instagram', entry: [liveEntry, messagingEntry] })
+    )
+
+    expect(response.status).toBe(200)
+    expect(dispatchedMessageIds()).toEqual({ 'wh-dm': ['m-mention', 'p-menu', 'm-dm'] })
+    const [, , body] = mockDispatch.mock.calls[0]
+    expect(JSON.stringify(body)).not.toContain('LC1')
+  })
+
+  it('does not dispatch when the engine consumed every event of the account', async () => {
+    mockFindWebhooksByRoutingKey.mockResolvedValue([target('wh-dm', 'IG1')])
+    mockRunAutoReply.mockResolvedValue(engineResult(['p-iar']))
+
+    const response = await POST(
+      signedPost({
+        object: 'instagram',
+        entry: [{ id: 'IG1', messaging: [messagingEntry.messaging[2]] }],
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(mockDispatch).not.toHaveBeenCalled()
+  })
+})

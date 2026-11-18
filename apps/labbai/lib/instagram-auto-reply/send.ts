@@ -5,6 +5,7 @@ import { truncateAtCodePoint } from '@labbai/utils/string'
 import {
   INSTAGRAM_AUTO_REPLY_DM_TEXT_MAX_LENGTH,
   INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH,
+  INSTAGRAM_AUTO_REPLY_PROMPT_TITLE_MAX_LENGTH,
 } from '@/lib/instagram-auto-reply/constants'
 import type { InstagramAutoReplyMediaStamp } from '@/lib/instagram-auto-reply/match'
 import {
@@ -132,10 +133,22 @@ export interface InstagramPrivateReplySent {
   usedTextFallback: boolean
 }
 
-function postPrivateReply(
+/**
+ * Who a DM goes to. `commentId` is a private reply to a comment, which Meta allows once per
+ * comment within 7 days; `userId` is an ordinary message to an Instagram-scoped user id, which
+ * works only inside the 24-hour window the user opened (by messaging, or by tapping a postback or
+ * quick-reply button).
+ */
+export type InstagramMessageRecipient = { commentId: string } | { userId: string }
+
+function recipientBody(recipient: InstagramMessageRecipient): Record<string, string> {
+  return 'commentId' in recipient ? { comment_id: recipient.commentId } : { id: recipient.userId }
+}
+
+function postMessage(
   accessToken: string,
   igAccountId: string,
-  commentId: string,
+  recipient: InstagramMessageRecipient,
   message: Record<string, unknown>
 ): Promise<InstagramGraphResult<{ messageId: string }>> {
   return callGraph(
@@ -143,9 +156,9 @@ function postPrivateReply(
     {
       method: 'POST',
       headers: jsonBearerHeaders(accessToken),
-      body: JSON.stringify({ recipient: { comment_id: commentId }, message }),
+      body: JSON.stringify({ recipient: recipientBody(recipient), message }),
     },
-    'Instagram private reply',
+    'commentId' in recipient ? 'Instagram private reply' : 'Instagram message',
     (body) => {
       const messageId = idString(toRecord(body).message_id)
       return messageId ? { messageId } : null
@@ -154,12 +167,12 @@ function postPrivateReply(
 }
 
 /**
- * Whether a button-template failure means the endpoint does not take templates for private
- * replies, rather than the reply itself being refused. Meta does not document button templates on
+ * Whether a failure means the endpoint does not take this message format (a template or quick
+ * replies), rather than the message itself being refused. Meta does not document rich formats on
  * `recipient.comment_id`, so an invalid-parameter error (code 100) or any error naming the
- * template is treated as "send it as text instead".
+ * template is treated as "send it in a simpler format instead".
  */
-function isTemplateRejected(result: { error: string; code: number | null }): boolean {
+export function isTemplateRejected(result: { error: string; code: number | null }): boolean {
   return result.code === GRAPH_INVALID_PARAMETER_CODE || /template/i.test(result.error)
 }
 
@@ -177,27 +190,39 @@ export function buildTextFallback(message: InstagramPrivateReplyMessage): string
 
 /**
  * Sends the one private reply a comment allows: `POST /{ig-user-id}/messages` with
- * `recipient.comment_id`.
+ * `recipient.comment_id`. See {@link sendLinkMessage}.
+ */
+export function sendPrivateReply(
+  accessToken: string,
+  igAccountId: string,
+  commentId: string,
+  message: InstagramPrivateReplyMessage
+): Promise<InstagramGraphResult<InstagramPrivateReplySent>> {
+  return sendLinkMessage(accessToken, igAccountId, { commentId }, message)
+}
+
+/**
+ * Sends a DM with up to three link buttons: `POST /{ig-user-id}/messages`.
  *
  * A DM with buttons goes out as a button template of `web_url` buttons. If Graph rejects the
  * template (see {@link isTemplateRejected}) the same message is sent once more as plain text with
  * the links appended, which is safe because a rejected request delivered nothing. A DM without
  * buttons is plain text from the start.
  */
-export async function sendPrivateReply(
+export async function sendLinkMessage(
   accessToken: string,
   igAccountId: string,
-  commentId: string,
+  recipient: InstagramMessageRecipient,
   message: InstagramPrivateReplyMessage
 ): Promise<InstagramGraphResult<InstagramPrivateReplySent>> {
   if (message.buttons.length === 0) {
-    const result = await postPrivateReply(accessToken, igAccountId, commentId, {
+    const result = await postMessage(accessToken, igAccountId, recipient, {
       text: truncateAtCodePoint(message.text, INSTAGRAM_AUTO_REPLY_DM_TEXT_MAX_LENGTH, ''),
     })
     return result.ok ? { ok: true, data: { ...result.data, usedTextFallback: false } } : result
   }
 
-  const template = await postPrivateReply(accessToken, igAccountId, commentId, {
+  const template = await postMessage(accessToken, igAccountId, recipient, {
     attachment: {
       type: 'template',
       payload: {
@@ -218,11 +243,93 @@ export async function sendPrivateReply(
   if (template.ok) return { ok: true, data: { ...template.data, usedTextFallback: false } }
   if (!isTemplateRejected(template)) return template
 
-  const text = await postPrivateReply(accessToken, igAccountId, commentId, {
+  const text = await postMessage(accessToken, igAccountId, recipient, {
     text: buildTextFallback(message),
   })
   if (text.ok) return { ok: true, data: { ...text.data, usedTextFallback: true } }
   return { ...text, error: `${text.error} (after the button template was rejected)` }
+}
+
+/** A message with one button whose tap comes back to the engine as a postback. */
+export interface InstagramPostbackPrompt {
+  text: string
+  buttonTitle: string
+  /** An `iar:<eventId>:<action>` payload. */
+  payload: string
+}
+
+/** A sent prompt, and whether quick replies had to replace the button template. */
+export interface InstagramPostbackPromptSent {
+  messageId: string
+  usedQuickReply: boolean
+}
+
+/**
+ * Sends a prompt the user answers by tapping a button: the opening DM or the follow gate.
+ *
+ * It goes out as a button template with one `postback` button. If Graph rejects the template
+ * (see {@link isTemplateRejected}), the same text is sent once more with one quick reply carrying
+ * the same payload; both come back as `iar:` events, and both open the 24-hour messaging window.
+ * When the quick reply is rejected too, the result is that rejection, and the caller decides
+ * what to send instead ({@link isTemplateRejected} is true for it).
+ */
+export async function sendPostbackPrompt(
+  accessToken: string,
+  igAccountId: string,
+  recipient: InstagramMessageRecipient,
+  prompt: InstagramPostbackPrompt
+): Promise<InstagramGraphResult<InstagramPostbackPromptSent>> {
+  const title = truncateAtCodePoint(
+    prompt.buttonTitle.trim(),
+    INSTAGRAM_AUTO_REPLY_PROMPT_TITLE_MAX_LENGTH,
+    ''
+  )
+  const template = await postMessage(accessToken, igAccountId, recipient, {
+    attachment: {
+      type: 'template',
+      payload: {
+        template_type: 'button',
+        text: truncateAtCodePoint(
+          prompt.text,
+          INSTAGRAM_AUTO_REPLY_DM_TEXT_WITH_BUTTONS_MAX_LENGTH,
+          ''
+        ),
+        buttons: [{ type: 'postback', title, payload: prompt.payload }],
+      },
+    },
+  })
+  if (template.ok) return { ok: true, data: { ...template.data, usedQuickReply: false } }
+  if (!isTemplateRejected(template)) return template
+
+  const quickReply = await postMessage(accessToken, igAccountId, recipient, {
+    text: truncateAtCodePoint(prompt.text, INSTAGRAM_AUTO_REPLY_DM_TEXT_MAX_LENGTH, ''),
+    quick_replies: [{ content_type: 'text', title, payload: prompt.payload }],
+  })
+  if (quickReply.ok) return { ok: true, data: { ...quickReply.data, usedQuickReply: true } }
+  return { ...quickReply, error: `${quickReply.error} (after the button template was rejected)` }
+}
+
+/**
+ * Whether an Instagram user follows the account: `GET /{igsid}?fields=is_user_follow_business`
+ * (User Profile API). The field is readable only after the user consented by messaging the
+ * account or tapping one of its buttons; before that Graph answers "User consent is required".
+ *
+ * `follows` is null when the response lacks the field. Callers treat that, and a failed call, as
+ * "unknown" and skip the follow gate rather than block the user.
+ */
+export async function getUserFollowsBusiness(
+  accessToken: string,
+  userId: string
+): Promise<InstagramGraphResult<{ follows: boolean | null }>> {
+  return callGraph(
+    graphUrl(`/${encodeURIComponent(userId)}`, { fields: 'is_user_follow_business' }),
+    { method: 'GET', headers: bearerHeaders(accessToken) },
+    'Instagram user profile',
+    (body) => {
+      const value = toRecord(body).is_user_follow_business
+      return { follows: typeof value === 'boolean' ? value : null }
+    }
+  )
 }
 
 /**
