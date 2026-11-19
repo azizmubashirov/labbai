@@ -1,5 +1,4 @@
 import { InstagramIcon } from '@/components/icons'
-import { INSTAGRAM_AUTO_REPLY_ENABLED } from '@/lib/instagram-auto-reply/feature'
 import {
   INSTAGRAM_COMMENT_CONDITION,
   INSTAGRAM_COMMENT_TRIGGER_ID,
@@ -40,7 +39,12 @@ export const instagramCommentWebhookTrigger: TriggerConfig = {
       title: 'Auto-replies',
       type: 'modal',
       modalId: 'instagram-auto-reply-rules',
-      hidden: !INSTAGRAM_AUTO_REPLY_ENABLED,
+      /**
+       * Mirrors `INSTAGRAM_AUTO_REPLY_ENABLED` (off until App Review). Kept as a literal: importing
+       * the flag here changed how Turbopack merges the trigger registry and crashed the workflow
+       * page with a TDZ error, so trigger configs must not import it.
+       */
+      hidden: true,
       hideFromPreview: true,
       hideFromCopilot: true,
       mode: 'trigger',
