@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getConversation: vi.fn(),
   findConversationByChat: vi.fn(),
   updateConversation: vi.fn(),
+  clearConversation: vi.fn(),
   insertOperatorMessage: vi.fn(),
   listMessages: vi.fn(),
   getAttachments: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@labbai/audit', () => ({
   AuditAction: {
     INBOX_CONVERSATION_UPDATED: 'INBOX_CONVERSATION_UPDATED',
     INBOX_REPLY_SENT: 'INBOX_REPLY_SENT',
+    INBOX_CONVERSATION_CLEARED: 'INBOX_CONVERSATION_CLEARED',
   },
   AuditResourceType: { INBOX_CONVERSATION: 'INBOX_CONVERSATION' },
   recordAudit: mocks.recordAudit,
@@ -46,6 +48,7 @@ vi.mock('@/lib/inbox/repository', () => ({
   getInboxConversation: mocks.getConversation,
   findInboxConversationByChat: mocks.findConversationByChat,
   updateInboxConversation: mocks.updateConversation,
+  clearInboxConversation: mocks.clearConversation,
   insertOperatorMessage: mocks.insertOperatorMessage,
   listInboxMessages: mocks.listMessages,
   listInboxConversations: vi.fn(),
@@ -67,6 +70,7 @@ vi.mock('@/lib/inbox/operator-media', () => ({
 }))
 
 import {
+  clearInboxConversationOperation,
   countUnreadInboxOperation,
   getInboxConversationOperation,
   INBOX_THREAD_PAGE_SIZE,
@@ -592,5 +596,110 @@ describe('Inbox AI switch from a workflow', () => {
       })
     ).rejects.toThrow()
     expect(mocks.findConversationByChat).not.toHaveBeenCalled()
+  })
+})
+
+describe('Clearing an Inbox conversation', () => {
+  const cleared = {
+    conversation: { ...conversation, unreadCount: 0, lastMessagePreview: null },
+    deletedMessages: 12,
+    deletedMemories: 2,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.resolveContext.mockResolvedValue({
+      workspaceId: 'ws-1',
+      workspaceOrganizationId: null,
+      allowPersonalApiKeys: true,
+    })
+    mocks.resolvePermission.mockResolvedValue('write')
+    mocks.getConversation.mockResolvedValue(conversation)
+    mocks.clearConversation.mockResolvedValue(cleared)
+  })
+
+  it('clears the conversation by its canonical workspace and chat, then audits and notifies', async () => {
+    const result = await clearInboxConversationOperation.execute({
+      principal,
+      input: { workspaceId: 'ws-1', conversationId: 'conv-1' },
+    })
+
+    expect(mocks.getConversation).toHaveBeenCalledWith('ws-1', 'conv-1')
+    expect(mocks.clearConversation).toHaveBeenCalledWith({
+      workspaceId: 'ws-1',
+      conversationId: 'conv-1',
+      externalChatId: '555',
+    })
+    expect(result).toEqual(cleared)
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'INBOX_CONVERSATION_CLEARED',
+        resourceId: 'conv-1',
+        resourceName: 'Aziz',
+        metadata: expect.objectContaining({ deletedMessages: 12, deletedMemories: 2 }),
+      })
+    )
+    expect(mocks.notifyInbox).toHaveBeenCalledWith('ws-1')
+  })
+
+  it('rejects a read-only member before touching the conversation', async () => {
+    mocks.resolvePermission.mockResolvedValue('read')
+    await expect(
+      clearInboxConversationOperation.execute({
+        principal,
+        input: { workspaceId: 'ws-1', conversationId: 'conv-1' },
+      })
+    ).rejects.toThrow()
+    expect(mocks.getConversation).not.toHaveBeenCalled()
+    expect(mocks.clearConversation).not.toHaveBeenCalled()
+    expect(mocks.recordAudit).not.toHaveBeenCalled()
+  })
+
+  it('is not reachable by a workflow run', async () => {
+    await expect(
+      clearInboxConversationOperation.execute({
+        principal: WORKFLOW_PRINCIPAL as never,
+        input: { workspaceId: 'ws-1', conversationId: 'conv-1' },
+      })
+    ).rejects.toThrow()
+    expect(mocks.resolveContext).not.toHaveBeenCalled()
+    expect(mocks.clearConversation).not.toHaveBeenCalled()
+  })
+
+  it('reports a conversation outside the workspace as not found without clearing anything', async () => {
+    mocks.getConversation.mockResolvedValue(null)
+    await expect(
+      clearInboxConversationOperation.execute({
+        principal,
+        input: { workspaceId: 'ws-1', conversationId: 'other-ws-conv' },
+      })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(mocks.clearConversation).not.toHaveBeenCalled()
+    expect(mocks.recordAudit).not.toHaveBeenCalled()
+    expect(mocks.notifyInbox).not.toHaveBeenCalled()
+  })
+
+  it('reports a conversation deleted mid-request as not found', async () => {
+    mocks.clearConversation.mockResolvedValue(null)
+    await expect(
+      clearInboxConversationOperation.execute({
+        principal,
+        input: { workspaceId: 'ws-1', conversationId: 'conv-1' },
+      })
+    ).rejects.toMatchObject({ code: 'not_found' })
+    expect(mocks.recordAudit).not.toHaveBeenCalled()
+    expect(mocks.notifyInbox).not.toHaveBeenCalled()
+  })
+
+  it('propagates a failed transaction without audit or notification', async () => {
+    mocks.clearConversation.mockRejectedValue(new Error('connection reset'))
+    await expect(
+      clearInboxConversationOperation.execute({
+        principal,
+        input: { workspaceId: 'ws-1', conversationId: 'conv-1' },
+      })
+    ).rejects.toThrow('connection reset')
+    expect(mocks.recordAudit).not.toHaveBeenCalled()
+    expect(mocks.notifyInbox).not.toHaveBeenCalled()
   })
 })

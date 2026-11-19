@@ -166,6 +166,31 @@ export const updateInboxConversationContract = defineRouteContract({
   },
 })
 
+export const clearInboxConversationResponseSchema = z.object({
+  success: z.literal(true),
+  conversation: inboxConversationSchema,
+  /** Inbox messages removed from the conversation's history. */
+  deletedMessages: z.number().int().min(0),
+  /** Agent memory records of this chat removed from the workspace. */
+  deletedMemories: z.number().int().min(0),
+})
+
+export type ClearInboxConversationResponse = z.output<typeof clearInboxConversationResponseSchema>
+
+/**
+ * Clears a conversation: deletes its Inbox history and the agent's memory of the chat, and
+ * resets unread and AI pause. The customer's own chat on the channel is not touched.
+ */
+export const clearInboxConversationContract = defineRouteContract({
+  method: 'POST',
+  path: '/api/workspaces/[id]/inbox/conversations/[conversationId]/clear',
+  params: inboxConversationParamsSchema,
+  response: {
+    mode: 'json',
+    schema: clearInboxConversationResponseSchema,
+  },
+})
+
 /** Base64 length of the largest file an operator can send. */
 export const INBOX_OPERATOR_FILE_MAX_BASE64_LENGTH =
   Math.ceil(INBOX_OPERATOR_FILE_MAX_BYTES / 3) * 4

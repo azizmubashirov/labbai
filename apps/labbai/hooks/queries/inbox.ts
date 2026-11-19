@@ -8,6 +8,8 @@ import {
 } from '@tanstack/react-query'
 import { requestJson } from '@/lib/api/client/request'
 import {
+  type ClearInboxConversationResponse,
+  clearInboxConversationContract,
   getInboxConversationContract,
   getInboxUnreadCountContract,
   type InboxChannel,
@@ -190,6 +192,31 @@ export function useReplyToInboxConversation(workspaceId: string) {
       requestJson(replyToInboxConversationContract, {
         params: { id: workspaceId, conversationId },
         body: attachment ? { text, attachment } : { text },
+      }),
+    onSettled: (_data, _error, variables) => {
+      queryClient.invalidateQueries({ queryKey: inboxKeys.workspaceLists(workspaceId) })
+      queryClient.invalidateQueries({ queryKey: inboxKeys.unread(workspaceId) })
+      queryClient.invalidateQueries({
+        queryKey: inboxKeys.thread(workspaceId, variables.conversationId),
+      })
+    },
+  })
+}
+
+/**
+ * Clears a conversation's Inbox history and the agent's memory of the chat. The open thread
+ * empties and the list row loses its preview and unread badge.
+ */
+export function useClearInboxConversation(workspaceId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      conversationId,
+    }: {
+      conversationId: string
+    }): Promise<ClearInboxConversationResponse> =>
+      requestJson(clearInboxConversationContract, {
+        params: { id: workspaceId, conversationId },
       }),
     onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: inboxKeys.workspaceLists(workspaceId) })

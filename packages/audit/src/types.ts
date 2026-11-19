@@ -187,6 +187,7 @@ export const AuditAction = {
   // Inbox
   INBOX_CONVERSATION_UPDATED: 'inbox_conversation.updated',
   INBOX_REPLY_SENT: 'inbox_conversation.reply_sent',
+  INBOX_CONVERSATION_CLEARED: 'inbox_conversation.cleared',
 
   // Instagram auto-reply
   INSTAGRAM_AUTO_REPLY_RULE_CREATED: 'instagram_auto_reply_rule.created',

@@ -51,6 +51,14 @@ export const inboxOperations = {
     ...INBOX_PRINCIPALS,
   }),
   // permission-group-exempt: the Inbox is not a governed permission-group surface yet; workspace roles gate it
+  clearConversation: defineWorkspaceOperation({
+    id: 'inbox.conversations.clear',
+    minimumRole: 'write',
+    workspaceApiKey: 'deny',
+    capability: 'none',
+    ...INBOX_PRINCIPALS,
+  }),
+  // permission-group-exempt: the Inbox is not a governed permission-group surface yet; workspace roles gate it
   reply: defineWorkspaceOperation({
     id: 'inbox.conversations.reply',
     minimumRole: 'write',
