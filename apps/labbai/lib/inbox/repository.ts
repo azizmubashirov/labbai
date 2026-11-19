@@ -1,5 +1,6 @@
 import { db } from '@labbai/db'
-import { inboxConversation, inboxMessage, user, webhook, workflow } from '@labbai/db/schema'
+import { inboxConversation, inboxMessage, memory, user, webhook, workflow } from '@labbai/db/schema'
+import { compareStrings } from '@labbai/utils/string'
 import {
   and,
   count,
@@ -19,6 +20,7 @@ import { settleInboxAiPause } from '@/lib/inbox/ai-pause'
 import { type InboxAttachment, inboxMessageSummary } from '@/lib/inbox/attachments'
 import type { InboxChannel } from '@/lib/inbox/channels'
 import { inboxPreview } from '@/lib/inbox/ingest'
+import { lockMemoryConversationInTx } from '@/lib/memory/locks'
 
 export type InboxConversationRecord = typeof inboxConversation.$inferSelect
 
@@ -42,9 +44,14 @@ export interface ListInboxConversationsParams {
   limit: number
 }
 
+/** Escapes `LIKE` wildcards (and the escape character) so text matches literally. */
+function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, '\\$&')
+}
+
 /** Wraps user text for `ILIKE`, escaping its own wildcards so they match literally. */
 function likePattern(search: string): string {
-  return `%${search.replace(/[\\%_]/g, '\\$&')}%`
+  return `%${escapeLike(search)}%`
 }
 
 /** Newest-first conversations of a workspace, optionally filtered by channel, unread, or text. */
@@ -93,7 +100,7 @@ export async function getInboxConversation(
 
 /** Wraps text for `LIKE` as a literal prefix, escaping its own wildcards. */
 function likePrefix(prefix: string): string {
-  return `${prefix.replace(/[\\%_]/g, '\\$&')}%`
+  return `${escapeLike(prefix)}%`
 }
 
 /**
@@ -395,6 +402,97 @@ export async function insertOperatorMessage(params: {
           updatedAt: sentAt,
         })
         .where(eq(inboxConversation.id, params.conversationId))
+    }
+  })
+}
+
+/**
+ * `LIKE` pattern for agent memory keys that end with `:<chat id>` — the convention workflows
+ * use to scope a conversation's memory to one customer chat (`rnb:tg:<chat id>`). The colon is
+ * part of the suffix, so chat `123` never matches a key for chat `1123`.
+ */
+export function inboxChatMemoryKeySuffixPattern(externalChatId: string): string {
+  return `%${escapeLike(`:${externalChatId}`)}`
+}
+
+/** What clearing a conversation removed, with the reset conversation row. */
+export interface ClearedInboxConversation {
+  conversation: InboxConversationRecord
+  deletedMessages: number
+  deletedMemories: number
+}
+
+/**
+ * Clears a conversation in one transaction: deletes all its Inbox messages, resets the unread
+ * counter, AI switch and pause and the last-message preview to a new conversation's defaults
+ * (the row itself stays, so the chat keeps its place in the list), and deletes the workspace's
+ * agent memory of the chat — records keyed by the external chat id itself or ending with
+ * `:<chat id>`. Each memory key is locked the way agent memory writers lock it, in a fixed order,
+ * before its row is deleted. Returns null when the conversation is not in the workspace.
+ */
+export async function clearInboxConversation(params: {
+  workspaceId: string
+  conversationId: string
+  externalChatId: string
+}): Promise<ClearedInboxConversation | null> {
+  const chatId = params.externalChatId.trim()
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(inboxConversation)
+      .set({
+        unreadCount: 0,
+        aiEnabled: true,
+        aiPausedUntil: null,
+        lastMessagePreview: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(inboxConversation.id, params.conversationId),
+          eq(inboxConversation.workspaceId, params.workspaceId)
+        )
+      )
+      .returning()
+    if (!row) return null
+
+    const [messages] = await tx.execute<{ deleted: number }>(sql`
+      with removed as (
+        delete from ${inboxMessage}
+        where ${inboxMessage.conversationId} = ${row.id}
+        returning 1
+      )
+      select count(*)::int as deleted from removed
+    `)
+
+    let deletedMemories = 0
+    if (chatId) {
+      const memoryScope = and(
+        eq(memory.workspaceId, params.workspaceId),
+        isNull(memory.deletedAt),
+        or(eq(memory.key, chatId), like(memory.key, inboxChatMemoryKeySuffixPattern(chatId)))
+      )
+      const matches = await tx.select({ key: memory.key }).from(memory).where(memoryScope)
+      const keys = [...new Set(matches.map((match) => match.key))].sort(compareStrings)
+      if (keys.length > 0) {
+        for (const key of keys) await lockMemoryConversationInTx(tx, params.workspaceId, key)
+        const removed = await tx
+          .delete(memory)
+          .where(
+            and(
+              eq(memory.workspaceId, params.workspaceId),
+              isNull(memory.deletedAt),
+              inArray(memory.key, keys)
+            )
+          )
+          .returning({ id: memory.id })
+        deletedMemories = removed.length
+      }
+    }
+
+    return {
+      conversation: row,
+      deletedMessages: Number(messages?.deleted ?? 0),
+      deletedMemories,
     }
   })
 }

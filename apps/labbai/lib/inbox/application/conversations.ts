@@ -26,6 +26,7 @@ import {
 } from '@/lib/inbox/operator-media'
 import { normalizeWhatsAppNumber } from '@/lib/inbox/outbound'
 import {
+  clearInboxConversation,
   countUnreadInboxConversations,
   findInboxConversationByChat,
   getInboxConversation,
@@ -69,6 +70,11 @@ export interface ReadInboxAttachmentInput {
 
 export interface CountUnreadInboxInput {
   workspaceId: string
+}
+
+export interface ClearInboxConversationInput {
+  workspaceId: string
+  conversationId: string
 }
 
 export interface UpdateInboxConversationInput {
@@ -259,6 +265,45 @@ export const updateInboxConversationOperation = defineAuthorizedWorkspaceUseCase
   /** Only an AI toggle is a semantic change worth auditing; marking read is not. */
   projectAudit({ input, result }) {
     return aiToggleAudit(result.conversation, input.aiEnabled, result.previousAiEnabled)
+  },
+})
+
+/**
+ * Clears a conversation for a fresh start: deletes its Inbox history, resets unread, the AI
+ * switch and any pause, and deletes the agent's memory of the chat in this workspace, all in one
+ * transaction. The conversation stays in the list, and the customer's own chat on the channel
+ * does not change. Tables a workflow keeps for itself are not touched.
+ */
+export const clearInboxConversationOperation = defineAuthorizedWorkspaceUseCase({
+  operation: inboxOperations.clearConversation,
+  resolveContext: (args: { input: ClearInboxConversationInput }) => resolveInboxContext(args),
+  authorizationOptions: {},
+  async execute({ input, context }) {
+    const existing = await requireConversation(context.workspaceId, input.conversationId)
+    const cleared = await clearInboxConversation({
+      workspaceId: existing.workspaceId,
+      conversationId: existing.id,
+      externalChatId: existing.externalChatId,
+    })
+    if (!cleared) throw new OrchestrationError('not_found', 'Conversation not found')
+    return cleared
+  },
+  projectAudit({ result }) {
+    const contact = describeConversation(result.conversation)
+    return {
+      action: AuditAction.INBOX_CONVERSATION_CLEARED,
+      resourceType: AuditResourceType.INBOX_CONVERSATION,
+      resourceId: result.conversation.id,
+      resourceName: contact,
+      description: `Cleared the chat with ${contact}: ${result.deletedMessages} messages and ${result.deletedMemories} agent memory records deleted`,
+      metadata: {
+        deletedMessages: result.deletedMessages,
+        deletedMemories: result.deletedMemories,
+      },
+    }
+  },
+  async afterSuccess({ result }) {
+    await announceInboxChange(result.conversation.workspaceId)
   },
 })
 

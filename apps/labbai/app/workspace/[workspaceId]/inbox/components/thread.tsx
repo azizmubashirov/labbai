@@ -13,6 +13,7 @@ import {
 } from '@/app/workspace/[workspaceId]/inbox/components/channel-icon'
 import { MessageAttachments } from '@/app/workspace/[workspaceId]/inbox/components/message-attachments'
 import { ReplyBox } from '@/app/workspace/[workspaceId]/inbox/components/reply-box'
+import { ThreadActions } from '@/app/workspace/[workspaceId]/inbox/components/thread-actions'
 import { buildThreadTimeline, conversationTitle } from '@/app/workspace/[workspaceId]/inbox/utils'
 import {
   type InboxConversation,
@@ -94,13 +95,20 @@ function MessageBubble({ workspaceId, message }: MessageBubbleProps) {
 }
 
 interface ThreadHeaderProps {
+  workspaceId: string
   conversation: InboxConversation
   canEdit: boolean
   isUpdating: boolean
   onToggleAi: (enabled: boolean) => void
 }
 
-function ThreadHeader({ conversation, canEdit, isUpdating, onToggleAi }: ThreadHeaderProps) {
+function ThreadHeader({
+  workspaceId,
+  conversation,
+  canEdit,
+  isUpdating,
+  onToggleAi,
+}: ThreadHeaderProps) {
   const pausedUntil =
     !conversation.aiEnabled && conversation.aiPausedUntil
       ? `AI paused until ${format(conversation.aiPausedUntil, 'HH:mm')}`
@@ -130,6 +138,7 @@ function ThreadHeader({ conversation, canEdit, isUpdating, onToggleAi }: ThreadH
         size='compact'
         aria-label='AI replies'
       />
+      {canEdit && <ThreadActions workspaceId={workspaceId} conversation={conversation} />}
     </header>
   )
 }
@@ -236,6 +245,7 @@ export function Thread({ workspaceId, conversationId, canEdit, pollIntervalMs }:
   return (
     <section className='flex min-w-0 flex-1 flex-col' aria-label={conversationTitle(conversation)}>
       <ThreadHeader
+        workspaceId={workspaceId}
         conversation={conversation}
         canEdit={canEdit}
         isUpdating={updateConversation.isPending}
