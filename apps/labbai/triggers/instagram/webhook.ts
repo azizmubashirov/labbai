@@ -67,6 +67,17 @@ export const instagramWebhookTrigger: TriggerConfig = {
       condition: INSTAGRAM_DM_CONDITION,
     },
     {
+      id: 'receiveOwnerReplies',
+      title: 'Also run on your own replies',
+      type: 'switch',
+      defaultValue: false,
+      description:
+        'Runs the workflow when the account itself sends a customer a message, with ownerReply set to true. This includes replies this workflow sends, so check ownerReply before replying.',
+      required: false,
+      mode: 'trigger-advanced',
+      condition: INSTAGRAM_DM_CONDITION,
+    },
+    {
       id: 'triggerInstructions',
       title: 'Setup Instructions',
       hideFromPreview: true,
@@ -86,7 +97,8 @@ export const instagramWebhookTrigger: TriggerConfig = {
     messageId: { type: 'string', description: 'Instagram message id (mid) of the first message' },
     senderId: {
       type: 'string',
-      description: 'Instagram-scoped id of the customer; use it as the recipient when replying',
+      description:
+        'Instagram-scoped id of the customer, also for owner replies; use it as the recipient when replying',
     },
     recipientId: { type: 'string', description: 'Your Instagram professional account id' },
     text: { type: 'string', description: 'Text of the first message, if any' },
@@ -100,6 +112,15 @@ export const instagramWebhookTrigger: TriggerConfig = {
       description: 'Id of the message the customer replied to, if any',
     },
     messages: { type: 'json', description: 'All customer messages in the delivery' },
+    ownerReply: {
+      type: 'boolean',
+      description:
+        'True when the account itself sent this message to the customer (only with "Also run on your own replies")',
+    },
+    appId: {
+      type: 'string',
+      description: 'Id of the app that sent an owner reply, when Meta reports it',
+    },
     raw: {
       type: 'json',
       description: 'Webhook payload from Instagram, limited to this account’s direct messages',

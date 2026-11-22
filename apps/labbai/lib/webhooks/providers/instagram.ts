@@ -72,6 +72,24 @@ export interface InstagramDirectMessage {
   raw: Record<string, unknown>
 }
 
+/**
+ * One message the professional account itself sent to a customer, normalized from an echo
+ * (`message.is_echo`). Echoes cover both replies typed in the Instagram app and messages sent
+ * through the API, including this workflow's own replies; `appId` is passed on when Meta sets it.
+ */
+export interface InstagramOwnerReply {
+  messageId: string
+  /** Instagram-scoped id of the customer the account wrote to. */
+  customerId: string
+  /** The professional account that sent the message (`entry.id`). */
+  accountId: string
+  text: string | null
+  timestamp: number | null
+  attachments: Array<{ type: string | null; url: string | null }>
+  appId: string | null
+  raw: Record<string, unknown>
+}
+
 /** One customer comment on a post or reel, normalized from a `comments` change. */
 export interface InstagramComment {
   commentId: string
@@ -131,19 +149,70 @@ export function getInstagramDirectMessages(body: unknown): InstagramDirectMessag
         recipientId,
         text: toStringOrNull(message.text),
         timestamp: typeof event.timestamp === 'number' ? event.timestamp : null,
-        attachments: toArray(message.attachments).map((attachment) => {
-          const record = toRecord(attachment)
-          return {
-            type: toStringOrNull(record.type),
-            url: toStringOrNull(toRecord(record.payload).url),
-          }
-        }),
+        attachments: messageAttachments(message),
         replyToMessageId: toStringOrNull(toRecord(message.reply_to).mid),
         raw: event,
       })
     }
   }
   return messages
+}
+
+/** Type and URL of each attachment on a `messaging` event's message. */
+function messageAttachments(
+  message: Record<string, unknown>
+): Array<{ type: string | null; url: string | null }> {
+  return toArray(message.attachments).map((attachment) => {
+    const record = toRecord(attachment)
+    return {
+      type: toStringOrNull(record.type),
+      url: toStringOrNull(toRecord(record.payload).url),
+    }
+  })
+}
+
+/**
+ * Messages the professional account sent to customers in an Instagram webhook delivery (echoes).
+ * Deleted messages and messages the account sent to itself are skipped.
+ */
+export function getInstagramOwnerReplies(body: unknown): InstagramOwnerReply[] {
+  const replies: InstagramOwnerReply[] = []
+  for (const entryRecord of deliveryEntries(body)) {
+    const accountId = toStringOrNull(entryRecord.id)
+    if (!accountId) continue
+    for (const raw of toArray(entryRecord.messaging)) {
+      const event = toRecord(raw)
+      const message = toRecord(event.message)
+      if (message.is_echo !== true || message.is_deleted === true || message.is_self === true) {
+        continue
+      }
+      const messageId = toStringOrNull(message.mid)
+      const senderId = toStringOrNull(toRecord(event.sender).id)
+      const customerId = toStringOrNull(toRecord(event.recipient).id)
+      if (!messageId || senderId !== accountId || !customerId || customerId === accountId) continue
+      replies.push({
+        messageId,
+        customerId,
+        accountId,
+        text: toStringOrNull(message.text),
+        timestamp: typeof event.timestamp === 'number' ? event.timestamp : null,
+        attachments: messageAttachments(message),
+        appId: idString(message.app_id) ?? idString(event.app_id),
+        raw: event,
+      })
+    }
+  }
+  return replies
+}
+
+/** An id Meta may send as a JSON number or a string. */
+function idString(value: unknown): string | null {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : toStringOrNull(value)
+}
+
+/** Whether a DM trigger's config asks for the account's own replies as well. */
+function receivesOwnerReplies(providerConfig: Record<string, unknown>): boolean {
+  return providerConfig.receiveOwnerReplies === true
 }
 
 /**
@@ -451,12 +520,14 @@ export type InstagramScopeResult =
 
 /**
  * The part of a delivery one trigger may see: entries of its own account, stripped to its own
- * event kind. Anything other than `scoped` means the webhook is not run.
+ * event kind. Anything other than `scoped` means the webhook is not run. A DM trigger that opted
+ * into `ownerReplies` also runs for a delivery holding only the account's own replies.
  */
 export function scopeInstagramDelivery(
   body: unknown,
   accountId: string,
-  kind: InstagramEventKind
+  kind: InstagramEventKind,
+  options: { ownerReplies?: boolean } = {}
 ): InstagramScopeResult {
   const delivery = splitInstagramDeliveryByAccount(body).find(
     (part) => part.accountId === accountId
@@ -472,7 +543,8 @@ export function scopeInstagramDelivery(
   const hasEvents =
     kind === 'comments'
       ? getInstagramComments(scoped).length > 0
-      : getInstagramDirectMessages(scoped).length > 0
+      : getInstagramDirectMessages(scoped).length > 0 ||
+        (options.ownerReplies === true && getInstagramOwnerReplies(scoped).length > 0)
   return hasEvents ? { status: 'scoped', body: scoped } : { status: 'no-events' }
 }
 
@@ -583,7 +655,8 @@ export const instagramHandler: WebhookProviderHandler = {
     const scoped = scopeInstagramDelivery(
       body,
       accountId,
-      instagramEventKindForTrigger(providerConfig.triggerId)
+      instagramEventKindForTrigger(providerConfig.triggerId),
+      { ownerReplies: receivesOwnerReplies(providerConfig) }
     )
     if (scoped.status === 'foreign-account') {
       logger.warn(`[${requestId}] Instagram delivery has no entries for the webhook's account`, {
@@ -597,13 +670,19 @@ export const instagramHandler: WebhookProviderHandler = {
 
   /**
    * Message ids alone for DM-only deliveries, so their keys match the ones issued before
-   * comments were supported; comment ids are added with a prefix.
+   * comments were supported; comment ids are added with a prefix. Echo ids key only a delivery
+   * with no customer message or comment, the one case an owner reply is what runs the trigger.
    */
   extractIdempotencyId(body: unknown) {
-    const ids = [
+    const eventIds = [
       ...getInstagramDirectMessages(body).map((message) => message.messageId),
       ...getInstagramComments(body).map((comment) => `comment:${comment.commentId}`),
-    ].sort()
+    ]
+    const ids = (
+      eventIds.length > 0
+        ? eventIds
+        : getInstagramOwnerReplies(body).map((reply) => `echo:${reply.messageId}`)
+    ).sort()
     if (ids.length === 0) return null
     return `instagram:${ids.length}:${sha256Hex(ids.join('|'))}`
   },
@@ -637,18 +716,41 @@ export const instagramHandler: WebhookProviderHandler = {
 
     const messages = getInstagramDirectMessages(body)
     const first = messages[0]
-    if (!first) return { input: null }
+    if (first) {
+      return {
+        input: {
+          messageId: first.messageId,
+          senderId: first.senderId,
+          recipientId: first.recipientId,
+          text: first.text,
+          timestamp: first.timestamp,
+          attachments: first.attachments,
+          replyToMessageId: first.replyToMessageId,
+          messages,
+          ownerReply: false,
+          appId: null,
+          raw: body,
+        },
+      }
+    }
+
+    const ownerReply = receivesOwnerReplies(providerConfig)
+      ? getInstagramOwnerReplies(body)[0]
+      : undefined
+    if (!ownerReply) return { input: null }
 
     return {
       input: {
-        messageId: first.messageId,
-        senderId: first.senderId,
-        recipientId: first.recipientId,
-        text: first.text,
-        timestamp: first.timestamp,
-        attachments: first.attachments,
-        replyToMessageId: first.replyToMessageId,
-        messages,
+        messageId: ownerReply.messageId,
+        senderId: ownerReply.customerId,
+        recipientId: ownerReply.accountId,
+        text: ownerReply.text,
+        timestamp: ownerReply.timestamp,
+        attachments: ownerReply.attachments,
+        replyToMessageId: null,
+        messages: [],
+        ownerReply: true,
+        appId: ownerReply.appId,
         raw: body,
       },
     }
