@@ -65,7 +65,7 @@ import {
   RESOLVED_SECRET_PROVENANCE_FIELD,
   RESOLVED_SECRET_PROVENANCE_METADATA_V1,
 } from '@/lib/execution/private-tool-metadata'
-import { INBOX_SEND_TOOL_IDS } from '@/lib/inbox/tool-ids'
+import { INBOX_SEND_TOOL_IDS, TELEGRAM_BUSINESS_REPLY_TOOL_IDS } from '@/lib/inbox/tool-ids'
 import { executeFunctionTool } from '@/lib/internal/function/execute'
 import { createInternalToolFileResult } from '@/lib/internal/tool-operations/file-result'
 import {
@@ -1604,6 +1604,19 @@ export async function executeTool(
   params: Record<string, any>,
   options: ExecuteToolOptions = {}
 ): Promise<ToolResponse> {
+  if (
+    typeof window === 'undefined' &&
+    TELEGRAM_BUSINESS_REPLY_TOOL_IDS.has(toolId) &&
+    params.businessConnectionId
+  ) {
+    const { markTelegramBusinessChatRead } = await import('@/lib/inbox/telegram-read')
+    await markTelegramBusinessChatRead({
+      workspaceId: resolveToolScope(params, options.executionContext).workspaceId,
+      botToken: params.botToken,
+      businessConnectionId: params.businessConnectionId,
+      chatId: params.chatId,
+    })
+  }
   const result = await executeToolWithTraceRegistry(toolId, params, options)
   if (result.success && typeof window === 'undefined' && INBOX_SEND_TOOL_IDS.has(toolId)) {
     const scope = resolveToolScope(params, options.executionContext)
