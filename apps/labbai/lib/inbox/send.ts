@@ -11,6 +11,7 @@ import { configString, resolveConversationChannelConfig } from '@/lib/inbox/chan
 import { type InboxChannel, telegramBusinessConnectionIdFromAccountId } from '@/lib/inbox/channels'
 import { parseOutboundToolMessage } from '@/lib/inbox/outbound'
 import type { InboxConversationRecord } from '@/lib/inbox/repository'
+import { markTelegramBusinessChatRead } from '@/lib/inbox/telegram-read'
 import { executeTool } from '@/tools'
 import { INSTAGRAM_GRAPH_BASE } from '@/tools/instagram/constants'
 import { readGraphError } from '@/tools/instagram/utils'
@@ -226,7 +227,8 @@ const TELEGRAM_MEDIA_METHODS: Record<InboxOutgoingKind, { method: string; field:
 
 /**
  * Sends an operator file on Telegram. In a Telegram Business thread the file goes out through
- * the Business connection, as the connected account rather than as the bot.
+ * the Business connection, as the connected account rather than as the bot, after the chat is
+ * marked read.
  */
 async function sendTelegramMedia(
   botToken: string,
@@ -242,7 +244,15 @@ async function sendTelegramMedia(
   const form = new FormData()
   form.append('chat_id', conversation.externalChatId)
   const businessConnectionId = telegramBusinessConnectionIdFromAccountId(conversation.accountId)
-  if (businessConnectionId) form.append('business_connection_id', businessConnectionId)
+  if (businessConnectionId) {
+    form.append('business_connection_id', businessConnectionId)
+    await markTelegramBusinessChatRead({
+      workspaceId: conversation.workspaceId,
+      botToken,
+      businessConnectionId,
+      chatId: conversation.externalChatId,
+    })
+  }
   form.append(field, fileBlob(media), media.fileName)
   if (caption) form.append('caption', caption)
 

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   resolveConfig: vi.fn(),
   executeTool: vi.fn(),
   resolveToken: vi.fn(),
+  markRead: vi.fn(),
 }))
 
 vi.mock('@/tools', () => ({ executeTool: mocks.executeTool }))
@@ -14,6 +15,7 @@ vi.mock('@/executor/utils/credential-token', () => ({
   resolveExecutorCredentialToken: mocks.resolveToken,
 }))
 vi.mock('@/lib/oauth/utils', () => ({ getCanonicalScopesForProvider: () => [] }))
+vi.mock('@/lib/inbox/telegram-read', () => ({ markTelegramBusinessChatRead: mocks.markRead }))
 vi.mock('@/lib/inbox/channel-config', () => ({
   resolveConversationChannelConfig: mocks.resolveConfig,
   configString: (config: Record<string, unknown>, key: string) =>
@@ -463,6 +465,42 @@ describe('sendInboxReply in a Telegram Business thread', () => {
     expect(form.get('chat_id')).toBe('555')
     expect(form.get('business_connection_id')).toBe('BC1')
     expect(outcome).toEqual({ status: 'sent', externalMessageId: '43' })
+  })
+
+  it('marks the Business chat read before the operator file goes out', async () => {
+    mocks.resolveConfig.mockResolvedValue({ ok: true, providerConfig: { botToken: '1:tok' } })
+    fetchMock.mockResolvedValue(Response.json({ ok: true, result: { message_id: 44 } }))
+
+    await sendInboxReply({
+      conversation: businessConversation,
+      text: '',
+      operatorUserId: 'op-1',
+      media: media(),
+    })
+
+    expect(mocks.markRead).toHaveBeenCalledWith({
+      workspaceId: 'ws',
+      botToken: '1:tok',
+      businessConnectionId: 'BC1',
+      chatId: '555',
+    })
+    expect(mocks.markRead.mock.invocationCallOrder[0]).toBeLessThan(
+      fetchMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('leaves a bot-chat file send without a read receipt', async () => {
+    mocks.resolveConfig.mockResolvedValue({ ok: true, providerConfig: { botToken: '1:tok' } })
+    fetchMock.mockResolvedValue(Response.json({ ok: true, result: { message_id: 45 } }))
+
+    await sendInboxReply({
+      conversation: telegramConversation,
+      text: '',
+      operatorUserId: 'op-1',
+      media: media(),
+    })
+
+    expect(mocks.markRead).not.toHaveBeenCalled()
   })
 
   it('explains a Business connection that can no longer reply', () => {

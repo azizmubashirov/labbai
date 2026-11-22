@@ -126,6 +126,8 @@ export interface TelegramBusinessConnection {
   ownerChatId: string | null
   /** Whether the bot may send messages in the account's chats. */
   canReply: boolean
+  /** Whether the bot may mark the account's incoming messages as read (`readBusinessMessage`). */
+  canRead: boolean
   /** False once the owner disconnects or pauses the bot. */
   isEnabled: boolean
   updatedAt: string
@@ -134,7 +136,8 @@ export interface TelegramBusinessConnection {
 /**
  * Reads a `BusinessConnection` object. `can_reply` moved into `rights` in Bot API 9.0; both
  * shapes are read. When neither says, replying is assumed possible so an unknown shape never
- * silences the agent.
+ * silences the agent. `can_read_messages` exists only in `rights`; without `rights` reading is
+ * assumed possible and a refusal from Telegram is what reports otherwise.
  */
 export function parseTelegramBusinessConnection(
   value: unknown,
@@ -148,8 +151,10 @@ export function parseTelegramBusinessConnection(
   const rights = connection.rights
   const legacyCanReply = connection.can_reply
   let canReply = true
+  let canRead = true
   if (isRecordLike(rights)) {
     canReply = rights.can_reply === true
+    canRead = rights.can_read_messages === true
   } else if (typeof legacyCanReply === 'boolean') {
     canReply = legacyCanReply
   }
@@ -159,6 +164,7 @@ export function parseTelegramBusinessConnection(
     ownerUserId,
     ownerChatId: idString(connection.user_chat_id),
     canReply,
+    canRead,
     isEnabled: connection.is_enabled !== false,
     updatedAt: now.toISOString(),
   }
@@ -178,6 +184,7 @@ export function storedTelegramBusinessConnection(
     ownerUserId,
     ownerChatId: toStringOrNull(stored.ownerChatId),
     canReply: stored.canReply !== false,
+    canRead: stored.canRead !== false,
     isEnabled: stored.isEnabled !== false,
     updatedAt: toStringOrNull(stored.updatedAt) ?? '',
   }
