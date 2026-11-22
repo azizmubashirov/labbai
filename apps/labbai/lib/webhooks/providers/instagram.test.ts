@@ -55,6 +55,7 @@ import {
   getInstagramAutoReplyPostbacks,
   getInstagramComments,
   getInstagramLiveComments,
+  getInstagramOwnerReplies,
   getInstagramStoryEvents,
   instagramHandler,
   partitionInstagramDelivery,
@@ -132,7 +133,7 @@ describe('instagramHandler', () => {
   it('skips a delivery that only carries echoes', async () => {
     const echoOnly = { entry: [{ id: 'IG1', messaging: [body.entry[0].messaging[1]] }] }
     expect((await instagramHandler.formatInput?.({ body: echoOnly } as never))?.input).toBeNull()
-    expect(instagramHandler.extractIdempotencyId?.(echoOnly)).toBeNull()
+    expect(scopeInstagramDelivery(echoOnly, 'IG1', 'messages')).toEqual({ status: 'no-events' })
   })
 
   it('derives a stable idempotency key from the message ids', () => {
@@ -869,5 +870,99 @@ describe('Instagram subscription handshake', () => {
     const response = await instagramHandler.handleChallenge!({}, handshake('any'), 'r4', 'abc')
 
     expect(response).toBeNull()
+  })
+})
+
+describe('Instagram owner replies', () => {
+  /** A message the account sent to a customer, as Meta echoes it back. */
+  function echo(mid: string, extra: Record<string, unknown> = {}) {
+    return {
+      sender: { id: 'IG1' },
+      recipient: { id: 'U1' },
+      timestamp: 1_790_000_000_005,
+      message: { mid, text: 'Doktor javobi', is_echo: true, ...extra },
+    }
+  }
+
+  const ownerReplyOnly = { entry: [{ id: 'IG1', messaging: [echo('e1', { app_id: 123 })] }] }
+  const optedIn = { triggerId: 'instagram_webhook', receiveOwnerReplies: true }
+
+  it('reads echoes the account sent to a customer and skips self, deleted and foreign ones', () => {
+    const delivery = {
+      entry: [
+        {
+          id: 'IG1',
+          messaging: [
+            echo('e1', { app_id: 123 }),
+            echo('e2', { is_self: true }),
+            echo('e3', { is_deleted: true }),
+            { ...echo('e4'), sender: { id: 'IG9' } },
+            body.entry[0].messaging[0],
+          ],
+        },
+      ],
+    }
+    expect(getInstagramOwnerReplies(delivery)).toEqual([
+      expect.objectContaining({
+        messageId: 'e1',
+        customerId: 'U1',
+        accountId: 'IG1',
+        text: 'Doktor javobi',
+        appId: '123',
+      }),
+    ])
+  })
+
+  it('keeps owner replies away from triggers that did not opt in', async () => {
+    expect(scopeInstagramDelivery(ownerReplyOnly, 'IG1', 'messages')).toEqual({
+      status: 'no-events',
+    })
+    const result = await instagramHandler.formatInput?.({
+      webhook: { providerConfig: { triggerId: 'instagram_webhook' } },
+      body: ownerReplyOnly,
+    } as never)
+    expect(result?.input).toBeNull()
+  })
+
+  it('runs an opted-in trigger with the customer as senderId and ownerReply set', async () => {
+    const scoped = await instagramHandler.scopeDeliveryBody?.({
+      webhook: { id: 'wh-1', routingKey: 'IG1' },
+      body: ownerReplyOnly,
+      requestId: 'r',
+      providerConfig: optedIn,
+    })
+    expect(scoped?.body).toBeDefined()
+
+    const result = await instagramHandler.formatInput?.({
+      webhook: { providerConfig: optedIn },
+      body: scoped?.body,
+    } as never)
+    expect(result?.input).toMatchObject({
+      messageId: 'e1',
+      senderId: 'U1',
+      recipientId: 'IG1',
+      text: 'Doktor javobi',
+      ownerReply: true,
+      appId: '123',
+      messages: [],
+    })
+  })
+
+  it('prefers the customer message when a delivery carries both', async () => {
+    const result = await instagramHandler.formatInput?.({
+      webhook: { providerConfig: optedIn },
+      body,
+    } as never)
+    expect(result?.input).toMatchObject({ messageId: 'm1', ownerReply: false })
+  })
+
+  it('keys owner replies apart from customer messages and leaves DM-only keys unchanged', () => {
+    const dmOnly = { entry: [{ id: 'IG1', messaging: [body.entry[0].messaging[0]] }] }
+    const echoKey = instagramHandler.extractIdempotencyId?.(ownerReplyOnly)
+    expect(echoKey).toMatch(/^instagram:1:/)
+    expect(echoKey).not.toBe(instagramHandler.extractIdempotencyId?.(dmOnly))
+    expect(instagramHandler.extractIdempotencyId?.(body)).toBe(
+      instagramHandler.extractIdempotencyId?.(dmOnly)
+    )
   })
 })
